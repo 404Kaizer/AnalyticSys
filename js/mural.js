@@ -576,7 +576,19 @@ async function _muralCarregarDonos() {
   const { data, error } = await window.supabaseClient
     .from('analistas_categoria').select('categoria, analista_user_id, analista_nome');
   if (error) throw new Error(error.message);
-  return data || [];
+  const donos = data || [];
+  // Nome do dono = NOME DE EXIBIÇÃO do perfil (Hugo, 10/11/2026), não o
+  // analista_nome gravado no cadastro. A RLS de profiles deixa o ADM ler
+  // todos e o analista só o próprio — que é o único dono que ele vê.
+  const nomes = new Map();
+  const eu = window.currentUser;
+  if (eu?.id && eu.nome_exibicao?.trim()) nomes.set(eu.id, eu.nome_exibicao.trim());
+  const ids = [...new Set(donos.map(d => d.analista_user_id).filter(id => id && !nomes.has(id)))];
+  if (ids.length && _moEhAdm()) {
+    const { data: perfis } = await window.supabaseClient.from('profiles').select('id, nome_exibicao').in('id', ids);
+    (perfis || []).forEach(p => { if (p.nome_exibicao?.trim()) nomes.set(p.id, p.nome_exibicao.trim()); });
+  }
+  return donos.map(d => ({ ...d, analista_nome: nomes.get(d.analista_user_id) || d.analista_nome }));
 }
 
 // Avocações ativas (o ADM assumiu o item no lugar do dono). Se a tabela
@@ -896,55 +908,108 @@ function _muralOrdenar(itens) {
 // Contagem regressiva do fechamento: tudo acima do limite precisa estar
 // tratado (comentário com a causa ou ocorrência aberta) antes dele; o
 // fechamento só ajusta o que sobrar sem explicação.
-function _muralFechamentoHtml(itens) {
-  const fech = _muralFechamento(_moDia(new Date()));
-  const dias = _moDiasEntre(new Date(), fech);
-  const semTrat = itens.filter(i => i.semTratamento);
-  const cor = dias <= 3 && semTrat.length ? 'var(--red)' : dias <= 7 && semTrat.length ? 'var(--urgente)' : 'var(--text2)';
-  return `<div class="mo-fech" style="--fc:${cor}"><i class="ti ti-calendar-due"></i>
-    <span><b>Fechamento ${dias === 0 ? 'hoje' : `em ${dias} dia${dias > 1 ? 's' : ''}`}</b> (${fmtPtDate(fech)})</span>
-    <span class="mo-hint">·</span><span><b>${itens.length}</b> acima do limite</span>
-    <span class="mo-hint">·</span>${semTrat.length
-      ? `<button class="mo-link" onclick="muralFiltro('semtrat')"><b>${semTrat.length}</b> ainda sem tratamento</button>`
-      : '<span class="mo-teal">todos com tratamento registrado</span>'}
-    <span class="mo-hint" style="margin-left:auto">O fechamento só ajusta o que ficar sem explicação ou pedido à central não concluído.</span></div>`;
+// ── Topo: Proposta B (Hugo, 10/11/2026) ──────────────────────────────────
+// Placar do fechamento: quanto da fila já tem tratamento (comentário com
+// causa ou ocorrência) e quanto falta até o fechamento, com o impacto do mês
+// ao lado. Substitui os 7 KPIs e a faixa do fechamento.
+// Barra: tratados (verde) · sem tratamento escalonados (vermelho) · sem
+// tratamento ainda no prazo (âmbar).
+function _muralBarraFech(its) {
+  const tot = its.length || 1;
+  const semT = its.filter(i => i.semTratamento);
+  const esc = semT.filter(i => i.status === 'escalonado').length;
+  const p = n => (n / tot * 100).toFixed(2) + '%';
+  return `<div class="mo-fbar" role="img" aria-label="${its.length - semT.length} de ${its.length} tratados">
+    <i style="width:${p(its.length - semT.length)};background:var(--green)"></i><i style="width:${p(esc)};background:var(--red)"></i><i style="width:${p(semT.length - esc)};background:var(--amber)"></i></div>`;
 }
 
-function _muralKpisHtml(itens) {
-  const fila = itens;
-  const semAcao = fila.filter(i => !i.temOc && i.diasSemAcao > 0).length;
-  const piorando = fila.filter(i => i.piorando).length;
-  const esc = fila.filter(i => i.status === 'escalonado').length;
-  const kgRes = fila.reduce((s, i) => s + _moKgResidual(i), 0);
-  const rs = fila.reduce((s, i) => s + _moRsResidual(i), 0);
-  // Mesma conta das colunas do Painel do time: líquido com sinal e, embaixo,
-  // desfalque · sobra.
+function _muralPlacarHtml(fila) {
+  const fech = _muralFechamento(_moDia(new Date()));
+  const dias = _moDiasEntre(new Date(), fech);
+  const semT = fila.filter(i => i.semTratamento).length;
+  const trat = fila.length - semT;
   const soma = (f, cond) => fila.reduce((s, i) => s + (cond(i) ? f(i) : 0), 0);
   const vLiq = soma(i => i.v, () => true), vDes = soma(i => i.v, i => i.v < 0), vSob = soma(i => i.v, i => i.v > 0);
-  const rLiq = soma(i => i.rs || 0, () => true), rDes = soma(i => i.rs || 0, i => i.v < 0), rSob = soma(i => i.rs || 0, i => i.v > 0);
-  const corSinal = v => v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'var(--text)';
-  // Os dois principais (Hugo, 09/11/2026) ficam em destaque numa linha
-  // própria; os demais, menores, embaixo — mesmo esquema de dois níveis do
-  // Resumo do Período do Gerencial.
-  // Principal = variação ATUAL (mês em aberto); embaixo, o acumulado de 30
-  // dias, que atravessa o fechamento (secundário).
+  const rLiq = soma(i => i.rs || 0, () => true);
   const v30 = soma(i => i.v30 ?? i.v, () => true), r30 = soma(i => i.rs30 ?? i.rs ?? 0, () => true);
-  const principais = [
-    ['Variação total · mês atual', _moPesoSinal(vLiq), `${_moPesoSinal(vDes)} desfalque · ${_moPesoSinal(vSob)} sobra · 30 dias: ${_moPesoSinal(v30)}`, corSinal(vLiq), 'ti-scale'],
-    ['Custo da variação · mês atual', _moRs(rLiq), `${_moRs(rDes)} desfalque · ${_moRs(rSob)} sobra · 30 dias: ${_moRs(r30)}`, corSinal(rLiq), 'ti-coin']
-  ];
-  const k = [
-    ['Na fila', fila.length, 'pares fora da faixa', 'var(--text)', 'ti-list-details'],
-    ['Sem ação', semAcao, 'nada feito desde que entrou', semAcao ? 'var(--urgente)' : 'var(--green)', 'ti-clock'],
-    ['Piorando', piorando, 'cresceu nos 3 últimos lançamentos', piorando ? 'var(--red)' : 'var(--green)', 'ti-trending-up'],
-    ['Escalonados', esc, 'prazo vencido ou ocorrência sem efeito', esc ? 'var(--red)' : 'var(--green)', 'ti-arrow-big-up-lines'],
-    ['Sem explicação', _moPeso(kgRes), `parte da variação sem causa · ${_moRs(rs).replace(/^[+−]/, '')}`, 'var(--amber)', 'ti-eye-off']
-  ];
-  const card = (cls) => ([l, v, s, c, i]) =>
-    `<div class="mo-kpi${cls}" style="--kc:${c}"><span class="mo-kpi-label"><i class="ti ${i}"></i>${l}</span><span class="mo-kpi-val" style="color:${c}">${v}</span><span class="mo-kpi-sub">${s}</span></div>`;
-  return `<div class="mo-kpis-hero">${principais.map(card(' mo-kpi-hero')).join('')}</div>
-    <div class="mo-kpis">${k.map(card('')).join('')}</div>`;
+  const cor = v => v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'var(--text)';
+  const corDias = dias <= 3 && semT ? 'var(--red)' : dias <= 7 && semT ? 'var(--urgente)' : 'var(--text)';
+  return `<div class="mo-placar">
+    <div class="mo-placar-fech">
+      <div class="mo-placar-l1">
+        <span class="mo-placar-dias" style="color:${corDias}">${dias === 0 ? 'Fechamento hoje' : `${dias} dia${dias > 1 ? 's' : ''}`}</span>
+        <span class="mo-hint">${dias === 0 ? '' : 'até o fechamento '}(${fmtPtDate(fech)})</span>
+        <span class="mo-placar-trat"><b>${trat}/${fila.length}</b> tratados${semT ? ` · <button class="mo-link" onclick="muralFiltro('semtrat')"><b>${semT}</b> sem tratamento</button>` : ''}</span>
+      </div>
+      ${_muralBarraFech(fila)}
+      <div class="mo-fleg"><span><i style="background:var(--green)"></i>Tratados (comentário com causa ou ocorrência)</span><span><i style="background:var(--red)"></i>Sem tratamento, escalonados</span><span><i style="background:var(--amber)"></i>Sem tratamento, no prazo</span></div>
+    </div>
+    <div class="mo-placar-num" title="${_moEsc(_moPesoSinal(vDes) + ' desfalque · ' + _moPesoSinal(vSob) + ' sobra')}"><span class="mo-kpi-label">Variação do mês</span><b style="color:${cor(vLiq)}">${_moPesoSinal(vLiq)}</b><span class="mo-hint mono">30 dias ${_moPesoSinal(v30)}</span></div>
+    <div class="mo-placar-num"><span class="mo-kpi-label">Custo</span><b style="color:${cor(rLiq)}">${_moRs(rLiq)}</b><span class="mo-hint mono">30 dias ${_moRs(r30)}</span></div>
+  </div>`;
 }
+
+// Cartões por analista (só ADM): barra de tratados até o fechamento, os 4
+// números que pedem ação (clicáveis, filtram a fila daquele analista),
+// impacto e a data da base. Substitui a tabela do Painel do time.
+function _muralTimeHtml(itens) {
+  const hoje = _moDia(new Date());
+  const porDono = new Map();
+  _mo.donos.forEach(d => {
+    const k = d.analista_user_id || d.categoria;
+    if (!porDono.has(k)) porDono.set(k, { nome: d.analista_nome || '—', cats: [] });
+    porDono.get(k).cats.push(d.categoria);
+  });
+  const cards = [...porDono.values()].map(d => {
+    const its = itens.filter(i => d.cats.includes(i.categoriaFoto));
+    const fotos = _mo.fotos.filter(f => d.cats.includes(f.categoria));
+    const ultima = fotos.map(f => _moIsoParaData(f.atual.dia)).sort((a, b) => b - a)[0];
+    const atraso = ultima ? _moDiasEntre(ultima, hoje) : null;
+    const base = fotos[0]?.atual.payload?.base || {};
+    // Base desatualizada: foto de mais de 1 dia ou SAP importado há mais de 2.
+    const sapDt = parseDate(base.sap);
+    const velha = atraso == null || atraso > 1 || (sapDt && _moDiasEntre(sapDt, hoje) > 2);
+    // Sem lançamento: fila e faixa com o último dia de conferência pendente +
+    // pares com SAP e nenhum lançamento em 30 dias (ponto cego).
+    const pendFila = its.filter(i => _moPendente(i));
+    const pendFaixa = fotos.reduce((s, f) => s + (f.atual.payload?.faixa || []).filter(l => l[6]).length, 0);
+    const pend30 = fotos.reduce((s, f) => s + (f.atual.payload?.pontosCegos?.semLancamento?.total || 0), 0);
+    const semT = its.filter(i => i.semTratamento), esc = its.filter(i => i.status === 'escalonado'), pior = its.filter(i => i.piorando);
+    const vLiq = its.reduce((s, i) => s + i.v, 0), rLiq = its.reduce((s, i) => s + (i.rs || 0), 0);
+    const kgRes = its.reduce((s, i) => s + _moKgResidual(i), 0);
+    const cor = v => v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'inherit';
+    const num = (n, rot, c, arr, title = '') => `<button class="mo-tc-n" onclick="muralFiltrarIds('${_moEsc(rot)} · ${_moEsc(d.nome)}', this)" data-ids="${_muralIdsAttr(arr)}"${title ? ` title="${_moEsc(title)}"` : ''}${arr.length ? '' : ' disabled'}>
+      <b style="color:${n ? c : 'var(--text3)'}">${n}</b><span>${rot}</span></button>`;
+    return `<div class="mo-tc">
+      <button class="mo-tc-head" onclick="muralFiltrarIds('fila de ${_moEsc(d.nome)}', this)" data-ids="${_muralIdsAttr(its)}" title="Ver a fila de ${_moEsc(d.nome)}">
+        <i class="ti ti-user"></i><span><b>${_moEsc(d.nome)}</b><small>${_moEsc(d.cats.join(', '))}</small></span></button>
+      <div><div class="mo-tc-l"><span>Tratados até o fechamento</span><b>${its.length - semT.length}/${its.length}</b></div>${_muralBarraFech(its)}</div>
+      <div class="mo-tc-nums">
+        ${num(semT.length, 'sem trat.', 'var(--amber)', semT)}${num(esc.length, 'escal.', 'var(--red)', esc)}${num(pior.length, 'piorando', 'var(--red)', pior)}
+        ${num(pendFila.length + pendFaixa + pend30, 'sem lanç.', 'var(--amber)', pendFila, `Fila: ${pendFila.length} · Na faixa: ${pendFaixa} · Sem nenhum lançamento em 30 dias: ${pend30}`)}
+      </div>
+      <div class="mo-tc-kv"><span>Variação do mês</span><b style="color:${cor(vLiq)}">${_moPesoSinal(vLiq)}</b><span>Custo</span><b style="color:${cor(rLiq)}">${_moRs(rLiq)}</b><span>Sem explicação</span><b>${_moPeso(kgRes)}</b></div>
+      <div class="mo-tc-base${velha ? ' mo-av-warn' : ''}"><i class="ti ti-database"></i>${atraso == null ? 'Sem foto' : `Foto ${atraso === 0 ? 'de hoje' : `de ${atraso} dia${atraso > 1 ? 's' : ''} atrás`}`} · SAP ${_moEsc((base.sap || '—').slice(0, 5))} · lanç. ${_moEsc((base.lancamentos || '—').slice(0, 5))}${velha ? ' · desatualizada' : ''}</div>
+    </div>`;
+  }).join('');
+  // Central na fila de mais de um analista: causa comum provável na central.
+  const donosPorCentral = new Map();
+  itens.forEach(i => {
+    if (!donosPorCentral.has(i.central)) donosPorCentral.set(i.central, new Set());
+    donosPorCentral.get(i.central).add(i.dono.nome);
+  });
+  const multi = [...donosPorCentral].filter(([, s]) => s.size > 1)
+    .map(([c, s]) => ({ c, s, its: itens.filter(i => i.central === c) }))
+    .sort((a, b) => (b.s.size - a.s.size) || (b.its.length - a.its.length));
+  const multiHtml = multi.length ? `<details class="mo-multi mo-multi-solto">
+      <summary><i class="ti ti-alert-triangle"></i><b>${multi.length} centra${multi.length > 1 ? 'is' : 'l'}</b> na fila de mais de um analista
+        <span class="mo-hint">· pode ser causa comum na central (operação, balança, gestão)</span><span class="mo-link" style="margin-left:auto">ver centrais</span><i class="ti ti-chevron-down mo-multi-chev" style="margin-left:6px"></i></summary>
+      <div class="mo-multi-chips">${multi.map(({ c, s, its }) =>
+        `<button class="mo-chip" onclick="muralFiltrarIds('${_moEsc(c)}', this)" data-ids="${_muralIdsAttr(its)}" title="${_moEsc([...s].join(', '))}"><b>${_moEsc(c)}</b> ${s.size} analistas · ${its.length} ite${its.length > 1 ? 'ns' : 'm'}</button>`).join('')}</div>
+    </details>` : '';
+  return `<div class="mo-tcs">${cards}</div>${multiHtml}`;
+}
+
 
 function _muralIdsAttr(arr) { return _moEsc(JSON.stringify(arr.map(_moChave))); }
 
@@ -1008,67 +1073,17 @@ function _muralPontosCegosHtml() {
   return linhas.map(l => `<div class="mo-blind${l.alerta ? ' mo-blind-alerta' : ''}"><b>${_moEsc(l.titulo)}</b>${l.cat ? `<span class="mo-cat">${_moEsc(l.cat)}</span>` : ''}<small>${_moEsc(l.desc)}${l.ex.length ? ` Ex.: ${_moEsc(l.ex.slice(0, 3).join('; '))}` : ''}</small></div>`).join('');
 }
 
-function _muralTimeHtml(itens) {
-  const hoje = _moDia(new Date());
-  const porDono = new Map();
-  _mo.donos.forEach(d => {
-    const k = d.analista_user_id || d.categoria;
-    if (!porDono.has(k)) porDono.set(k, { nome: d.analista_nome || '—', cats: [] });
-    porDono.get(k).cats.push(d.categoria);
-  });
-  const ativos = itens;
-  const linhas = [...porDono.values()].map(d => {
-    const its = ativos.filter(i => d.cats.includes(i.categoriaFoto));
-    const fotos = _mo.fotos.filter(f => d.cats.includes(f.categoria));
-    const ultima = fotos.map(f => _moIsoParaData(f.atual.dia)).sort((a, b) => b - a)[0];
-    const atraso = ultima ? _moDiasEntre(ultima, hoje) : null;
-    const base = fotos[0]?.atual.payload?.base || {};
-    // Sem lançamento de estoque: itens da fila e da faixa com o lançamento do
-    // último dia de conferência pendente + pares que tiveram SAP mas nenhum
-    // lançamento nos 30 dias (ponto cego).
-    const pendFila = its.filter(i => _moPendente(i)).length;
-    const pendFaixa = fotos.reduce((s, f) => s + (f.atual.payload?.faixa || []).filter(l => l[6]).length, 0);
-    const pend30 = fotos.reduce((s, f) => s + (f.atual.payload?.pontosCegos?.semLancamento?.total || 0), 0);
-    const semLanc = pendFila + pendFaixa + pend30;
-    const kgRes = its.reduce((s, i) => s + _moKgResidual(i), 0);
-    const rs = its.reduce((s, i) => s + _moRsResidual(i), 0);
-    // Variação e custo totais: soma COM SINAL (líquida, como a Variação Total
-    // do Gerencial) e, embaixo, quanto é desfalque e quanto é sobra.
-    const soma = (f, cond) => its.reduce((s, i) => s + (cond(i) ? f(i) : 0), 0);
-    const vLiq = soma(i => i.v, () => true), vDes = soma(i => i.v, i => i.v < 0), vSob = soma(i => i.v, i => i.v > 0);
-    const rLiq = soma(i => i.rs || 0, () => true), rDes = soma(i => i.rs || 0, i => i.v < 0), rSob = soma(i => i.rs || 0, i => i.v > 0);
-    const corSinal = v => v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'inherit';
-    const n = (v, c) => `<td${v ? ` style="color:${c}"` : ''}>${v}</td>`;
-    return `<tr onclick="muralFiltrarIds('fila de ${_moEsc(d.nome)}', this)" data-ids="${_muralIdsAttr(its)}">
-      <td><b>${_moEsc(d.nome)}</b><small>${_moEsc(d.cats.join(', '))}</small></td>
-      <td>${its.length}</td>
-      <td style="color:${corSinal(vLiq)}">${_moPesoSinal(vLiq)}<small>${_moPesoSinal(vDes)} · ${_moPesoSinal(vSob)}</small></td>
-      <td style="color:${corSinal(rLiq)}">${_moRs(rLiq)}<small>${_moRs(rDes)} · ${_moRs(rSob)}</small></td>
-      ${n(its.filter(i => i.piorando).length, 'var(--red)')}${n(its.filter(i => !i.temOc && i.diasSemAcao > 0).length, 'var(--urgente)')}${n(its.filter(i => i.status === 'escalonado').length, 'var(--red)')}${n(its.filter(i => i.semTratamento).length, 'var(--urgente)')}
-      <td${semLanc ? ' style="color:var(--amber)"' : ''} title="Fila: ${pendFila} · Na faixa: ${pendFaixa} · Sem nenhum lançamento em 30 dias: ${pend30}">${semLanc}<small>fila ${pendFila} · faixa ${pendFaixa} · 30d ${pend30}</small></td>
-      <td>${_moPeso(kgRes)}<small>${_moRs(rs).replace(/^[+−]/, '')}</small></td>
-      <td${atraso == null || atraso > 1 ? ' style="color:var(--red)"' : ''}>${atraso == null ? 'sem foto' : atraso === 0 ? 'hoje' : `há ${atraso} dia${atraso > 1 ? 's' : ''}`}<small>SAP ${_moEsc((base.sap || '—').slice(0, 5))} · lanç. ${_moEsc((base.lancamentos || '—').slice(0, 5))}</small></td></tr>`;
-  }).join('');
-  // Central na fila de mais de um analista: causa comum provável na central.
-  const donosPorCentral = new Map();
-  ativos.forEach(i => {
-    if (!donosPorCentral.has(i.central)) donosPorCentral.set(i.central, new Set());
-    donosPorCentral.get(i.central).add(i.dono.nome);
-  });
-  // Mais analistas e mais itens primeiro. Um bloco recolhido só, com um chip
-  // por central (Hugo, 09/11/2026: uma linha por central ocupava a tela).
-  const multi = [...donosPorCentral].filter(([, s]) => s.size > 1)
-    .map(([c, s]) => ({ c, s, its: ativos.filter(i => i.central === c) }))
-    .sort((a, b) => (b.s.size - a.s.size) || (b.its.length - a.its.length));
-  const multiHtml = multi.length ? `<details class="mo-multi">
-      <summary><i class="ti ti-alert-triangle"></i><b>${multi.length} centra${multi.length > 1 ? 'is' : 'l'}</b> na fila de mais de um analista
-        <span class="mo-hint">· pode ser causa comum na central (operação, balança, gestão)</span><i class="ti ti-chevron-down mo-multi-chev"></i></summary>
-      <div class="mo-multi-chips">${multi.map(({ c, s, its }) =>
-        `<button class="mo-chip" onclick="muralFiltrarIds('${_moEsc(c)}', this)" data-ids="${_muralIdsAttr(its)}" title="${_moEsc([...s].join(', '))}"><b>${_moEsc(c)}</b> ${s.size} analistas · ${its.length} ite${its.length > 1 ? 'ns' : 'm'}</button>`).join('')}</div>
-    </details>` : '';
-  return `<div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-users"></i>Painel do time</span><span class="mo-hint" style="margin-left:auto">Clique num analista para ver a fila dele</span></div>
-    <div class="mo-scroll"><table class="mo-team"><thead><tr><th>Analista</th><th>Na fila</th><th title="Soma com sinal das variações da fila. Embaixo: desfalque · sobra">Variação total</th><th title="Soma com sinal do custo das variações da fila. Embaixo: desfalque · sobra">Custo da variação</th><th>Piorando</th><th>Sem ação</th><th>Escalonados</th><th title="Ainda sem comentário com a causa nem ocorrência: não pode ir para o fechamento">Sem tratamento</th><th title="Pares sem o lançamento do último dia de conferência (diário: último dia útil; Agregado/Adição: terça), na fila e na faixa, mais os que não tiveram nenhum lançamento em 30 dias">Sem lançamento</th><th>Sem explicação</th><th>Foto</th></tr></thead><tbody>${linhas}</tbody></table></div>
-    ${multiHtml}</div>`;
+
+// Cartões laterais recolhíveis (Hugo, 10/11/2026); o estado de cada um fica
+// guardado neste navegador.
+function _muralLatAberto(id) {
+  try { const v = localStorage.getItem('mural.lat.' + id); return v == null ? true : v === '1'; } catch (_) { return true; }
+}
+function muralLatToggle(el) { try { localStorage.setItem('mural.lat.' + el.dataset.lat, el.open ? '1' : '0'); } catch (_) {} }
+function _muralLatHtml(id, icon, titulo, corpo, { acao = '', classeCorpo = '' } = {}) {
+  return `<details class="mo-panel mo-lat" data-lat="${id}"${_muralLatAberto(id) ? ' open' : ''} ontoggle="muralLatToggle(this)">
+    <summary class="mo-panel-head"><span class="mo-panel-title"><i class="ti ${icon}"></i>${titulo}</span>${acao}<i class="ti ti-chevron-down mo-lat-chev"></i></summary>
+    <div class="mo-panel-body ${classeCorpo}">${corpo}</div></details>`;
 }
 
 function _muralAuditoriaHtml() {
@@ -1083,8 +1098,9 @@ function _muralAuditoriaHtml() {
       <div class="mo-blind${a.diverg.length ? ' mo-blind-alerta' : ''}"><b>${a.diverg.length} par(es) com variação divergente</b><small>Sua base × foto do dono: base desatualizada ou importação incompleta de um dos lados.</small>${l(a.diverg, x => `<small>• ${_moEsc(x.material)} · ${_moEsc(x.central)}: ADM ${_moKg(x.vAdm)} × dono ${_moKg(x.vDono)}</small>`)}</div>
       <div class="mo-blind${a.semCadastro ? ' mo-blind-alerta' : ''}"><b>${a.semCadastro} material(is) sem categoria na sua base</b><small>${_moEsc((a.semCadastroEx || []).slice(0, 5).join('; '))}</small></div>`;
   }
-  return `<div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-shield-search"></i>Auditoria de cobertura</span>
-    <button class="btn btn-sm" style="margin-left:auto" onclick="muralAuditar()"><i class="ti ti-player-play"></i> ${a ? 'Rodar de novo' : 'Rodar'}</button></div><div class="mo-panel-body">${corpo}</div></div>`;
+  // preventDefault: o botão fica no cabeçalho recolhível e não deve recolher.
+  return _muralLatHtml('auditoria', 'ti-shield-search', 'Auditoria de cobertura', corpo, {
+    acao: `<button class="btn btn-sm" style="margin-left:auto" onclick="event.preventDefault();muralAuditar()"><i class="ti ti-player-play"></i> ${a ? 'Rodar de novo' : 'Rodar'}</button>` });
 }
 
 function muralRender() {
@@ -1114,9 +1130,9 @@ function muralRender() {
   if (itens.some(i => i.avocado)) filtros.push(['avocados', 'Avocados']);
   const cats = [...new Set(_mo.fotos.map(f => f.categoria))].join(', ');
   const fotoInfo = _mo.fotos.map(f => `${f.categoria}: ${String(f.atual.dia).split('-').reverse().join('/')}`).join(' · ');
-  // KPIs e Painel do time no topo; fechamento, "desde a foto anterior" e
-  // filtros logo antes da fila (Hugo, 09/11/2026).
-  el.innerHTML = cab + _muralKpisHtml(base) + (adm ? _muralTimeHtml(itens) : '') + _muralFechamentoHtml(itens) + _muralDesdeHtml(itens) + _muralFiltrosHtml(itens) +
+  // Topo = Proposta B (Hugo, 10/11/2026): placar do fechamento (respeita os
+  // filtros), cartões por analista (ADM), "desde a foto anterior", filtros.
+  el.innerHTML = cab + _muralPlacarHtml(base) + (adm ? _muralTimeHtml(itens) : '') + _muralDesdeHtml(itens) + _muralFiltrosHtml(itens) +
     `<div class="mo-grid">
       <div class="mo-panel">
         <div class="mo-panel-head">
@@ -1138,11 +1154,11 @@ function muralRender() {
         <div class="mo-foot-note mo-hint">Janela móvel de ${MURAL_JANELA_DIAS} dias até ontem · Fotos: ${_moEsc(fotoInfo)}</div>
       </div>
       <div class="mo-aside">
-        <div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-eye-off"></i>Pontos cegos</span></div><div class="mo-panel-body">${_muralPontosCegosHtml()}</div></div>
+        ${_muralLatHtml('pontos-cegos', 'ti-eye-off', 'Pontos cegos', _muralPontosCegosHtml())}
         ${adm ? _muralAuditoriaHtml() : ''}
-        <div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-clock"></i>Prazos para o dono agir</span></div><div class="mo-panel-body mo-rules">
-          ${Object.entries(MURAL_PRAZO).map(([k, d]) => `<span class="mo-lvl" style="--lv:${MURAL_NIVEL[k].cor}">${MURAL_NIVEL[k].label}</span><span>${d} dias${k === 'critico' ? ', só sai com ocorrência' : ''}</span>`).join('')}
-          <p class="mo-hint" style="grid-column:1/-1;margin:6px 0 0">Ação é comentar ou abrir ocorrência; o comentário renova o prazo uma vez. Prazo vencido, ou ocorrência aberta com a variação crescendo, escalona ao ADM. Nenhum prazo passa do fechamento.</p></div></div>
+        ${_muralLatHtml('prazos', 'ti-clock', 'Prazos para o dono agir',
+          `${Object.entries(MURAL_PRAZO).map(([k, d]) => `<span class="mo-lvl" style="--lv:${MURAL_NIVEL[k].cor}">${MURAL_NIVEL[k].label}</span><span>${d} dias${k === 'critico' ? ', só sai com ocorrência' : ''}</span>`).join('')}
+          <p class="mo-hint" style="grid-column:1/-1;margin:6px 0 0">Ação é comentar ou abrir ocorrência; o comentário renova o prazo uma vez. Prazo vencido, ou ocorrência aberta com a variação crescendo, escalona ao ADM. Nenhum prazo passa do fechamento.</p>`, { classeCorpo: 'mo-rules' })}
       </div>
     </div>`;
   _muralRxAtualizar();
