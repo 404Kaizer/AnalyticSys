@@ -803,71 +803,77 @@ function _muralPrazoHtml(it) {
   return `<span class="mo-meta${it.limitadoPeloFechamento ? ' mo-red' : ''}"><i class="ti ti-clock"></i> ${d === 0 ? 'prazo vence hoje' : `${d} dia${d > 1 ? 's' : ''} para agir`}${fech}${crit ? ' · exige ocorrência' : ''}</span>`;
 }
 
-// Onde procurar: o que já aparece no 1º lançamento do trecho (do dia 1 até
-// ele: primeiros dias do mês, ou Custos SAP do mês anterior importado antes
-// do ajuste do fechamento) × o que veio depois. Só aparece quando essa
-// parte pesa (≥ 30% da variação).
-function _muralHerdadaHtml(it) {
-  if (!it.herdadaKg || Math.abs(it.herdadaKg) < 0.3 * Math.abs(it.v)) return '';
-  const desde = (it.primeiroMes || it.pontos?.[0])?.[0]?.slice(0, 5) || '';
-  const doMes = !!it.primeiroMes && it.atual;
-  return `<div class="mo-ex-text"><b class="mo-herd">${_moKg(it.herdadaKg)}</b> já no 1º lançamento${doMes ? ' do mês' : ''} (${_moEsc(desde)}) · <b>${_moKg(it.novaKg)}</b> depois</div>`;
+// Prazo em texto curto para a coluna Situação da linha (Proposta A).
+// { t, red }: red = vencido ou batendo no fechamento.
+function _muralPrazoTxt(it) {
+  if (it.temOc) {
+    const lim = it.ocs.map(o => o.limite).filter(Boolean).sort((a, b) => a - b)[0];
+    const d = lim ? _moDiasEntre(new Date(), lim) : null;
+    const t = `${it.ocs.map(o => o.numero).join(', ') || 'Ocorrência'} aberta`
+      + (d == null ? '' : d < 0 ? ` · central vencida há ${-d} d` : ` · central até ${fmtPtDate(lim).slice(0, 5)}`)
+      + (it.ocCrescendo ? ' · crescendo desde a abertura' : '');
+    return { t, red: (d != null && d < 0) || it.ocCrescendo };
+  }
+  const d = _moDiasEntre(new Date(), it.limite);
+  const exige = it.nivel === 'critico' ? ' · exige ocorrência' : '';
+  if (d < 0) return { t: `Prazo vencido há ${-d} dia${d < -1 ? 's' : ''}${exige}`, red: true };
+  return { t: `${d === 0 ? 'Prazo vence hoje' : `${d} dia${d > 1 ? 's' : ''} para agir`}${it.limitadoPeloFechamento ? ' (fechamento)' : ''}${exige}`, red: it.limitadoPeloFechamento };
 }
 
+// Linha do item — Proposta A, "Linha compacta" (Hugo, 10/11/2026): colunas
+// fixas Item · Situação · Últimos 30 dias · Variação do mês · ações em
+// ícones. O que não cabe nas colunas vira UMA linha curta de avisos, só
+// quando existe; a composição da prioridade fica no balão do número. O
+// detalhe completo está no Raio-X (clique na linha).
 function _muralItemHtml(it) {
   const nv = MURAL_NIVEL[it.nivel] || MURAL_NIVEL.atencao;
-  const st = MURAL_STATUS[it.status];
-  // Número e gráfico na cor do SINAL, padrão do sistema: desfalque vermelho,
-  // sobra âmbar. A cor do nível fica na etiqueta e na faixa lateral.
+  const st = MURAL_STATUS[it.status] || { label: it.status, cor: 'var(--text2)' };
   const corV = it.v < -0.05 ? 'var(--red)' : it.v > 0.05 ? 'var(--amber)' : 'var(--text2)';
-  const chips = [];
-  if (it.piorando) chips.push(['hot', 'ti-trending-up', 'piorando']);
-  if ((it.meses || 1) > 1) chips.push(['hot', 'ti-history', `${it.meses}º mês seguido`]);
-  if (it.reincidente) chips.push(['hot', 'ti-repeat', `reincidente: ${_moKg(it.anteriorKg)} antes do mês, mesmo sentido`]);
-  if (!it.temOc && it.diasSemAcao > 0) chips.push(['warn', 'ti-clock', `sem ação há ${it.diasSemAcao} dia${it.diasSemAcao > 1 ? 's' : ''}`]);
-  const pend = _moPendente(it);
-  if (pend) chips.push(['warn', 'ti-calendar-x', `lançamento ${pend} pendente`]);
-  if (it.capErro) chips.push(['warn', 'ti-alert-hexagon', 'acima da capacidade física']);
-  if (it.ocs.length) chips.push(['', 'ti-file-alert', it.ocs.map(o => o.numero).join(', ')]);
-  if (it.avocado) chips.push(['adm', 'ti-shield-check', `avocado pelo ADM: ${it.avocado.motivo}`]);
-  if (it.causa) chips.push(['adm', 'ti-message-check', `causa: ${it.causa}`]);
-  const pe = Math.min(100, Math.abs(it.explicadoKg || 0) / (Math.abs(it.v) || 1) * 100);
-  const explic = (it.explic || []).length
-    ? `<b class="mo-teal">${_moKg(it.explicadoKg)}</b> explicados · <b>${_moKg(it.residual)}</b> sem explicação`
-    : `Nada explicado por pendência ou divergência · <b>${_moKg(it.v)}</b> a investigar`;
-  const titleExplic = (it.explic || []).map(e => `${e.t}: ${_moKg(e.kg)}`).join('\n');
-  const titlePrio = it.partes.filter(p => p[1]).map(p => `${p[0]}: +${p[1].toFixed(1)}`).join('\n');
   const pts = it.pontos || [];
   const dataset = `data-central="${_moEsc(it.central)}" data-material="${_moEsc(it.material)}"`;
-  // Clique em qualquer parte do item abre o Raio-X (menos nos botões).
+  // Linha 2 do item: onde · formato · reincidência/tendência.
+  const sub = [_moEsc(it.central), `Reg. ${_moEsc(it.regional)}`,
+    `<span title="${_moEsc(MURAL_FORMATO_DESC[it.formato] || '')}">${_moEsc(MURAL_FORMATO_LABEL[it.formato] || it.formato)}</span>`];
+  if (it.reincidente) sub.push(`<span class="mo-red" title="${_moEsc(_moKg(it.anteriorKg))} antes do mês, mesmo sentido">reincidente</span>`);
+  if ((it.meses || 1) > 1) sub.push(`<span class="mo-red">${it.meses}º mês seguido</span>`);
+  if (it.piorando) sub.push('<span class="mo-red">piorando</span>');
+  if (_moEhAdm()) sub.push(it.avocado ? `ADM <span class="mo-hint">(${_moEsc(it.dono.nome)} acompanha)</span>` : _moEsc(it.dono.nome));
+  // Avisos: só o que exige atenção ou explica parte da variação.
+  const avisos = [];
+  const pend = _moPendente(it);
+  if (pend) avisos.push(`<span class="mo-av-warn"><i class="ti ti-calendar-x"></i>lançamento ${_moEsc(pend)} pendente</span>`);
+  if (it.capErro) avisos.push('<span class="mo-av-warn"><i class="ti ti-alert-hexagon"></i>acima da capacidade física</span>');
+  if (Math.abs(it.explicadoKg || 0) >= 0.5) avisos.push(`<span class="mo-teal" title="${_moEsc((it.explic || []).map(e => `${e.t}: ${_moKg(e.kg)}`).join('\n'))}"><i class="ti ti-arrows-diff"></i>${_moKg(it.explicadoKg)} explicados</span>`);
+  if (it.herdadaKg && Math.abs(it.herdadaKg) >= 0.3 * Math.abs(it.v)) avisos.push(`<span class="mo-herd"><i class="ti ti-arrow-bar-to-down"></i>${_moKg(it.herdadaKg)} já no 1º lançamento do mês</span>`);
+  if (it.avocado) avisos.push(`<span class="mo-teal"><i class="ti ti-shield-check"></i>avocado: ${_moEsc(it.avocado.motivo)}</span>`);
+  if (it.causa) avisos.push(`<span class="mo-teal"><i class="ti ti-message-check"></i>causa: ${_moEsc(it.causa)}</span>`);
+  const prazo = _muralPrazoTxt(it);
+  const semAcao = !it.temOc && it.diasSemAcao > 0 ? ` · ${it.diasSemAcao} dia${it.diasSemAcao > 1 ? 's' : ''} sem ação` : '';
+  const titleNum = [it.atual === false ? 'Sem lançamento no mês ainda: mostrando o acumulado de 30 dias' : 'Variação do mês: desde o dia 1 (após o fechamento anterior)',
+    `Prioridade ${it.prioridade.toFixed(1)}:`, ...it.partes.filter(p => p[1]).map(p => `  ${p[0]}: +${p[1].toFixed(1)}`)].join('\n');
+  const periodo = pts.length ? pts[0][0] + ' a ' + pts[pts.length - 1][0] : '';
   return `<article class="mo-item mo-rx-link" style="--lv:${nv.cor}" ${dataset} onclick="if (!event.target.closest('button, a, input, select')) muralRaioXAbrir(this)">
     <div class="mo-stripe"></div>
     <div class="mo-main">
-      <div class="mo-title">
-        <span class="mo-lvl"><i class="ti ${nv.icon}"></i>${nv.label}</span>
-        <span class="mo-mat">${_moEsc(it.material)}</span>
-        <span class="mo-where">· ${_moEsc(it.central)} · Reg. ${_moEsc(it.regional)}</span>
-        <span class="mo-shape mo-shape-${_moEsc(it.formato)}" title="${_moEsc(MURAL_FORMATO_DESC[it.formato] || '')}">${_moEsc(MURAL_FORMATO_LABEL[it.formato] || it.formato)}</span>
-      </div>
-      ${chips.length ? `<div class="mo-why">${chips.map(([c, i, t]) => `<span class="${c}"><i class="ti ${i}"></i>${_moEsc(t)}</span>`).join('')}</div>` : ''}
-      <div class="mo-explain" title="${_moEsc(titleExplic)}">
-        <div class="mo-track"><i style="width:${pe}%;background:var(--teal)"></i><i style="width:${100 - pe}%;background:${nv.cor};opacity:.75"></i></div>
-        <div class="mo-ex-text">${explic}</div>
-        ${_muralHerdadaHtml(it)}
-      </div>
+      <div class="mo-title"><span class="mo-lvl"><i class="ti ${nv.icon}"></i>${nv.label}</span><span class="mo-mat">${_moEsc(it.material)}</span></div>
+      <div class="mo-sub">${sub.join(' · ')}</div>
+      ${avisos.length ? `<div class="mo-avisos">${avisos.join('')}</div>` : ''}
     </div>
-    <div class="mo-sparkbox">${_muralSpark(pts, corV, it.atual ? it.desde : null)}<small>${pts.length ? `${_moEsc(pts[0][0].slice(0, 5))} → ${_moEsc(pts[pts.length - 1][0].slice(0, 5))}` : ''}</small></div>
-    <div class="mo-num"><span class="mo-kg" style="color:${corV}" title="${it.atual === false ? 'Sem lançamento no mês ainda: mostrando o acumulado de 30 dias' : 'Variação atual: desde o dia 1 do mês (após o fechamento anterior)'}">${_moKg(it.v)}</span><span class="mo-rs">${it.custoMed ? _moRs(it.rs) : 'sem custo'}</span>${
-      it.v30 != null ? `<span class="mo-30" title="Acumulado dos últimos 30 dias, atravessando o fechamento">${it.atual === false ? 'sem lançamento no mês · ' : ''}30 dias: ${_moKg(it.v30)}</span>`
-        : '<span class="mo-30 mo-antiga" title="Foto calculada pela versão anterior do Mural: o número é o acumulado de 30 dias. A variação do mês aparece quando o dono da categoria entrar ou clicar em Atualizar.">foto antiga · acumulado 30 dias</span>'}<span class="mo-prio" title="${_moEsc(titlePrio)}">prioridade <b>${it.prioridade.toFixed(1)}</b></span></div>
-    <div class="mo-foot">
-      <span class="mo-status" style="--sc:${st.cor}">${st.label}</span>
-      <span class="mo-meta"><i class="ti ti-user"></i> ${it.avocado ? `ADM <span class="mo-hint">(${_moEsc(it.dono.nome)} acompanha)</span>` : _moEsc(it.dono.nome)}</span>
-      ${_muralPrazoHtml(it)}
-      <div class="mo-actions">
-        <button class="btn btn-sm" onclick="muralMovimentacoes(this)" ${dataset} title="Detalhe dia a dia do mês, com os movimentos SAP (como na Visão Micro)"><i class="ti ti-table"></i> Movimentações</button>
-        ${_muralBotoesHtml(it, dataset, pts.length ? pts[0][0] + ' a ' + pts[pts.length - 1][0] : '')}
-      </div>
+    <div class="mo-sit">
+      <b style="color:${st.cor}">${st.label}</b>
+      <span${prazo.red ? ' class="mo-red"' : ''}>${_moEsc(prazo.t)}${semAcao}</span>
+    </div>
+    <div class="mo-sparkbox">${_muralSpark(pts, corV, it.atual ? it.desde : null)}</div>
+    <div class="mo-num" title="${_moEsc(titleNum)}">
+      <span class="mo-kg" style="color:${corV}">${_moKg(it.v)}</span>
+      <span class="mo-30">${it.custoMed ? _moRs(it.rs) : 'sem custo'} · ${it.v30 != null ? `30d ${_moKg(it.v30)}` : '<span class="mo-antiga">foto antiga</span>'}</span>
+    </div>
+    <div class="mo-acoes">
+      <button class="btn btn-sm mo-ico" onclick="muralMovimentacoes(this)" ${dataset} title="Movimentações: detalhe dia a dia do mês, com os movimentos SAP" aria-label="Movimentações"><i class="ti ti-table"></i></button>
+      <button class="btn btn-sm mo-ico" onclick="muralComentar(this)" ${dataset} data-diff="${it.v}" data-periodo="${_moEsc(periodo)}" title="${it.temOc ? 'Comentar' : 'Comentar ou abrir ocorrência'}" aria-label="${it.temOc ? 'Comentar' : 'Comentar ou abrir ocorrência'}"><i class="ti ti-message-plus"></i></button>
+      ${_moEhAdm() && _mo.avocDisponivel ? (it.avocado
+        ? `<button class="btn btn-sm mo-ico" onclick="muralDevolver('${_moEsc(it.avocado.id)}')" title="Devolver a ${_moEsc(it.dono.nome)}" aria-label="Devolver"><i class="ti ti-arrow-back-up"></i></button>`
+        : `<button class="btn btn-sm mo-ico" onclick="muralAvocar(this)" ${dataset} data-categoria="${_moEsc(it.categoriaFoto)}" data-dono="${_moEsc(it.dono.nome)}" title="Avocar: assumir no lugar do dono" aria-label="Avocar"><i class="ti ti-shield-check"></i></button>`) : ''}
     </div>
   </article>`;
 }
@@ -1312,7 +1318,8 @@ function _muralGruposHtml(lista, { itemHtml, peso, resumo, px = '' }) {
 
 function _muralFilaHtml(lista) {
   if (!lista.length) return '<div class="empty-state" style="padding:28px"><p>Nada nesta visão.</p></div>';
-  return _muralGruposHtml(lista, { itemHtml: _muralItemHtml });
+  return `<div class="mo-cols" aria-hidden="true"><span></span><span>Item</span><span>Situação</span><span>Últimos 30 dias</span><span class="mo-r">Variação do mês</span><span></span></div>`
+    + _muralGruposHtml(lista, { itemHtml: _muralItemHtml });
 }
 
 function muralGrupo(g) { _mo.grupo = g; muralRender(); }
@@ -1693,7 +1700,10 @@ function _muralRxChart(rx, lim, acoes, gran = 'dia') {
   // o triângulo pequeno quase não aparecia). Vai atrás da linha e dos pontos.
   const porDia = new Map();
   acoes.forEach(a => {
-    const i = rx.dayList.findIndex(d => _moDia(d).getTime() === _moDia(a.quando).getTime());
+    let i = rx.dayList.findIndex(d => _moDia(d).getTime() === _moDia(a.quando).getTime());
+    // Ação de hoje (o eixo vai até ontem): fica na última data, com a data
+    // real no balão — senão o comentário recém-feito não aparecia (10/11).
+    if (i < 0 && _moDia(a.quando) > _moDia(rx.dayList[n - 1])) i = n - 1;
     if (i >= 0) { if (!porDia.has(i)) porDia.set(i, []); porDia.get(i).push(a); }
   });
   const marcas = [...porDia].map(([i, as]) => {
