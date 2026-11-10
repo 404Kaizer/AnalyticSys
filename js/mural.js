@@ -1074,16 +1074,31 @@ function _muralPontosCegosHtml() {
 }
 
 
-// Cartões laterais recolhíveis (Hugo, 10/11/2026); o estado de cada um fica
-// guardado neste navegador.
-function _muralLatAberto(id) {
-  try { const v = localStorage.getItem('mural.lat.' + id); return v == null ? true : v === '1'; } catch (_) { return true; }
+// Coluna lateral (Pontos cegos, Auditoria, Prazos) recolhe para o LADO
+// (Hugo, 10/11/2026): vira uma barra estreita de ícones e a fila ganha a
+// largura. O estado fica guardado neste navegador.
+function _muralColunaAberta() {
+  try { return localStorage.getItem('mural.coluna') !== '0'; } catch (_) { return true; }
 }
-function muralLatToggle(el) { try { localStorage.setItem('mural.lat.' + el.dataset.lat, el.open ? '1' : '0'); } catch (_) {} }
+// abrir: true/false; alvo: id do cartão para rolar até ele ao abrir.
+function muralColuna(abrir, alvo) {
+  try { localStorage.setItem('mural.coluna', abrir ? '1' : '0'); } catch (_) {}
+  const grid = document.querySelector('#mural-root .mo-grid');
+  if (!grid) return;
+  grid.classList.toggle('mo-lat-off', !abrir);
+  if (abrir && alvo) document.querySelector(`#mural-root .mo-lat[data-lat="${alvo}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+const MURAL_LATERAIS = [['pontos-cegos', 'ti-eye-off', 'Pontos cegos'], ['auditoria', 'ti-shield-search', 'Auditoria de cobertura'], ['prazos', 'ti-clock', 'Prazos para o dono agir']];
+function _muralTrilhoHtml(adm) {
+  return `<div class="mo-trilho">
+    <button class="btn btn-sm mo-ico" onclick="muralColuna(true)" title="Mostrar os cartões laterais" aria-label="Mostrar os cartões laterais"><i class="ti ti-layout-sidebar-right-expand"></i></button>
+    ${MURAL_LATERAIS.filter(([id]) => adm || id !== 'auditoria').map(([id, ic, t]) =>
+      `<button class="btn btn-sm mo-ico" onclick="muralColuna(true, '${id}')" title="${t}" aria-label="${t}"><i class="ti ${ic}"></i></button>`).join('')}
+  </div>`;
+}
 function _muralLatHtml(id, icon, titulo, corpo, { acao = '', classeCorpo = '' } = {}) {
-  return `<details class="mo-panel mo-lat" data-lat="${id}"${_muralLatAberto(id) ? ' open' : ''} ontoggle="muralLatToggle(this)">
-    <summary class="mo-panel-head"><span class="mo-panel-title"><i class="ti ${icon}"></i>${titulo}</span>${acao}<i class="ti ti-chevron-down mo-lat-chev"></i></summary>
-    <div class="mo-panel-body ${classeCorpo}">${corpo}</div></details>`;
+  return `<div class="mo-panel mo-lat" data-lat="${id}"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ${icon}"></i>${titulo}</span>${acao}</div>
+    <div class="mo-panel-body ${classeCorpo}">${corpo}</div></div>`;
 }
 
 function _muralAuditoriaHtml() {
@@ -1098,9 +1113,8 @@ function _muralAuditoriaHtml() {
       <div class="mo-blind${a.diverg.length ? ' mo-blind-alerta' : ''}"><b>${a.diverg.length} par(es) com variação divergente</b><small>Sua base × foto do dono: base desatualizada ou importação incompleta de um dos lados.</small>${l(a.diverg, x => `<small>• ${_moEsc(x.material)} · ${_moEsc(x.central)}: ADM ${_moKg(x.vAdm)} × dono ${_moKg(x.vDono)}</small>`)}</div>
       <div class="mo-blind${a.semCadastro ? ' mo-blind-alerta' : ''}"><b>${a.semCadastro} material(is) sem categoria na sua base</b><small>${_moEsc((a.semCadastroEx || []).slice(0, 5).join('; '))}</small></div>`;
   }
-  // preventDefault: o botão fica no cabeçalho recolhível e não deve recolher.
   return _muralLatHtml('auditoria', 'ti-shield-search', 'Auditoria de cobertura', corpo, {
-    acao: `<button class="btn btn-sm" style="margin-left:auto" onclick="event.preventDefault();muralAuditar()"><i class="ti ti-player-play"></i> ${a ? 'Rodar de novo' : 'Rodar'}</button>` });
+    acao: `<button class="btn btn-sm" style="margin-left:auto" onclick="muralAuditar()"><i class="ti ti-player-play"></i> ${a ? 'Rodar de novo' : 'Rodar'}</button>` });
 }
 
 function muralRender() {
@@ -1133,7 +1147,7 @@ function muralRender() {
   // Topo = Proposta B (Hugo, 10/11/2026): placar do fechamento (respeita os
   // filtros), cartões por analista (ADM), "desde a foto anterior", filtros.
   el.innerHTML = cab + _muralPlacarHtml(base) + (adm ? _muralTimeHtml(itens) : '') + _muralDesdeHtml(itens) + _muralFiltrosHtml(itens) +
-    `<div class="mo-grid">
+    `<div class="mo-grid${_muralColunaAberta() ? '' : ' mo-lat-off'}">
       <div class="mo-panel">
         <div class="mo-panel-head">
           <div class="mo-abas" role="tablist">
@@ -1153,7 +1167,9 @@ function muralRender() {
         ${_mo.aba === 'faixa' ? _muralFaixaHtml() : `<div class="mo-queue">${_muralFilaHtml(ativos)}</div>`}
         <div class="mo-foot-note mo-hint">Janela móvel de ${MURAL_JANELA_DIAS} dias até ontem · Fotos: ${_moEsc(fotoInfo)}</div>
       </div>
+      ${_muralTrilhoHtml(adm)}
       <div class="mo-aside">
+        <button class="btn btn-sm mo-aside-x" onclick="muralColuna(false)" title="Recolher os cartões para o lado"><i class="ti ti-layout-sidebar-right-collapse"></i> Recolher</button>
         ${_muralLatHtml('pontos-cegos', 'ti-eye-off', 'Pontos cegos', _muralPontosCegosHtml())}
         ${adm ? _muralAuditoriaHtml() : ''}
         ${_muralLatHtml('prazos', 'ti-clock', 'Prazos para o dono agir',
