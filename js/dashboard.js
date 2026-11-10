@@ -1303,7 +1303,7 @@ function _dgVgCounts(pares) {
 }
 
 // Score agregado exibido nos donuts — MESMA fórmula usada pelo Dashboard
-// Analítico (macro.js: _scoreFromCounts, dentro de macroApplyFilter):
+// Analítico (macro.js: macroScoreFromCounts):
 // penalidade = atenção×0,2 + urgente×0,5 + crítico×1,0, sobre o total de
 // itens (não é a mesma fórmula do calcHealthScore individual de central).
 function _dgVgScoreFromCounts(counts) {

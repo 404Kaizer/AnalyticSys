@@ -1230,6 +1230,8 @@ function muralRender() {
   }
   const itens = muralItensDerivados();
   _mo._ultItens = itens;
+  // Visão nova em teste (mural-painel.js, Hugo 10/11/2026): lista + painel.
+  if (typeof muralPainelAtivo === 'function' && muralPainelAtivo()) { muralPainelRender(el, itens); return; }
   // Filtros da barra valem para KPIs e fila; fechamento, "desde a foto
   // anterior" e Painel do time continuam mostrando o quadro inteiro.
   const base = _muralAplicarFiltros(itens);
@@ -1241,7 +1243,7 @@ function muralRender() {
   const fotoInfo = _mo.fotos.map(f => `${f.categoria}: ${String(f.atual.dia).split('-').reverse().join('/')}`).join(' · ');
   // Topo = Proposta B (Hugo, 10/11/2026): placar do fechamento (respeita os
   // filtros), cartões por analista (ADM), "desde a foto anterior", filtros.
-  el.innerHTML = cab + _muralPlacarHtml(base) + (adm ? _muralTimeHtml(itens) : '') + _muralDesdeHtml(itens) + _muralFiltrosHtml(itens) +
+  el.innerHTML = cab + (typeof muralPainelBotaoHtml === 'function' ? muralPainelBotaoHtml(false) : '') + _muralPlacarHtml(base) + (adm ? _muralTimeHtml(itens) : '') + _muralDesdeHtml(itens) + _muralFiltrosHtml(itens) +
     `<div class="mo-grid${_muralColunaAberta() ? '' : ' mo-lat-off'}">
       <div class="mo-panel">
         <div class="mo-panel-head">
@@ -1860,7 +1862,9 @@ function _muralRxChart(rx, lim, acoes, gran = 'dia') {
 // lançamento do mês) — a mesma conta da coluna "mês anterior" da Visão Micro
 // (_anGetVarMesAnterior). Mais o mês em aberto, como no Mural.
 const MURAL_RX_MESES = 6;
-function _muralRxMeses(central, mat, catKey) {
+// comAberto=false: só os meses fechados (o painel das Operações soma a
+// variação do mês em aberto que já tem, sem recalcular o mês).
+function _muralRxMeses(central, mat, catKey, comAberto = true) {
   const J = muralJanela(), out = [];
   const nomeMes = d => d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(d.getFullYear()).slice(2);
   for (let k = MURAL_RX_MESES; k >= 1; k--) {
@@ -1880,7 +1884,7 @@ function _muralRxMeses(central, mat, catKey) {
       anc, nat, teo, estFim: ok ? fimStock.value : null, dtFim: ok ? fimStock.dtLabel : null, v: ok && anc ? fimStock.value - teo : null,
       falta: !anc ? 'sem âncora' : 'sem inv.' });
   }
-  const atual = muralRaioXCalcular(central, mat, catKey, 'mes');
+  const atual = comAberto ? muralRaioXCalcular(central, mat, catKey, 'mes') : null;
   if (atual) {
     const s = atual.payload.summary;
     out.push({ chave: 'mes', rot: nomeMes(atual.ini), aberto: true, anc: s.pesoIniAusente ? null : { value: s.pesoIni, dtLabel: s.dtIniLabel.replace('Saldo SAP em ', '') },
@@ -1962,6 +1966,23 @@ function muralRaioX(central, mat, periodo = 'invs') { // abre em Inventários (H
   // Redesenhar troca o elemento sob o mouse e o "mouseout" nunca chega
   // (ex.: clique numa barra de inventário): esconde o balão antes.
   if (typeof _hideTip === 'function') _hideTip();
+  // Visão nova das Operações (mural-painel.js): o item selecionado mostra o
+  // Raio-X dentro do painel, no lugar da gaveta.
+  const host = document.getElementById('mp-rx');
+  if (host && host.dataset.c === central && host.dataset.m === mat) {
+    if (!host.dataset.tip && typeof _showTip === 'function') {
+      host.dataset.tip = '1';
+      host.addEventListener('mouseover', e => { const p = e.target.closest?.('.mo-rx-pt'); if (p) _showTip(e, decodeURIComponent(p.dataset.tip), p.dataset.col); });
+      host.addEventListener('mousemove', e => { if (e.target.closest?.('.mo-rx-pt')) _moveTip(e); });
+      host.addEventListener('mouseout', e => { if (e.target.closest?.('.mo-rx-pt')) _hideTip(); });
+    }
+    const sc = host.querySelector('.mo-dr-body')?.scrollTop || 0;
+    host.innerHTML = _muralRxHtml(rx, it, catKey);
+    if (_mo.rx.manterScroll) host.querySelector('.mo-dr-body').scrollTop = sc;
+    _mo.rx.manterScroll = false;
+    if (document.getElementById('mo-rx-exp-ov')?.classList.contains('open')) muralRxExpandir();
+    return;
+  }
   let dr = document.getElementById('mo-drawer');
   if (!dr) {
     document.body.insertAdjacentHTML('beforeend',
@@ -2045,6 +2066,8 @@ function muralRaioXFechar() {
   document.getElementById('mo-drawer')?.setAttribute('aria-hidden', 'true');
   document.getElementById('mo-scrim')?.classList.remove('open');
   _mo.rx = null;
+  // Fechar o Raio-X dentro do painel volta para a central do item.
+  if (document.getElementById('mp-rx') && typeof muralPainelVoltar === 'function') muralPainelVoltar();
 }
 // Depois de comentar/avocar o Mural redesenha; a gaveta aberta acompanha.
 function _muralRxAtualizar() {

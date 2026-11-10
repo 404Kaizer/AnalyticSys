@@ -8,6 +8,27 @@ const _levelColor = { critico: '#f43f5e', urgente: '#f97316', atencao: '#f59e0b'
 const _levelLabel = { critico: 'CRÍTICO', urgente: 'URGENTE', atencao: 'ATENÇÃO', bom: 'BOM' };
 const _levelSev   = { critico: 3, urgente: 2, atencao: 1, bom: 0 };
 const _levelFromScore = (s) => s >= 80 ? 'bom' : s >= 55 ? 'atencao' : s >= 30 ? 'urgente' : 'critico';
+// Símbolo de cada nível (Hugo, 10/11/2026: em todo lugar que mostra nível,
+// inclusive nos donuts). Tabler: ícone da fonte no HTML e o mesmo desenho
+// (path) dentro do SVG do donut.
+const _levelIcon = { critico: 'ti-flame', urgente: 'ti-alert-circle', atencao: 'ti-alert-triangle', bom: 'ti-circle-check' };
+const _levelIconPath = {
+  critico: 'M12 10.941c2.333 -3.308 .167 -7.823 -1 -8.941c0 3.395 -2.235 5.299 -3.667 6.706c-1.43 1.408 -2.333 3.621 -2.333 5.588c0 3.704 3.134 6.706 7 6.706s7 -3.002 7 -6.706c0 -1.712 -1.232 -4.403 -2.333 -5.588c-2.084 3.353 -3.257 3.353 -4.667 2.235',
+  urgente: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M12 8v4 M12 16h.01',
+  atencao: 'M12 9v4 M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z M12 16h.01',
+  bom: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M9 12l2 2l4 -4'
+};
+const _levelIconSvg = (lvl, x, y, size, col) => `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${(size / 24).toFixed(3)})" fill="none" stroke="${col}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="${_levelIconPath[lvl]}"/></g>`;
+
+// Saúde no centro do donut, a partir das contagens por nível: quanto do
+// total está saudável, penalizando pela gravidade (atenção 0,2 · urgente 0,5
+// · crítico 1,0). Também usada no painel das Operações (mural-painel.js).
+function macroScoreFromCounts(counts) {
+  const total = Object.values(counts).reduce((s, n) => s + n, 0);
+  if (!total) return 100;
+  const penalty = (counts.atencao || 0) * 0.2 + (counts.urgente || 0) * 0.5 + (counts.critico || 0) * 1.0;
+  return Math.max(0, Math.round((1 - penalty / total) * 100));
+}
 
 // Estado global para re-renderização ao filtrar
 let _macroState = null;
@@ -379,25 +400,8 @@ function macroApplyFilter() {
   // ── Score de saúde agregado ──────────────────────────────────────────
   // Usa HEALTH_PENALTIES para ponderar: mesmo cálculo do calcHealthScore
   // mas aplicado aos counts por nível já calculados acima
-  const _scoreFromCounts = (counts) => {
-    const total = Object.values(counts).reduce((s, n) => s + n, 0);
-    if (!total) return 100;
-    // Score geral da empresa: quanto do total está saudável,
-    // penalizando proporcionalmente pela gravidade de cada nível.
-    // Pesos por item sobre o total (não sobre os não-bons):
-    //   bom      → penalidade 0    (contribui 100% para a saúde)
-    //   atencao  → penalidade 0.2  (leve)
-    //   urgente  → penalidade 0.5  (moderado)
-    //   critico  → penalidade 1.0  (total)
-    const penalty =
-      (counts.atencao||0) * 0.2 +
-      (counts.urgente||0) * 0.5 +
-      (counts.critico||0) * 1.0;
-    return Math.max(0, Math.round((1 - penalty / total) * 100));
-  };
-
-  const centralScore = _scoreFromCounts(centralCounts);
-  const matScore     = _scoreFromCounts(matCounts);
+  const centralScore = macroScoreFromCounts(centralCounts);
+  const matScore     = macroScoreFromCounts(matCounts);
   const nCentrals    = Object.values(centralCounts).reduce((s, n) => s + n, 0);
   const nMats        = Object.values(matCounts).reduce((s, n) => s + n, 0);
 
@@ -487,7 +491,7 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, it
   if (!svgEl) return;
 
   const total = Object.values(counts).reduce((s, n) => s + n, 0);
-  const isCentrals = type === 'centrais';
+  const isCentrals = type === 'centrais' || type.endsWith('-centrais'); // '-centrais': painel das Operações
 
   if (!total) {
     svgEl.innerHTML = `<text x="150" y="145" text-anchor="middle" font-size="13" fill="var(--text3)" font-family="var(--mono)">Sem dados</text>`;
@@ -555,7 +559,7 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, it
 
     const tipLines = [
       `<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
-        <span style="width:10px;height:10px;border-radius:3px;background:${col};display:inline-block;flex-shrink:0"></span>
+        <i class="ti ${_levelIcon[lvl]}" style="color:${col};font-size:14px;flex-shrink:0"></i>
         <span style="font-weight:700;font-size:13px;color:var(--text)">${_levelLabel[lvl]}</span>
         <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:${col};font-weight:700">${n} (${pctStr}%)</span>
       </div>`,
@@ -639,8 +643,9 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, it
       <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="2" fill="${col}" opacity="0.7"/>
       <text x="${labelX.toFixed(1)}" y="${(ty - 3).toFixed(1)}" text-anchor="${labelAnchor}"
         font-size="12" font-weight="700" font-family="var(--mono)" fill="${col}">${label}</text>
-      <text x="${labelX.toFixed(1)}" y="${(ty + 11).toFixed(1)}" text-anchor="${labelAnchor}"
+      <text x="${(labelX + (onRight ? 13 : -13)).toFixed(1)}" y="${(ty + 11).toFixed(1)}" text-anchor="${labelAnchor}"
         font-size="9.5" font-family="var(--mono)" fill="${col}" opacity="0.65">${_levelLabel[lvl]}</text>
+      ${_levelIconSvg(lvl, onRight ? labelX : labelX - 10, ty + 2.5, 10, col)}
     </g>`;
   });
 
@@ -666,7 +671,11 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, it
   // Score principal — grande, colorido
   svg += `<text x="${CX}" y="${CY - 8}" text-anchor="middle" font-size="34" font-weight="700" font-family="var(--mono)" fill="${scoreCol}" style="pointer-events:none">${score}%</text>`;
   // Label de nível
-  svg += `<text x="${CX}" y="${CY + 13}" text-anchor="middle" font-size="9" font-weight="700" font-family="var(--mono)" fill="${scoreCol}" letter-spacing=".08em" opacity="0.85" style="pointer-events:none">${scoreLabel}</text>`;
+  // Símbolo à esquerda do nível; a largura do rótulo é estimada (mono 9px +
+  // letter-spacing ≈ 6,2 px por letra) para centralizar o conjunto.
+  const lblW = scoreLabel.length * 6.2;
+  svg += `<text x="${CX + 6}" y="${CY + 13}" text-anchor="middle" font-size="9" font-weight="700" font-family="var(--mono)" fill="${scoreCol}" letter-spacing=".08em" opacity="0.85" style="pointer-events:none">${scoreLabel}</text>`;
+  svg += _levelIconSvg(scoreLevel, CX + 6 - lblW / 2 - 13, CY + 4.5, 10, scoreCol);
   // Total de itens — discreto, abaixo
   svg += `<text x="${CX}" y="${CY + 32}" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="var(--text3)" style="pointer-events:none">${nLabel} ${unitLabel}</text>`;
 
@@ -704,7 +713,7 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, it
         padding:3px 10px;border-radius:5px;
         font-size:10px;font-weight:700;font-family:var(--mono);
         letter-spacing:.04em;white-space:nowrap;cursor:default">
-        <span style="width:6px;height:6px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>
+        <i class="ti ${_levelIcon[lvl]}" style="font-size:12px;flex-shrink:0"></i>
         ${counts[lvl]} ${_levelLabel[lvl]}
       </span>`;
     }).join('');
