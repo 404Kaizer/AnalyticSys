@@ -844,12 +844,15 @@ function _muralItemHtml(it) {
   const pts = it.pontos || [];
   const dataset = `data-central="${_moEsc(it.central)}" data-material="${_moEsc(it.material)}"`;
   // Linha 2 do item: onde · formato · reincidência/tendência.
-  const sub = [_moEsc(it.central), `Reg. ${_moEsc(it.regional)}`,
+  // Nas visões Regional e Central o grupo já diz a central e a regional, e o
+  // dono vem da categoria (Hugo, 10/11/2026): só a visão Material repete.
+  const porMat = _mo.grupo === 'material';
+  const sub = [...(porMat ? [_moEsc(it.central), `Reg. ${_moEsc(it.regional)}`] : []),
     `<span title="${_moEsc(MURAL_FORMATO_DESC[it.formato] || '')}">${_moEsc(MURAL_FORMATO_LABEL[it.formato] || it.formato)}</span>`];
   if (it.reincidente) sub.push(`<span class="mo-red" title="${_moEsc(_moKg(it.anteriorKg))} antes do mês, mesmo sentido">reincidente</span>`);
   if ((it.meses || 1) > 1) sub.push(`<span class="mo-red">${it.meses}º mês seguido</span>`);
   if (it.piorando) sub.push('<span class="mo-red">piorando</span>');
-  if (_moEhAdm()) sub.push(it.avocado ? `ADM <span class="mo-hint">(${_moEsc(it.dono.nome)} acompanha)</span>` : _moEsc(it.dono.nome));
+  if (porMat && _moEhAdm()) sub.push(it.avocado ? `ADM <span class="mo-hint">(${_moEsc(it.dono.nome)} acompanha)</span>` : _moEsc(it.dono.nome));
   // Avisos: só o que exige atenção ou explica parte da variação.
   const avisos = [];
   const pend = _moPendente(it);
@@ -1408,15 +1411,16 @@ function _muralResumoFaixa(its) {
 // como na Fila — o analista também confere e comenta o que está na faixa.
 function _muralFaixaItemHtml(l) {
   const dataset = `data-central="${_moEsc(l.central)}" data-material="${_moEsc(l.material)}"`;
+  const porMat = _mo.grupo === 'material'; // central e dono só na visão Material (ver _muralItemHtml)
   const corV = l.v < -0.05 ? 'var(--red)' : l.v > 0.05 ? 'var(--amber)' : 'var(--text2)';
   const corUso = l.pct >= 80 ? 'var(--amber)' : 'var(--green)';
   const nCom = typeof _varComDe === 'function' ? _varComDe(l.central, l.material).filter(r => !r.oc_id).length : 0;
   return `<article class="mo-fx mo-rx-link" ${dataset} onclick="if (!event.target.closest('button, a, input, select')) muralRaioXAbrir(this)">
     <div class="mo-fx-main">
-      <div class="mo-title"><span class="mo-mat">${_moEsc(l.material)}</span><span class="mo-where">· ${_moEsc(l.central)} · ${_moEsc(l.categoria)}</span>
+      <div class="mo-title"><span class="mo-mat">${_moEsc(l.material)}</span><span class="mo-where">· ${porMat ? _moEsc(l.central) + ' · ' : ''}${_moEsc(l.categoria)}</span>
         ${l.voltou ? '<span class="mo-voltou" title="Estava na fila na foto anterior">voltou à faixa</span>' : ''}
         ${l.terPend ? `<span class="mo-pend" title="Sem lançamento no último dia de conferência">lançamento ${_moEsc(_moPendente({ lancPendente: l.terPend }))} pendente</span>` : ''}</div>
-      <span class="mo-meta"><i class="ti ti-user"></i>${_moEsc(l.dono)} · último lançamento ${_moEsc((l.ult || '—').slice(0, 5))}${nCom ? ` · <i class="ti ti-message-dots"></i>${nCom}` : ''}</span>
+      <span class="mo-meta">${porMat ? `<i class="ti ti-user"></i>${_moEsc(l.dono)} · ` : ''}último lançamento ${_moEsc((l.ult || '—').slice(0, 5))}${nCom ? ` · <i class="ti ti-message-dots"></i>${nCom}` : ''}</span>
     </div>
     <div class="mo-fx-uso" title="Quanto da faixa &quot;bom&quot; da categoria a variação já ocupa"><span class="mo-uso"><i style="width:${Math.min(100, l.pct)}%;background:${corUso}"></i></span>${Math.round(l.pct)}%</div>
     <div class="mo-fx-v"><b style="color:${corV}">${_moKg(l.v)}</b>${l.v30 != null ? `<small>30 dias: ${_moKg(l.v30)}</small>` : ''}</div>
@@ -1742,9 +1746,8 @@ function _muralRxChart(rx, lim, acoes, gran = 'dia') {
     const cx = x(i), cy = H - B + 13, cor = as.some(a => a.oc) ? '#f43f5e' : '#3b82f6';
     // Só o tipo, o autor e quando — o texto inteiro fica no histórico, onde
     // o clique leva (Hugo, 09/11/2026: o balão cortava os comentários).
-    const hora = d => d.getHours() || d.getMinutes() ? ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
     const lista = as.map(a => `<div style="display:flex;gap:7px;margin-top:5px;align-items:center"><span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${a.oc ? '#f43f5e' : '#3b82f6'}"></span>
-      <span style="font-size:12px;color:var(--text)">${_moEsc(a.titulo)}</span><span style="margin-left:auto;padding-left:10px;font-family:var(--mono);font-size:11px;color:var(--text3)">${fmtPtDate(a.quando).slice(0, 5)}${hora(a.quando)}</span></div>`).join('')
+      <span style="font-size:12px;color:var(--text)">${_moEsc(a.titulo)}</span><span style="margin-left:auto;padding-left:10px;font-family:var(--mono);font-size:11px;color:var(--text3)">${_moRxDatas(a)}</span></div>`).join('')
       + '<div style="margin-top:8px;font-size:11.5px;color:var(--text3)">Clique para ler no histórico</div>';
     const titulo = as.length > 1 ? `${as.length} ações` : (as[0].oc ? 'Ocorrência' : 'Comentário');
     const tip = _moRxTip(cor, titulo, fmtPtDate(as[0].quando).slice(0, 5), '', lista);
@@ -1823,18 +1826,27 @@ function _muralRxBarras(meses, lim) {
 }
 
 // Comentários e ocorrências do par dentro do período.
+// "fato 03/11 · registrado 10/11 12:22" — a data do fato (modal) e a do
+// registro; ocorrência só tem a data de abertura.
+function _moRxDatas(a, longa) {
+  const fato = longa ? fmtPtDate(a.quando) : fmtPtDate(a.quando).slice(0, 5);
+  if (!a.criado) return fato;
+  return `fato ${fato} · registrado ${fmtPtDate(a.criado).slice(0, 5)} ${a.criado.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
 function _muralRxAcoes(central, mat, ini, fim) {
   const ate = new Date(fim); ate.setHours(23, 59, 59, 999);
   const noPer = d => d && d >= ini && d <= ate;
   const coms = (typeof _varComDe === 'function' ? _varComDe(central, mat) : [])
-    .map(r => ({ quando: r.created_at ? new Date(r.created_at) : _moIsoParaData(r.data), oc: !!r.oc_id,
+    // quando = data do FATO (escolhida no modal) — posiciona no gráfico;
+    // criado = quando foi registrado (Hugo, 10/11/2026: são duas datas).
+    .map(r => ({ quando: _moIsoParaData(r.data) || (r.created_at ? new Date(r.created_at) : null), criado: r.created_at ? new Date(r.created_at) : null, oc: !!r.oc_id,
       titulo: `${r.oc_id ? 'Ocorrência ' + (r.oc_numero || '') : 'Comentário'} · ${r.autor_nome || '—'}`, texto: r.texto || '' }))
     .filter(a => noPer(a.quando));
   const ocs = (Array.isArray(state.ocorrencias) ? state.ocorrencias : [])
     .filter(o => o.central === central && o.material === mat && noPer(_moIsoParaData(o.dataAbertura)))
     .map(o => ({ quando: _moIsoParaData(o.dataAbertura), oc: true,
-      titulo: `Ocorrência ${o.numero || o.id}${o.concluida ? ' (concluída)' : ''}`, texto: o.descricao || '' }));
-  return [...coms, ...ocs].sort((a, b) => a.quando - b.quando);
+      titulo: `Ocorrência ${o.numero || o.id}${o.concluida ? ' (concluída)' : ''}`, texto: o.descricao || '', criado: null }));
+  return [...coms, ...ocs].sort((a, b) => (a.quando - b.quando) || ((a.criado || 0) - (b.criado || 0)));
 }
 
 // Raio-X em GAVETA lateral (como no protótipo) e Movimentações no modal de
@@ -2025,12 +2037,16 @@ function _muralRxHtml(rx, it, catKey) {
       if (!ult || Math.sign(m.v) !== Math.sign(ult.v) || classifyVariation(Math.abs(m.v), catKey, thresholds) === 'bom') break;
       seq++;
     }
-    const media = fechados.length ? fechados.reduce((t, m) => t + m.v, 0) / fechados.length : 0;
+    // Acumulado (Hugo, 10/11/2026): soma de todos os inventários disponíveis
+    // mais o mês em aberto, até o último lançamento de estoque.
+    const comV = meses.filter(m => m.v != null), aberto = comV.find(m => m.aberto);
+    const acum = comV.reduce((t, m) => t + m.v, 0);
+    const acumSub = comV.length ? `${fechados.length} inventário${fechados.length === 1 ? '' : 's'}${aberto ? ` + mês em aberto até ${_moEsc((aberto.dtFim || '').slice(0, 5))}` : ''}` : 'sem inventário';
     resumo = `<div class="mo-dr-sum">
       ${card('Último inventário', ult ? _moKg(ult.v) : '—', ult ? `${ult.rot}${custo ? ' · ' + _moRs(ult.v * custo) : ''}` : 'sem inventário', ult ? cor(ult.v) : '')}
       ${card('Fora da faixa', `${fora.length} de ${fechados.length}`, `inventários dos últimos ${MURAL_RX_MESES} meses`, fora.length ? 'var(--amber)' : '')}
       ${card('Seguidos no mesmo sentido', String(seq), seq > 1 ? 'reincidente até o último inventário' : seq ? 'só o último inventário' : 'último inventário na faixa', seq > 1 ? 'var(--red)' : '')}
-      ${card('Média por inventário', fechados.length ? _moKg(media) : '—', 'meses fechados', cor(media))}
+      ${card('Acumulado', comV.length ? _moKg(acum) : '—', acumSub + (custo && comV.length ? ' · ' + _moRs(acum * custo) : ''), cor(acum))}
     </div>`;
   } else {
     resumo = `<div class="mo-dr-sum">
@@ -2050,7 +2066,7 @@ function _muralRxHtml(rx, it, catKey) {
   if (pend) hip.unshift(`Cobrar o lançamento ${pend}`);
   if (it && (it.reincidente || (it.meses || 1) > 1)) hip.push('Ver as justificativas dos meses anteriores no Inventário');
   const hist = acoes.length
-    ? acoes.slice().reverse().map(a => `<li data-dia="${localISODate(a.quando)}"><i class="ti ${a.oc ? 'ti-file-alert mo-red' : 'ti-message'}"></i><div><small class="mo-hint">${fmtPtDate(a.quando)} · ${_moEsc(a.titulo)}</small><div>${_moEsc(a.texto) || '—'}</div></div></li>`).join('')
+    ? acoes.slice().reverse().map(a => `<li data-dia="${localISODate(a.quando)}"><i class="ti ${a.oc ? 'ti-file-alert mo-red' : 'ti-message'}"></i><div><small class="mo-hint">${_moEsc(a.titulo)} · ${_moRxDatas(a, true)}</small><div>${_moEsc(a.texto) || '—'}</div></div></li>`).join('')
     : '<li class="mo-hint">Nenhum comentário ou ocorrência no período.</li>';
   const prio = it ? it.partes.filter(p => p[1]).map(p => `<span>${_moEsc(p[0])}</span><b>+${p[1].toFixed(1)}</b>`).join('')
     + `<span class="tot">Prioridade</span><b class="tot">${it.prioridade.toFixed(1)}</b>` : '';
