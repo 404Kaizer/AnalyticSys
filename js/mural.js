@@ -537,9 +537,8 @@ const _moRsResidual = (i) => Math.abs(i.residual * (i.custoMed || 0));
 // O FÍSICO manda (Hugo, 09/11/2026); R$ fica como informação secundária.
 const _moKgResidual = (i) => Math.abs(i.residual || 0);
 // Totais em toneladas a partir de 10 t, como o Gerencial; abaixo, em kg.
-const _moPeso = (kg) => Math.abs(kg) >= 10000
-  ? (kg / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' t'
-  : kg.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' kg';
+// Tudo em kg (Hugo, 10/11/2026): misturar t e kg atrapalhava comparar.
+const _moPeso = (kg) => kg.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' kg';
 const _moPesoSinal = (kg) => (kg < -0.05 ? '−' : kg > 0.05 ? '+' : '') + _moPeso(Math.abs(kg));
 
 // ── Leitura das fotos ──────────────────────────────────────────────────────
@@ -1604,11 +1603,11 @@ function muralRaioXCalcular(central, mat, catKey, periodo) {
 }
 
 // ── Peças comuns dos gráficos do Raio-X (dia a dia e inventários) ────────
-const MO_RX_DIM = { W: 740, H: 274, L: 84, R: 12, T: 24, B: 50 };
+const MO_RX_DIM = { W: 740, H: 274, L: 100, R: 12, T: 24, B: 50 };
 // Tamanho no gráfico expandido (muralRxExpandir); _moRxDim é o que vale na
 // hora de desenhar. ponytail: troca global e volta, em vez de passar o
 // tamanho por parâmetro por todas as funções.
-const MO_RX_DIM_GRANDE = { W: 1320, H: 540, L: 96, R: 16, T: 28, B: 56 };
+const MO_RX_DIM_GRANDE = { W: 1320, H: 540, L: 112, R: 16, T: 28, B: 56 };
 let _moRxDim = MO_RX_DIM;
 const _moRxF = v => v.toFixed(1);
 // Cor em hex porque _showTip (macro.js) pinta a borda do balão com ela.
