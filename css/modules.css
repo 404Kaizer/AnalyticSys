@@ -13586,6 +13586,9 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-time-n { font-size: 13px; color: var(--text2); text-align: right; }
 /* Raio-X no painel: corre com a página, como Regional e Central (Hugo,
    10/11/2026: sem scroll dentro de scroll); as ações ficam no topo. */
+.mp-inv { min-width: 0; }
+.mp-inv circle.mo-rx-pt { transition: r .12s; }
+.mp-inv circle.mo-rx-pt:hover { r: 7; }
 .mp-rx { display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
 .mp-rx .mo-dr-body, .mp-rx .mo-rx-acoes { flex: none; overflow: visible; max-height: none; }
 @media (max-width: 1100px) {

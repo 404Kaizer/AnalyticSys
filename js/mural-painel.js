@@ -159,11 +159,70 @@ function _mpPendEscopo(ps, centrais) {
 function _mpAcumPar(p) {
   const k = _mpChave(p.central, p.material);
   if (!_mp.acum.has(k)) {
-    const fech = _muralRxMeses(p.central, p.material, p.catKey, false).filter(m => m.v != null);
-    _mp.acum.set(k, { v: fech.reduce((t, m) => t + m.v, 0), n: fech.length });
+    const meses = _muralRxMeses(p.central, p.material, p.catKey, false).map(m => ({ chave: m.chave, rot: m.rot, v: m.v }));
+    const fech = meses.filter(m => m.v != null);
+    _mp.acum.set(k, { v: fech.reduce((t, m) => t + m.v, 0), n: fech.length, meses });
   }
   const a = _mp.acum.get(k);
-  return { v: a.v + p.v, n: a.n };
+  return { v: a.v + p.v, n: a.n, meses: a.meses };
+}
+
+// ── Inventário a inventário do escopo (Hugo, 10/11/2026) ──────────────────
+// Linha da variação LÍQUIDA por inventário: soma, mês a mês, da variação de
+// inventário de todos os pares da regional/central (mesma conta do gráfico
+// de barras do Raio-X) + o mês em aberto (tracejado). Sai do cache do
+// acumulado, então não custa cálculo a mais. Desenhado na largura real.
+function _mpInvHtml(ps, larg) {
+  const J = muralJanela();
+  const meses = new Map();
+  ps.forEach(p => {
+    const a = _mp.acum.get(_mpChave(p.central, p.material));
+    (a?.meses || []).forEach(m => {
+      if (!meses.has(m.chave)) meses.set(m.chave, { rot: m.rot, v: 0, n: 0, des: 0, sob: 0, pares: [] });
+      if (m.v == null) return;
+      const x = meses.get(m.chave);
+      x.v += m.v; x.n++; if (m.v < 0) x.des += m.v; else x.sob += m.v;
+      x.pares.push({ nome: `${p.material} · ${p.central}`, v: m.v });
+    });
+  });
+  const ab = { rot: J.fim.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(J.fim.getFullYear()).slice(2),
+    v: 0, n: ps.length, des: 0, sob: 0, pares: [], aberto: true };
+  ps.forEach(p => { ab.v += p.v; if (p.v < 0) ab.des += p.v; else ab.sob += p.v; ab.pares.push({ nome: `${p.material} · ${p.central}`, v: p.v }); });
+  const pts = [...[...meses.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, x]) => x), ab];
+  const comV = pts.filter(x => x.n);
+  if (comV.length < 2) return '<p class="mo-hint">Sem inventários suficientes neste escopo para traçar a linha.</p>';
+
+  const W = Math.max(420, Math.round(larg)), H = 230, L = 96, R = 24, T = 26, B = 40, f = (v) => v.toFixed(1);
+  const vals = comV.map(x => x.v), mn = Math.min(0, ...vals), mxv = Math.max(0, ...vals), pad = (mxv - mn || 1) * 0.12;
+  const y = (v) => T + (mxv + pad - v) / (mxv - mn + 2 * pad) * (H - T - B);
+  const x = (i) => L + (pts.length > 1 ? i * (W - L - R) / (pts.length - 1) : 0);
+  const svg = [];
+  // Eixo: máximo, zero e mínimo (pula rótulo a menos de 14 px de outro).
+  const ticks = []; [mxv, 0, mn].forEach(v => { if (!ticks.some(t => Math.abs(y(t) - y(v)) < 14)) ticks.push(v); });
+  ticks.forEach(v => svg.push(`<text x="${L - 10}" y="${f(y(v) + 4)}" text-anchor="end" class="mo-rx-ax">${_moPesoSinal(v)}</text>`));
+  svg.push(`<line x1="${L}" x2="${W - R}" y1="${f(y(0))}" y2="${f(y(0))}" stroke="var(--border3)"/>`);
+  // Linha: trechos contínuos entre meses com inventário; até o mês em aberto, tracejada.
+  const idx = pts.map((p, i) => (p.n ? i : -1)).filter(i => i >= 0);
+  idx.forEach((i, k) => {
+    if (!k) return;
+    const j = idx[k - 1];
+    svg.push(`<line x1="${f(x(j))}" y1="${f(y(pts[j].v))}" x2="${f(x(i))}" y2="${f(y(pts[i].v))}" stroke="var(--text2)" stroke-width="2.2"${pts[i].aberto || i - j > 1 ? ' stroke-dasharray="5 4"' : ''}/>`);
+  });
+  pts.forEach((p, i) => {
+    svg.push(`<text x="${f(x(i))}" y="${H - 20}" text-anchor="middle" class="mo-rx-ax" style="fill:var(--text2)">${_moEsc(p.rot)}</text>`,
+      `<text x="${f(x(i))}" y="${H - 6}" text-anchor="middle" class="mo-rx-ax">${p.aberto ? 'em aberto' : p.n ? 'inventário' : 'sem inv.'}</text>`);
+    if (!p.n) return;
+    const c = _moRxHex(p.v), top = [...p.pares].sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 3);
+    const grade = _moRxLinha('Variação líquida', _moKg(p.v), c) + _moRxLinha('Desfalques', _moKg(p.des), '#f43f5e')
+      + _moRxLinha('Sobras', _moKg(p.sob), '#f59e0b') + _moRxLinha(p.aberto ? 'Pares' : 'Pares com inventário', `${p.n} de ${ps.length}`);
+    const extra = `<div style="margin-top:10px;font-size:12.5px;color:var(--text2)">Os que mais pesam:</div>` + top.map(t =>
+      `<div style="display:flex;gap:10px;font-size:12.5px;margin-top:3px"><span style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_moEsc(t.nome)}</span><span style="margin-left:auto;font-family:var(--mono);color:${_moRxHex(t.v)}">${_moKg(t.v)}</span></div>`).join('');
+    const tip = _moRxTip(c, `${p.rot}${p.aberto ? ' · em aberto' : ''}`, '', grade, extra);
+    const ly = p.v < 0 ? y(p.v) + 20 : y(p.v) - 11;
+    svg.push(`<circle class="mo-rx-pt" cx="${f(x(i))}" cy="${f(y(p.v))}" r="5" fill="${c}"${p.aberto ? ' fill-opacity=".45" stroke="' + c + '" stroke-width="1.5"' : ''} data-tip="${tip}" data-col="${c}"/>`,
+      `<text x="${f(x(i))}" y="${f(ly)}" text-anchor="middle" class="mo-rx-ax" style="fill:${c};font-weight:600;pointer-events:none">${_moPesoSinal(p.v)}</text>`);
+  });
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Variação líquida de inventário a inventário" style="display:block;overflow:visible">${svg.join('')}</svg>`;
 }
 
 // ── Seleção ────────────────────────────────────────────────────────────────
@@ -364,7 +423,9 @@ function _mpPainelHtml(todos, itensFila) {
   const rank = s.tipo === 'regional' ? `<div class="mp-card"><h4 class="mp-tit">Saúde das centrais da regional</h4>${centrais.map(c => ({ c, ...(_mpSaude(ps.filter(p => p.central === c))) }))
     .sort((a, b) => a.score - b.score).map(x => `<button class="mp-rank" ${_mpLinhaAttrs('central', { regional: s.regional, central: x.c })}>
       ${_mpIco(x.nivel)}<b>${_moEsc(x.c)}</b><span class="mp-rank-bar"><i style="width:${x.score}%;background:${MP_NIVEL_COR[x.nivel]}"></i></span><span class="mono" style="color:${MP_NIVEL_COR[x.nivel]}">${x.score}%</span></button>`).join('')}</div>` : '';
-  return `${cab}${_mpSaudeHtml(ps)}${rank}${_mpPendHtml()}<div class="mp-dois">${_mpTopHtml(ps)}${_mpAcoesHtml(ps)}</div>`;
+  const inv = `<div class="mp-card"><h4 class="mp-tit">Variação de inventário a inventário <span class="mo-hint">soma líquida dos ${ps.length} pares</span></h4>
+    <div id="mp-inv" class="mp-inv"><span class="mo-hint">Calculando os inventários…</span></div></div>`;
+  return `${cab}${_mpSaudeHtml(ps)}${inv}${rank}${_mpPendHtml()}<div class="mp-dois">${_mpTopHtml(ps)}${_mpAcoesHtml(ps)}</div>`;
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
@@ -374,6 +435,13 @@ function muralPainelRender(el, itens) {
   // Seleção que sumiu (filtro, busca, item que saiu da fila) volta ao Geral.
   const s = _mp.sel;
   if (s.tipo !== 'geral' && !todos.some(p => p.regional === s.regional && (s.tipo === 'regional' || p.central === s.central) && (s.tipo !== 'item' || p.material === s.material))) _mp.sel = { tipo: 'geral' };
+  // Balão dos pontos do gráfico de inventários (o do Raio-X tem o seu, em #mp-rx).
+  if (!el.dataset.mpTip && typeof _showTip === 'function') {
+    el.dataset.mpTip = '1';
+    el.addEventListener('mouseover', e => { const p = e.target.closest?.('.mp-inv .mo-rx-pt'); if (p) _showTip(e, decodeURIComponent(p.dataset.tip), p.dataset.col); });
+    el.addEventListener('mousemove', e => { if (e.target.closest?.('.mp-inv .mo-rx-pt')) _moveTip(e); });
+    el.addEventListener('mouseout', e => { if (e.target.closest?.('.mp-inv .mo-rx-pt')) _hideTip(); });
+  }
   el.innerHTML = muralPainelBotaoHtml(true) + `<div class="mp-root">${_muralFiltrosHtml(itens)}
     <div class="mp">${_mpListaHtml(todos, todos.filter(p => p.it).length, todos.filter(p => p.fx).length)}
       <section class="mp-painel">${_mpPainelHtml(todos, fila)}</section></div></div>`;
@@ -412,6 +480,8 @@ function _mpDepois(todos) {
     }
     const ac = document.getElementById('mp-acum');
     if (ac) ac.innerHTML = `<span class="mo-hint">Acumulado</span><b class="mp-big" style="color:${_mpCor(tot)}">${_moPesoSinal(tot)}</b><small class="mo-hint">${nInv} inventário${nInv === 1 ? '' : 's'} + mês em aberto</small>`;
+    const inv = document.getElementById('mp-inv');
+    if (inv) inv.innerHTML = _mpInvHtml(ps, inv.clientWidth);
   }, 0);
 }
 
