@@ -13409,6 +13409,9 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mo-rx-ax { font-family: var(--mono); font-size: 13px; fill: var(--text3); }
 .mo-rx-leg { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 4px 6px 0; font-size: 12.5px; color: var(--text2); }
 .mo-rx-leg i { display: inline-block; width: 18px; border-top: 2px dashed; vertical-align: middle; margin-right: 6px; opacity: .8; }
+/* Balão do Raio-X (o mesmo dos donuts da Macro, que tem estilo inline de
+   260px): mais largo e com mais respiro para as letras maiores. */
+#macro-donut-tip:has(.mo-rx-tipw) { max-width: 400px !important; min-width: 280px !important; padding: 14px 18px !important; }
 .mo-rx-pt { cursor: pointer; transition: r .12s, stroke-width .12s; }
 .mo-rx-chart circle.mo-rx-pt:hover { r: 7; stroke-width: 2.5; }
 .mo-rx-acao { cursor: pointer; }

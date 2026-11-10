@@ -1080,12 +1080,13 @@ function _muralPontosCegosHtml() {
 // Coluna lateral (Pontos cegos, Auditoria, Prazos) recolhe para o LADO
 // (Hugo, 10/11/2026): vira uma barra estreita de ícones e a fila ganha a
 // largura. O estado fica guardado neste navegador.
-function _muralColunaAberta() {
-  try { return localStorage.getItem('mural.coluna') !== '0'; } catch (_) { return true; }
-}
+// Coluna lateral começa recolhida a cada abertura do sistema (Hugo, 10/11/2026);
+// o estado só vale enquanto a página está aberta, para não herdar a escolha antiga.
+let _moColunaAberta = false;
+function _muralColunaAberta() { return _moColunaAberta; }
 // abrir: true/false; alvo: id do cartão para rolar até ele ao abrir.
 function muralColuna(abrir, alvo) {
-  try { localStorage.setItem('mural.coluna', abrir ? '1' : '0'); } catch (_) {}
+  _moColunaAberta = !!abrir;
   const grid = document.querySelector('#mural-root .mo-grid');
   if (!grid) return;
   grid.classList.toggle('mo-lat-off', !abrir);
@@ -1613,13 +1614,14 @@ const _moRxF = v => v.toFixed(1);
 // Cor em hex porque _showTip (macro.js) pinta a borda do balão com ela.
 const _moRxHex = v => v < -0.05 ? '#f43f5e' : v > 0.05 ? '#f59e0b' : '#7b85a0';
 const _moRxNivel = (v, lim) => { const a = Math.abs(v); return a <= lim.bom ? ['NA FAIXA', '#10b981'] : a <= lim.atencao ? ['ATENÇÃO', '#f59e0b'] : a <= lim.urgente ? ['URGENTE', '#f97316'] : ['CRÍTICO', '#f43f5e']; };
-const _moRxLinha = (rot, val, cor) => `<div style="color:var(--text3)">${rot}</div><div style="color:${cor || 'var(--text)'};text-align:right">${val}</div>`;
+const _moRxLinha = (rot, val, cor) => `<div style="color:var(--text2)">${rot}</div><div style="color:${cor || 'var(--text)'};text-align:right;font-weight:600">${val}</div>`;
 // Balão no padrão dos donuts da Macro, mostrado por delegação na gaveta.
-const _moRxTip = (cor, titulo, dir, grade, extra = '') => encodeURIComponent(`<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+const _moRxTip = (cor, titulo, dir, grade, extra = '') => encodeURIComponent(`<div class="mo-rx-tipw" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
     <span style="width:10px;height:10px;border-radius:3px;background:${cor};flex-shrink:0"></span>
-    <span style="font-weight:700;font-size:13px;color:var(--text)">${titulo}</span>
-    <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:${cor};font-weight:700">${dir}</span></div>
-  ${grade ? `<div style="display:grid;grid-template-columns:auto auto;gap:5px 14px;font-family:var(--mono);font-size:11px">${grade}</div>` : ''}${extra}`);
+    <span style="font-weight:700;font-size:15px;color:var(--text)">${titulo}</span>
+    <span style="margin-left:auto;font-family:var(--mono);font-size:13px;color:${cor};font-weight:700">${dir}</span></div>
+  ${grade ? `<div style="display:grid;grid-template-columns:auto auto;gap:7px 20px;font-family:var(--mono);font-size:13.5px">${grade}</div>` : ''}${extra}`);
+const _MO_RX_DICA_MOV = '<div style="margin-top:10px;font-size:13px;color:var(--text2)">Clique para ver as movimentações</div>';
 
 // Escala vertical, faixa "bom", tracejados de limite/crítico, rótulos no
 // eixo da esquerda (fora da área do gráfico, pulando os que ficariam a
@@ -1714,8 +1716,8 @@ function _muralRxChart(rx, lim, acoes, gran = 'dia') {
       + _moRxLinha('Est. Inicial', fmtKg(r.initialStock ?? 0)) + _moRxLinha('Movimentos SAP', fmtKgSigned(mov))
       + _moRxLinha('Est. Teórico', fmtKg(r.theoreticalStock ?? 0), 'var(--purple)') + _moRxLinha('Est. Final', fmtKg(r.finalStock ?? 0), 'var(--teal)')
       + (r.lancCount > 1 ? _moRxLinha('Lançamentos no dia', r.lancCount, '#f59e0b') : '');
-    const tip = _moRxTip(_moRxHex(v), r.dateLabel, `<span style="color:${nvCor}">${nv}</span>`, grade);
-    svg.push(`<circle class="mo-rx-pt" cx="${f(x(i))}" cy="${f(y(v))}" r="${i === rx.iUlt ? 5 : 3.5}" fill="${c}" stroke="var(--bg2)" stroke-width="1.5" data-tip="${tip}" data-col="${_moRxHex(v)}"/>`);
+    const tip = _moRxTip(_moRxHex(v), r.dateLabel, `<span style="color:${nvCor}">${nv}</span>`, grade, _MO_RX_DICA_MOV);
+    svg.push(`<circle class="mo-rx-pt" cx="${f(x(i))}" cy="${f(y(v))}" r="${i === rx.iUlt ? 5 : 3.5}" fill="${c}" stroke="var(--bg2)" stroke-width="1.5" data-tip="${tip}" data-col="${_moRxHex(v)}" onclick="muralMovDia(${i})"/>`);
   });
   semanas.forEach((s, k) => {
     const v = s.v, c = v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'var(--text2)';
@@ -1727,8 +1729,8 @@ function _muralRxChart(rx, lim, acoes, gran = 'dia') {
       + _moRxLinha('Último lançamento', _moEsc(r.dateLabel)) + _moRxLinha('Est. Final', fmtKg(r.finalStock ?? 0), 'var(--teal)')
       + _moRxLinha('Est. Teórico', fmtKg(r.theoreticalStock ?? 0), 'var(--purple)')
       + (s.idx.length > 1 ? _moRxLinha('Lançamentos na semana', s.idx.length, '#f59e0b') : '');
-    const tip = _moRxTip(_moRxHex(v), `Semana ${fmtPtDate(ini).slice(0, 5)} a ${fmtPtDate(s.ter).slice(0, 5)}`, `<span style="color:${nvCor}">${nv}</span>`, grade);
-    svg.push(`<circle class="mo-rx-pt" cx="${f(x(s.i))}" cy="${f(y(v))}" r="${k === semanas.length - 1 ? 5.5 : 4.5}" fill="${c}" stroke="var(--bg2)" stroke-width="1.5" data-tip="${tip}" data-col="${_moRxHex(v)}"/>`);
+    const tip = _moRxTip(_moRxHex(v), `Semana ${fmtPtDate(ini).slice(0, 5)} a ${fmtPtDate(s.ter).slice(0, 5)}`, `<span style="color:${nvCor}">${nv}</span>`, grade, _MO_RX_DICA_MOV);
+    svg.push(`<circle class="mo-rx-pt" cx="${f(x(s.i))}" cy="${f(y(v))}" r="${k === semanas.length - 1 ? 5.5 : 4.5}" fill="${c}" stroke="var(--bg2)" stroke-width="1.5" data-tip="${tip}" data-col="${_moRxHex(v)}" onclick="muralMovDia(${s.j})"/>`);
   });
   // Comentários e ocorrências: uma marca por dia — linha vertical na cor
   // (azul = comentário, vermelho = ocorrência) e um selo com a quantidade
@@ -1747,8 +1749,8 @@ function _muralRxChart(rx, lim, acoes, gran = 'dia') {
     // Só o tipo, o autor e quando — o texto inteiro fica no histórico, onde
     // o clique leva (Hugo, 09/11/2026: o balão cortava os comentários).
     const lista = as.map(a => `<div style="display:flex;gap:7px;margin-top:5px;align-items:center"><span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${a.oc ? '#f43f5e' : '#3b82f6'}"></span>
-      <span style="font-size:12px;color:var(--text)">${_moEsc(a.titulo)}</span><span style="margin-left:auto;padding-left:10px;font-family:var(--mono);font-size:11px;color:var(--text3)">${_moRxDatas(a)}</span></div>`).join('')
-      + '<div style="margin-top:8px;font-size:11.5px;color:var(--text3)">Clique para ler no histórico</div>';
+      <span style="font-size:13.5px;color:var(--text)">${_moEsc(a.titulo)}</span><span style="margin-left:auto;padding-left:12px;font-family:var(--mono);font-size:12.5px;color:var(--text2)">${_moRxDatas(a)}</span></div>`).join('')
+      + '<div style="margin-top:10px;font-size:13px;color:var(--text2)">Clique para ler no histórico</div>';
     const titulo = as.length > 1 ? `${as.length} ações` : (as[0].oc ? 'Ocorrência' : 'Comentário');
     const tip = _moRxTip(cor, titulo, fmtPtDate(as[0].quando).slice(0, 5), '', lista);
     return `<g class="mo-rx-pt mo-rx-acao" data-tip="${tip}" data-col="${cor}" onclick="muralRxIrAcoes('${localISODate(as[0].quando)}')">
@@ -1815,7 +1817,7 @@ function _muralRxBarras(meses, lim) {
       + _moRxLinha('Ajustes SAP', fmtKgSigned(m.nat.totalAju), 'var(--amber)')
       + _moRxLinha('Est. Teórico', fmtKg(m.teo), 'var(--purple)') + _moRxLinha(`Est. Final (${_moEsc(m.dtFim || '')})`, fmtKg(m.estFim), 'var(--teal)');
     const tip = _moRxTip(c, `${m.rot}${m.aberto ? ' · em aberto' : ''}`, `<span style="color:${nvCor}">${nv}</span>`, grade,
-      '<div style="margin-top:8px;font-size:11.5px;color:var(--text3)">Clique para ver o dia a dia do mês</div>');
+      '<div style="margin-top:10px;font-size:13px;color:var(--text2)">Clique para ver o dia a dia do mês</div>');
     const rot = _moPesoSinal(m.v), ly = m.v < 0 ? top + h + 15 : top - 6;
     svg.push(`<g class="mo-rx-pt mo-rx-barra" data-tip="${tip}" data-col="${c}" onclick="muralRaioXPeriodo('${m.aberto ? 'mes' : 'inv:' + m.chave}')">
       <rect x="${f(cx - slot / 2 + 2)}" y="${_moRxDim.T}" width="${f(slot - 4)}" height="${H - B - _moRxDim.T}" fill="transparent"/>
@@ -1971,6 +1973,41 @@ function muralMovimentacoes(el) {
   if (!rx) { toast('Período inválido para as Movimentações.', 'error'); return; }
   window.__analiticoDetailCache = window.__analiticoDetailCache || new Map();
   window.__analiticoDetailCache.set('mural-mov', { ...rx.payload, key: 'mural-mov' });
+  openAnaliticoDetailModal('mural-mov');
+}
+
+// Clique num ponto do gráfico (Hugo, 10/11/2026): Movimentações só do trecho
+// que forma a variação daquele lançamento — do dia seguinte ao lançamento
+// anterior até ele (no diário costuma ser um dia só; no semanal, a semana).
+// Fatia a série do período aberto, para bater com o balão do ponto.
+// ponytail: a coluna Var. Acumulada do modal recomeça do zero no trecho.
+function muralMovDia(j) {
+  muralRxRecolher(); // o gráfico expandido (z 320) ficaria por cima do modal (z 260)
+  const { central, mat, periodo } = _mo.rx || {};
+  const rx = central && muralRaioXCalcular(central, mat, _muralRxItem(central, mat).catKey, periodo);
+  const fim = rx?.rows[j];
+  if (!fim) return;
+  let a = j;
+  while (a > 0 && !rx.rows[a - 1].hasLanc) a--;
+  const dias = rx.rows.slice(a, j + 1);
+  const soma = k => dias.reduce((s, d) => s + (d[k] || 0), 0);
+  const cods = (k, vazio) => _codsLabel(dias.flatMap(d => d[k] || []), vazio);
+  const ini = dias[0].initialStock;
+  window.__analiticoDetailCache = window.__analiticoDetailCache || new Map();
+  window.__analiticoDetailCache.set('mural-mov', {
+    ...rx.payload, key: 'mural-mov', days: dias,
+    periodLabel: a === j ? fim.dateLabel : `${dias[0].dateLabel} a ${fim.dateLabel}`,
+    summary: {
+      ...rx.payload.summary,
+      pesoIni: ini ?? 0, pesoIniAusente: ini == null,
+      dtIniLabel: a > 0 ? `Último lançamento: ${rx.rows[a - 1].dateLabel}` : rx.payload.summary.dtIniLabel,
+      totalEnt: soma('totalEnt'), entLabel: cods('entEntries', 'Sem entradas no trecho'),
+      totalSai: soma('totalSai'), saiLabel: cods('saiEntries', 'Sem saídas no trecho'),
+      totalAju: soma('totalAju'), ajuLabel: cods('ajuEntries', 'Sem ajustes no trecho'),
+      estTeorico: fim.theoreticalStock ?? 0, pesoFim: fim.finalStock ?? 0, pesoFimAusente: false,
+      dtFimLabel: `Lançamento: ${fim.dateLabel}`, diff: soma('diff')
+    }
+  });
   openAnaliticoDetailModal('mural-mov');
 }
 
