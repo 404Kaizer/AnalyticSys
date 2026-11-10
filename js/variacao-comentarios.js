@@ -44,8 +44,7 @@ function _varComOcStatus(ocId) {
   return _VARCOM_OC_STATUS[st] || st;
 }
 
-// ponytail: sem realtime — comentário de outro analista só chega no boot ou
-// ao abrir o modal. Upgrade: canal postgres_changes como _ocRealtimeInit.
+// Carga inicial no boot; depois o canal em tempo real abaixo mantém a lista.
 async function syncVariacaoComentariosFromSupabase() {
   if (!window.supabaseClient || !window.currentUser) return;
   try {
@@ -54,6 +53,36 @@ async function syncVariacaoComentariosFromSupabase() {
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar comentários de variação:', err);
   }
+}
+
+// Tempo real (Hugo, 10/11/2026): comentário de outro usuário chega na hora
+// — ícone da Micro, situação/prazo do Mural e Raio-X aberto (os três via
+// _varComRefreshBtns → muralRender) — e avisa no sino (notifPushComentario).
+// Mesmo padrão de _ocRealtimeInit. O próprio comentário já entrou na lista
+// pelo _varComInserir: o id repetido é ignorado.
+let _varComChannel = null;
+function _varComRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _varComChannel) return;
+  _varComChannel = window.supabaseClient
+    .channel('variacao_comentarios_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'variacao_comentarios' }, (p) => {
+      const r = p.new;
+      if (!r || _varComs.some(x => x.id === r.id)) return;
+      _varComs.push(r);
+      _varComRefreshBtns(r.central, r.material);
+      if (_varComCtx) _varComRenderLista();
+      if (typeof notifPushComentario === 'function') notifPushComentario(r);
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'variacao_comentarios' }, (p) => {
+      const r = _varComs.find(x => x.id === p.old?.id);
+      if (!r) return;
+      _varComs = _varComs.filter(x => x.id !== r.id);
+      _varComRefreshBtns(r.central, r.material);
+      if (_varComCtx) _varComRenderLista();
+    })
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Comentários] Canal Realtime com problema:', status);
+    });
 }
 
 // ── Ícone da linha ──────────────────────────────────────────

@@ -9289,6 +9289,8 @@ async function restoreAndRender() {
     // ver ocorrencias.js/dai.js.
     if (typeof _ocRealtimeInit === 'function') _ocRealtimeInit();
     if (typeof _daiRealtimeInit === 'function') _daiRealtimeInit();
+    // Comentários de variação em tempo real + aviso no sino (10/11/2026).
+    if (typeof _varComRealtimeInit === 'function') _varComRealtimeInit();
     // Canal Realtime de Custos SAP (05/08) — cadastro compartilhado do
     // time, RLS libera SELECT geral: todo mundo recebe INSERT/UPDATE/
     // DELETE de qualquer usuário, sem filtro de relevância (ver import.js).

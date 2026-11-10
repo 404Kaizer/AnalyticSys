@@ -159,6 +159,7 @@ const _NTM = {
   ocorrencia:   { icon:'ti-alert-circle'    },
   conferencia:  { icon:'ti-calendar-event'  },
   mural:        { icon:'ti-target-arrow'    },
+  comentario:   { icon:'ti-message-dots'    },
   atividade:    { icon:'ti-bolt'            },
   auth:         { icon:'ti-fingerprint'     },
   // Prioridade do Supervisor (31/07) — ícone e cor próprios (ver
@@ -222,13 +223,21 @@ function notifNavigate(id, event) {
   event?.stopPropagation();
   const n = (state.notifications||[]).find(n=>n.id===id);
   if (n) { n.read=true; if(typeof persist==='function') persist(); }
-  const page = _NOTIF_ROUTE[id] || (n?.type === 'mural' ? 'analitico' : null);
+  const page = _NOTIF_ROUTE[id] || (n?.type === 'mural' || n?.type === 'comentario' ? 'analitico' : null);
   notifClose();
   if (page && typeof navigate==='function') navigate(page);
   // Aviso do Mural: abre a aba Operações já no filtro do aviso.
   if (n?.type === 'mural') {
     if (typeof anSwitchView === 'function') anSwitchView('operacoes');
     if (n.filtro && typeof muralFiltro === 'function') muralFiltro(n.filtro);
+  }
+  // Comentário de outro usuário: abre o Raio-X do item, no histórico.
+  if (n?.type === 'comentario') {
+    if (typeof anSwitchView === 'function') anSwitchView('operacoes');
+    if (typeof muralRaioX === 'function') {
+      muralRaioX(n.central, n.material);
+      document.getElementById('mo-dr-hist')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
   _notifRenderBadge();
 }
@@ -252,6 +261,32 @@ function notifPushOcorrenciaSupervisor({ ocorrenciaId, tipo, titulo, corpo }) {
   _notifRenderBadge();
   if (_notifOpen) _notifRenderDropdown();
   notifShowActivityToast(titulo, corpo || '');
+  notifPlaySound();
+}
+
+// ── Comentário de variação de outro usuário (10/11/2026) ──
+// Disparada pelo tempo real de variacao-comentarios.js. Avisa só quem cuida
+// do par: o ADM (todas as categorias) e o dono da categoria — nunca o autor.
+// Comentário que só vincula uma ocorrência fica de fora (o aviso é o dela).
+// O clique abre o Raio-X do item no Mural.
+function notifPushComentario(r) {
+  if (!r || r.oc_id || !window.currentUser || r.user_id === window.currentUser.id) return;
+  if (typeof muralParMeInteressa === 'function' && !muralParMeInteressa(r.material)) return;
+  if (!Array.isArray(state.notifications)) state.notifications = [];
+  const id = `com-${r.id}`;
+  if (state.notifications.some(n => n.id === id)) return;
+  const texto = String(r.texto || '').replace(/^Causa: [^.]+\.\s*/, '');
+  const causa = (String(r.texto || '').match(/^Causa: ([^.]+)\./) || [])[1];
+  const titulo = `Comentário em ${r.material} · ${r.central}`;
+  const corpo = `${r.autor_nome || 'Alguém'}${causa ? ` (${causa})` : ''}: ${texto}`;
+  state.notifications.unshift({
+    id, type: 'comentario', level: 'info', title: titulo, body: corpo.slice(0, 140),
+    createdAt: Date.now(), read: false, central: r.central, material: r.material,
+  });
+  if (typeof persist === 'function') persist();
+  _notifRenderBadge();
+  if (_notifOpen) _notifRenderDropdown();
+  notifShowActivityToast(titulo, corpo.slice(0, 140));
   notifPlaySound();
 }
 
@@ -289,7 +324,7 @@ function _notifRenderDropdown() {
       : n.type === 'atividade' ? (_ACTIVITY_MODULE_COLOR[n.activityTable] || _ACTIVITY_DEFAULT_COLOR)
       : temOcorrenciaVinculada ? (_SUPERVISOR_PRIORITY_COLOR[n.type] || 'var(--purple)')
       : lm.col;
-    const hasRoute = isAtividade ? !!n.activityLogId : temOcorrenciaVinculada ? true : !!_NOTIF_ROUTE[n.id];
+    const hasRoute = isAtividade ? !!n.activityLogId : temOcorrenciaVinculada ? true : (!!_NOTIF_ROUTE[n.id] || n.type === 'comentario');
     const clickAttr = !hasRoute ? '' : isAtividade
       ? `onclick="notifAbrirDetalheAtividade('${_notifEsc(n.id)}',event)"`
       : temOcorrenciaVinculada

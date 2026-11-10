@@ -642,6 +642,15 @@ function _muralAvisos() {
 }
 
 // ── Itens com o estado de ação derivado ───────────────────────────────────
+// Avisos de comentário (notifPushComentario): o ADM vê tudo; o analista,
+// só os pares da(s) categoria(s) dele em analistas_categoria.
+function muralParMeInteressa(material) {
+  if (_moEhAdm()) return true;
+  const eu = window.currentUser?.id;
+  const cat = normalizeCategoriaMaterial(getCategoriaPorGrupo(material));
+  return !!eu && !!cat && _mo.donos.some(d => d.analista_user_id === eu && normalizeCategoriaMaterial(d.categoria) === cat);
+}
+
 function _muralDonoDe(categoria) {
   const d = _mo.donos.find(x => x.categoria === categoria);
   return { uid: d?.analista_user_id || null, nome: (d?.analista_nome || '—').trim() };
@@ -1908,7 +1917,9 @@ function _muralRxHtml(rx, it, catKey) {
   const { central, material, summary: s } = rx.payload;
   const thresholds = getHealthThresholds();
   const lim = thresholds[catKey] || { bom: 0, atencao: 0, urgente: 0 };
-  const acoes = _muralRxAcoes(central, material, rx.ini, rx.fim);
+  // Período em aberto ('invs'/'mes') termina ontem, mas as ações vão até
+  // agora — senão o comentário feito hoje não aparecia (Hugo, 10/11/2026).
+  const acoes = _muralRxAcoes(central, material, rx.ini, String(rx.periodo).startsWith('inv:') ? rx.fim : new Date());
   const dataset = `data-central="${_moEsc(central)}" data-material="${_moEsc(material)}"`;
   // Abre em Inventários; clicar numa barra abre o mês (fechado 'inv:…' ou o
   // em aberto 'mes') no gráfico de linhas, com Diário/Semanal (Hugo, 09/11).
