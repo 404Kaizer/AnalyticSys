@@ -278,6 +278,19 @@ function muralAvaliarPar({ central, mat, catKey, categoria, janela, lancsJan, sa
   } };
 }
 
+// PUZL agrupada por central uma vez só (centralDestino primeiro, como o
+// diagnóstico da Visão Micro) + índice de Saídas — a parte "explicada".
+function _muralCtx() {
+  const entradasPorCentral = new Map();
+  (state.entradas || []).forEach(e => {
+    const c = e.centralDestino || e.centralCompra || '';
+    if (!entradasPorCentral.has(c)) entradasPorCentral.set(c, []);
+    entradasPorCentral.get(c).push(e);
+  });
+  ensureSaidasIndex();
+  return { entradasPorCentral, saidasPorCentral: _saidasByCentral };
+}
+
 // ── Cálculo das categorias do dono ─────────────────────────────────────────
 // categorias: rótulos de CATEGORIAS_MATERIAL. Devolve { porCategoria:
 // { [categoria]: { itens, pontosCegos } }, base, janela }.
@@ -291,16 +304,7 @@ async function muralCalcular(categorias) {
   // nome padronizado — ver _dgVgBuildPares.
   const catDe = (rec) => normalizeCategoriaMaterial(getCategoriaPorGrupo(rec.materialOriginal || rec.material));
 
-  // PUZL agrupada por central uma vez só (centralDestino primeiro, como o
-  // diagnóstico da Visão Micro).
-  const entradasPorCentral = new Map();
-  (state.entradas || []).forEach(e => {
-    const c = e.centralDestino || e.centralCompra || '';
-    if (!entradasPorCentral.has(c)) entradasPorCentral.set(c, []);
-    entradasPorCentral.get(c).push(e);
-  });
-  ensureSaidasIndex();
-  const ctx = { entradasPorCentral, saidasPorCentral: _saidasByCentral };
+  const ctx = _muralCtx();
 
   // Universo: todo par central × material com lançamento OU SAP na janela.
   const pares = new Map(); // `${central}|||${mat}` -> { central, mat, lancs, sap, categoria, catKey }
@@ -372,6 +376,91 @@ function muralDataBase() {
     entradas:    maxData(state.entradas, r => r.dtDescarga || r.dtEmissao),
     saidas:      maxData(state.saidas, 'dtEmissao')
   };
+}
+
+// ── A base mais recente vale (Hugo, 10/11/2026) ──────────────────────────
+// Cada um importa a própria base; a foto é a do dono da categoria. No ADM,
+// par a par: se a base dele tem lançamento do par MAIS NOVO que o último da
+// foto, o par é recalculado na base do ADM (mesma conta da foto) e troca de
+// lugar na foto — pode ir da fila para a faixa e vice-versa. Empate ou ADM
+// mais velho: vale a foto (o Raio-X avisa quando a base do ADM está atrás).
+// ponytail: decide só pelo último lançamento do par; SAP importado mais
+// tarde com o mesmo último lançamento não troca a fonte.
+const _muralBaseAdmTxt = (o, dono) => `Sua base tem lançamento até ${o.adm}; a foto de ${dono || 'o dono'} ia até ${o.foto || '—'}. Este número foi recalculado na sua base (a mais recente vale).`;
+
+// O par na foto (fila ou faixa): último lançamento, variação e se o número
+// já veio da base do ADM.
+function _muralFotoPar(central, mat) {
+  for (const f of _mo.fotos || []) {
+    const p = f.atual?.payload || {};
+    const it = (p.itens || []).find(i => i.central === central && i.material === mat);
+    if (it) return { v: it.v, ult: it.pontos?.length ? it.pontos[it.pontos.length - 1][0] : null, baseAdm: it.baseAdm, dono: _muralDonoDe(f.categoria).nome };
+    const l = (p.faixa || []).find(x => x[0] === central && x[1] === mat);
+    if (l) return { v: l[2], ult: l[4], baseAdm: l[7], dono: _muralDonoDe(f.categoria).nome };
+  }
+  return null;
+}
+
+// Aviso do Raio-X (só ADM): a foto do dono tem lançamento mais novo que a
+// base do ADM — o número da fila e o que o Raio-X calcula na hora divergem.
+function _muralAvisoBaseHtml(central, mat) {
+  if (!_moEhAdm()) return '';
+  const fp = _muralFotoPar(central, mat);
+  if (!fp?.ult || fp.baseAdm) return '';
+  const ate = muralJanela().fim; ate.setHours(23, 59, 59, 999);
+  const admUlt = _muralUltLancAdm(central, mat, ate), fotoUlt = parseDate(fp.ult);
+  if (!fotoUlt || (admUlt && admUlt >= fotoUlt)) return '';
+  return `<div class="mo-rx-aviso"><i class="ti ti-database"></i><span>O número da fila (<b>${_moKg(fp.v)}</b>) vem da foto de ${_moEsc(fp.dono)}, com lançamento até <b>${_moEsc(fp.ult.slice(0, 5))}</b>.
+    Sua base vai até <b>${admUlt ? fmtPtDate(admUlt).slice(0, 5) : 'nenhum lançamento na janela'}</b>, por isso aqui e nas Movimentações o valor é outro. Importe os lançamentos mais recentes: a base mais nova passa a valer.</span></div>`;
+}
+
+function _muralUltLancAdm(central, mat, ate) {
+  let max = null;
+  (getLancIndex().byCentralMat.get(central)?.get(mat) || []).forEach(r => {
+    const d = parseDate(r.dtLanc);
+    if (d && d <= ate && (!max || d > max)) max = d;
+  });
+  return max;
+}
+
+async function _muralReconciliar(fotos) {
+  if (!_moEhAdm() || !state.lancamentos?.length) return;
+  const t0 = performance.now();
+  const janela = muralJanela(), thresholds = getHealthThresholds();
+  const ate = new Date(janela.fim); ate.setHours(23, 59, 59, 999);
+  const emJanela = (dt) => { const d = parseDate(dt); return d && d >= janela.ini && d <= ate; };
+  let ctx = null, trocados = 0, n = 0;
+  for (const f of fotos) {
+    const p = f.atual?.payload;
+    if (!p || !Array.isArray(p.itens)) continue;
+    const pares = [
+      ...p.itens.map(it => ({ central: it.central, mat: it.material, catKey: it.catKey, ult: it.pontos?.length ? it.pontos[it.pontos.length - 1][0] : null, item: it })),
+      ...(p.faixa || []).map(l => ({ central: l[0], mat: l[1], catKey: null, ult: l[4], linha: l }))
+    ];
+    const itens = [], faixa = [];
+    let nFoto = 0;
+    for (const par of pares) {
+      const manter = () => par.item ? itens.push(par.item) : faixa.push(par.linha);
+      const admUlt = _muralUltLancAdm(par.central, par.mat, ate);
+      const fotoUlt = parseDate(par.ult);
+      if (!admUlt || (fotoUlt && admUlt <= fotoUlt)) { manter(); continue; }
+      ctx = ctx || _muralCtx();
+      const catKey = par.catKey || getCatKeyDoCadastro(par.mat);
+      const res = muralAvaliarPar({ central: par.central, mat: par.mat, catKey, categoria: f.categoria, janela,
+        lancsJan: (getLancIndex().byCentralMat.get(par.central)?.get(par.mat) || []).filter(r => emJanela(r.dtLanc)),
+        sapJan: (getSapIndex().byCentralMat.get(par.central)?.get(par.mat) || []).filter(r => emJanela(r.dtLanc) && !isSapExcluidoPorFechamento(r)),
+        thresholds, ctx });
+      // De onde veio o número: a foto (dono) foi trocada pela base do ADM.
+      const origem = { adm: fmtPtDate(admUlt), foto: par.ult || null };
+      if (res.item) { itens.push({ ...res.item, baseAdm: origem }); nFoto++; }
+      else if (res.faixa) { faixa.push([...res.faixa, origem]); nFoto++; }
+      else manter(); // ponto cego na base do ADM: fica a foto
+      if (++n % 25 === 0) await yieldToUI();
+    }
+    f.atual = { ...f.atual, payload: { ...p, itens, faixa, trocadosAdm: nFoto } };
+    trocados += nFoto;
+  }
+  if (trocados) console.info(`[Mural] ${trocados} par(es) recalculado(s) na base do ADM (mais nova que a foto) em ${Math.round(performance.now() - t0)} ms`);
 }
 
 // ── Publicação ─────────────────────────────────────────────────────────────
@@ -607,6 +696,7 @@ async function muralRecarregar() {
   muralRender();
   try {
     const [fotos, donos, avocacoes] = await Promise.all([_muralCarregarFotos(), _muralCarregarDonos(), _muralCarregarAvocacoes()]);
+    await _muralReconciliar(fotos);
     _mo.fotos = fotos; _mo.donos = donos; _mo.avocacoes = avocacoes; _mo.carregado = true;
     _muralAvisos();
   } catch (err) {
@@ -857,6 +947,7 @@ function _muralItemHtml(it) {
   const pend = _moPendente(it);
   if (pend) avisos.push(`<span class="mo-av-warn"><i class="ti ti-calendar-x"></i>lançamento ${_moEsc(pend)} pendente</span>`);
   if (it.capErro) avisos.push('<span class="mo-av-warn"><i class="ti ti-alert-hexagon"></i>acima da capacidade física</span>');
+  if (it.baseAdm) avisos.push(`<span class="mo-teal" title="${_moEsc(_muralBaseAdmTxt(it.baseAdm, it.dono?.nome))}"><i class="ti ti-database"></i>pela sua base (lanç. ${_moEsc(it.baseAdm.adm.slice(0, 5))})</span>`);
   if (Math.abs(it.explicadoKg || 0) >= 0.5) avisos.push(`<span class="mo-teal" title="${_moEsc((it.explic || []).map(e => `${e.t}: ${_moKg(e.kg)}`).join('\n'))}"><i class="ti ti-arrows-diff"></i>${_moKg(it.explicadoKg)} explicados</span>`);
   if (it.herdadaKg && Math.abs(it.herdadaKg) >= 0.3 * Math.abs(it.v)) avisos.push(`<span class="mo-herd"><i class="ti ti-arrow-bar-to-down"></i>${_moKg(it.herdadaKg)} já no 1º lançamento do mês</span>`);
   if (it.avocado) avisos.push(`<span class="mo-teal"><i class="ti ti-shield-check"></i>avocado: ${_moEsc(it.avocado.motivo)}</span>`);
@@ -968,6 +1059,7 @@ function _muralTimeHtml(itens) {
     const ultima = fotos.map(f => _moIsoParaData(f.atual.dia)).sort((a, b) => b - a)[0];
     const atraso = ultima ? _moDiasEntre(ultima, hoje) : null;
     const base = fotos[0]?.atual.payload?.base || {};
+    const nAdm = fotos.reduce((s, f) => s + (f.atual.payload?.trocadosAdm || 0), 0);
     // Base desatualizada: foto de mais de 1 dia ou SAP importado há mais de 2.
     const sapDt = parseDate(base.sap);
     const velha = atraso == null || atraso > 1 || (sapDt && _moDiasEntre(sapDt, hoje) > 2);
@@ -991,7 +1083,7 @@ function _muralTimeHtml(itens) {
         ${num(pendFila.length + pendFaixa + pend30, 'sem lanç.', 'var(--amber)', pendFila, `Fila: ${pendFila.length} · Na faixa: ${pendFaixa} · Sem nenhum lançamento em 30 dias: ${pend30}`)}
       </div>
       <div class="mo-tc-kv"><span>Variação do mês</span><b style="color:${cor(vLiq)}">${_moPesoSinal(vLiq)}</b><span>Custo</span><b style="color:${cor(rLiq)}">${_moRs(rLiq)}</b><span>Sem explicação</span><b>${_moPeso(kgRes)}</b></div>
-      <div class="mo-tc-base${velha ? ' mo-av-warn' : ''}"><i class="ti ti-database"></i>${atraso == null ? 'Sem foto' : `Foto ${atraso === 0 ? 'de hoje' : `de ${atraso} dia${atraso > 1 ? 's' : ''} atrás`}`} · SAP ${_moEsc((base.sap || '—').slice(0, 5))} · lanç. ${_moEsc((base.lancamentos || '—').slice(0, 5))}${velha ? ' · desatualizada' : ''}</div>
+      <div class="mo-tc-base${velha ? ' mo-av-warn' : ''}"><i class="ti ti-database"></i>${atraso == null ? 'Sem foto' : `Foto ${atraso === 0 ? 'de hoje' : `de ${atraso} dia${atraso > 1 ? 's' : ''} atrás`}`} · SAP ${_moEsc((base.sap || '—').slice(0, 5))} · lanç. ${_moEsc((base.lancamentos || '—').slice(0, 5))}${velha ? ' · desatualizada' : ''}${nAdm ? `<span class="mo-teal" title="Pares em que a sua base tem lançamento mais novo que a foto: recalculados na sua base (a mais recente vale)"> · ${nAdm} pela sua base</span>` : ''}</div>
     </div>`;
   }).join('');
   // Central na fila de mais de um analista: causa comum provável na central.
@@ -1373,8 +1465,8 @@ function _muralFaixaLinhas() {
     const catKey = detectCatKey(f.categoria);
     const lim = thresholds[catKey]?.bom || 0;
     const naFilaAntes = new Set((f.anterior?.payload?.itens || []).map(_moChave));
-    (f.atual.payload?.faixa || []).forEach(([central, material, v, regional, ult, v30, terPend]) => {
-      linhas.push({ central, material, v, v30, regional, ult, terPend, categoria: f.categoria, dono: _muralDonoDe(f.categoria).nome,
+    (f.atual.payload?.faixa || []).forEach(([central, material, v, regional, ult, v30, terPend, baseAdm]) => {
+      linhas.push({ central, material, v, v30, regional, ult, terPend, baseAdm, categoria: f.categoria, dono: _muralDonoDe(f.categoria).nome,
         pct: lim ? Math.abs(v) / lim * 100 : 0, voltou: naFilaAntes.has(central + '|' + material) });
     });
   });
@@ -1420,7 +1512,7 @@ function _muralFaixaItemHtml(l) {
       <div class="mo-title"><span class="mo-mat">${_moEsc(l.material)}</span><span class="mo-where">· ${porMat ? _moEsc(l.central) + ' · ' : ''}${_moEsc(l.categoria)}</span>
         ${l.voltou ? '<span class="mo-voltou" title="Estava na fila na foto anterior">voltou à faixa</span>' : ''}
         ${l.terPend ? `<span class="mo-pend" title="Sem lançamento no último dia de conferência">lançamento ${_moEsc(_moPendente({ lancPendente: l.terPend }))} pendente</span>` : ''}</div>
-      <span class="mo-meta">${porMat ? `<i class="ti ti-user"></i>${_moEsc(l.dono)} · ` : ''}último lançamento ${_moEsc((l.ult || '—').slice(0, 5))}${nCom ? ` · <i class="ti ti-message-dots"></i>${nCom}` : ''}</span>
+      <span class="mo-meta">${porMat ? `<i class="ti ti-user"></i>${_moEsc(l.dono)} · ` : ''}último lançamento ${_moEsc((l.ult || '—').slice(0, 5))}${l.baseAdm ? ` · <span class="mo-teal" title="${_moEsc(_muralBaseAdmTxt(l.baseAdm, l.dono))}"><i class="ti ti-database"></i>pela sua base</span>` : ''}${nCom ? ` · <i class="ti ti-message-dots"></i>${nCom}` : ''}</span>
     </div>
     <div class="mo-fx-uso" title="Quanto da faixa &quot;bom&quot; da categoria a variação já ocupa"><span class="mo-uso"><i style="width:${Math.min(100, l.pct)}%;background:${corUso}"></i></span>${Math.round(l.pct)}%</div>
     <div class="mo-fx-v"><b style="color:${corV}">${_moKg(l.v)}</b>${l.v30 != null ? `<small>30 dias: ${_moKg(l.v30)}</small>` : ''}</div>
@@ -2122,6 +2214,7 @@ function _muralRxHtml(rx, it, catKey) {
         ${modoInv ? `<button class="mo-link" onclick="muralRaioXPeriodo('invs')"><i class="ti ti-arrow-left"></i> Inventários</button>
           <b class="mo-rx-mes">${_moEsc(nomeMes)}${rx.periodo === 'mes' ? ' · em aberto' : ''}</b>
           <div class="mo-abas" role="tablist" style="margin-left:auto">${granBtns}</div>` : `<span class="mo-hint">Inventários de ${periodoTxt}</span>`}</div>
+      ${_muralAvisoBaseHtml(central, material)}
       ${resumo}
       ${modoInvs
         ? sec('ti-chart-bar', 'Variação de inventário a inventário', `<div class="mo-dr-chart">${_muralRxBtnExp}${_muralRxBarras(meses, lim)}</div><p class="mo-hint">Cada barra vai do inventário do mês anterior ao do mês. Passe o mouse para a cascata do mês; clique para abrir o mês.</p>`)
