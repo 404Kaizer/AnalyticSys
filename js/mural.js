@@ -1118,7 +1118,7 @@ function muralRender() {
             <button class="mo-aba${_mo.aba !== 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba !== 'faixa'}" onclick="muralAba('fila')"><i class="ti ti-flame"></i>${adm ? 'Fila de ação' : 'Minha fila · ' + _moEsc(cats)} <b>${lista.length}</b></button>
             <button class="mo-aba${_mo.aba === 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba === 'faixa'}" onclick="muralAba('faixa')"><i class="ti ti-circle-check"></i>Na faixa <b>${_muralFaixaFiltradas().length}</b></button>
           </div>
-          ${_mo.aba === 'faixa' ? '' : `<div class="mo-filtros">${filtros.map(([k, l]) => `<button class="mo-chip${!_mo.ids && _mo.filtro === k ? ' on' : ''}" onclick="muralFiltro('${k}')">${l}</button>`).join('')}
+          ${_mo.aba === 'faixa' ? `<div class="mo-filtros"><button class="btn btn-sm" onclick="muralGruposTodos(true)" title="Expandir todos os grupos"><i class="ti ti-arrows-maximize"></i></button><button class="btn btn-sm" onclick="muralGruposTodos(false)" title="Recolher todos os grupos"><i class="ti ti-arrows-minimize"></i></button></div>` : `<div class="mo-filtros">${filtros.map(([k, l]) => `<button class="mo-chip${!_mo.ids && _mo.filtro === k ? ' on' : ''}" onclick="muralFiltro('${k}')">${l}</button>`).join('')}
             ${_mo.ids ? `<button class="mo-chip on" onclick="muralFiltro('todos')">${_moEsc(_mo.idsLabel)} <i class="ti ti-x"></i></button>` : ''}
             <select class="mo-sort" onchange="muralOrdem(this.value)" aria-label="Ordenar a fila">
               <option value="prio"${_mo.ordem === 'prio' ? ' selected' : ''}>Ordenar: prioridade</option>
@@ -1269,10 +1269,10 @@ function _muralResumoGrupo(its) {
 // A ordem dos GRUPOS segue a ordenação escolhida (Hugo, 09/11/2026):
 // prioridade = a maior de dentro; variação = |líquida do grupo| (o número da
 // linha); sem explicação = soma do que está sem explicação.
-function _muralAgrupar(its, chave) {
+function _muralAgrupar(its, chave, peso) {
   const m = new Map();
   its.forEach(i => { const k = chave(i); if (!m.has(k)) m.set(k, []); m.get(k).push(i); });
-  const peso = {
+  peso = peso || {
     prio:     g => Math.max(...g.map(i => i.prioridade)),
     kg:       g => Math.abs(g.reduce((s, i) => s + i.v, 0)),
     residual: g => g.reduce((s, i) => s + _moKgResidual(i), 0)
@@ -1282,36 +1282,37 @@ function _muralAgrupar(its, chave) {
 
 function _muralGrupoAberto(key, padrao) { return _mo.abertos.has(key) ? _mo.abertos.get(key) : padrao; }
 
-function _muralGrupoHtml(key, titulo, sub, its, aberto, corpo, nivel) {
+function _muralGrupoHtml(key, titulo, sub, its, aberto, corpo, nivel, resumo = _muralResumoGrupo) {
   return `<details class="mo-grp mo-grp-${nivel}" data-g="${_moEsc(key)}" ${aberto ? 'open' : ''} ontoggle="muralGrupoToggle(this)">
     <summary><i class="ti ti-chevron-right mo-grp-chev"></i><span class="mo-grp-tit">${_moEsc(titulo)}</span>${sub ? `<span class="mo-hint">${_moEsc(sub)}</span>` : ''}
-      <span class="mo-grp-res">${_muralResumoGrupo(its)}</span></summary>
+      <span class="mo-grp-res">${resumo(its)}</span></summary>
     <div class="mo-grp-corpo">${corpo}</div></details>`;
+}
+
+// Agrupamento das 3 visões (Regional → Central, Central, Material), comum à
+// Fila de ação e à aba Na faixa (Hugo, 10/11/2026). px separa o estado
+// aberto/fechado dos grupos de cada aba.
+function _muralGruposHtml(lista, { itemHtml, peso, resumo, px = '' }) {
+  const g = _mo.grupo;
+  const grupo = (key, titulo, sub, its, aberto, corpo, nivel) => _muralGrupoHtml(px + key, titulo, sub, its, _muralGrupoAberto(px + key, aberto), corpo, nivel, resumo);
+  if (g === 'material') {
+    return _muralAgrupar(lista, i => i.material, peso).map(([mat, its], n) =>
+      grupo('mat|' + mat, mat, `${its[0].categoriaFoto || its[0].categoria} · ${new Set(its.map(i => i.central)).size} central(is)`, its, n < 3, its.map(itemHtml).join(''), 1)).join('');
+  }
+  if (g === 'central') {
+    return _muralAgrupar(lista, i => i.central, peso).map(([cen, its], n) =>
+      grupo('cen|' + cen, cen, `Reg. ${its[0].regional}`, its, n < 3, its.map(itemHtml).join(''), 1)).join('');
+  }
+  return _muralAgrupar(lista, i => i.regional || '—', peso).map(([reg, its], n) => {
+    const centrais = _muralAgrupar(its, i => i.central, peso).map(([cen, ic], m) =>
+      grupo('reg|' + reg + '|' + cen, cen, '', ic, n < 3 && m < 2, ic.map(itemHtml).join(''), 2)).join('');
+    return grupo('reg|' + reg, reg, `${new Set(its.map(i => i.central)).size} central(is)`, its, n < 3, centrais, 1);
+  }).join('');
 }
 
 function _muralFilaHtml(lista) {
   if (!lista.length) return '<div class="empty-state" style="padding:28px"><p>Nada nesta visão.</p></div>';
-  const g = _mo.grupo;
-  if (g === 'material') {
-    return _muralAgrupar(lista, i => i.material).map(([mat, its], n) => {
-      const key = 'mat|' + mat;
-      return _muralGrupoHtml(key, mat, `${its[0].categoriaFoto} · ${new Set(its.map(i => i.central)).size} central(is)`, its, _muralGrupoAberto(key, n < 3), its.map(_muralItemHtml).join(''), 1);
-    }).join('');
-  }
-  if (g === 'central') {
-    return _muralAgrupar(lista, i => i.central).map(([cen, its], n) => {
-      const key = 'cen|' + cen;
-      return _muralGrupoHtml(key, cen, `Reg. ${its[0].regional}`, its, _muralGrupoAberto(key, n < 3), its.map(_muralItemHtml).join(''), 1);
-    }).join('');
-  }
-  return _muralAgrupar(lista, i => i.regional || '—').map(([reg, its], n) => {
-    const key = 'reg|' + reg;
-    const centrais = _muralAgrupar(its, i => i.central).map(([cen, ic], m) => {
-      const k2 = 'reg|' + reg + '|' + cen;
-      return _muralGrupoHtml(k2, cen, '', ic, _muralGrupoAberto(k2, n < 3 && m < 2), ic.map(_muralItemHtml).join(''), 2);
-    }).join('');
-    return _muralGrupoHtml(key, reg, `${new Set(its.map(i => i.central)).size} central(is)`, its, _muralGrupoAberto(key, n < 3), centrais, 1);
-  }).join('');
+  return _muralGruposHtml(lista, { itemHtml: _muralItemHtml });
 }
 
 function muralGrupo(g) { _mo.grupo = g; muralRender(); }
@@ -1348,17 +1349,43 @@ function _muralFaixaHtml() {
   if (!linhas.length) return `<div class="empty-state" style="padding:28px"><p>${semDado
     ? 'As fotos atuais ainda não trazem os itens na faixa. A próxima foto de cada dono já traz.'
     : 'Nenhum par na faixa nas fotos atuais.'}</p></div>`;
-  const adm = _moEhAdm();
-  return `<div class="mo-scroll mo-faixa-scroll"><table class="mo-team mo-faixa">
-    <thead><tr><th>Material · Central</th>${adm ? '<th>Dono</th>' : ''}<th>Variação</th><th title="Quanto da faixa &quot;bom&quot; da categoria a variação já ocupa">Uso da faixa</th><th>Último lanç.</th></tr></thead>
-    <tbody>${linhas.map(l => {
-      const cor = l.pct >= 80 ? 'var(--amber)' : 'var(--green)';
-      return `<tr><td><b>${_moEsc(l.material)}</b>${l.voltou ? ' <span class="mo-voltou" title="Estava na fila na foto anterior">voltou à faixa</span>' : ''}<small>${_moEsc(l.central)} · Reg. ${_moEsc(l.regional)} · ${_moEsc(l.categoria)}</small></td>
-        ${adm ? `<td><small style="font-size:13.5px">${_moEsc(l.dono)}</small></td>` : ''}
-        <td style="color:${l.v < -0.05 ? 'var(--red)' : l.v > 0.05 ? 'var(--amber)' : 'inherit'}">${_moKg(l.v)}${l.v30 != null ? `<small>30 dias: ${_moKg(l.v30)}</small>` : ''}</td>
-        <td><span class="mo-uso"><i style="width:${Math.min(100, l.pct)}%;background:${cor}"></i></span>${Math.round(l.pct)}%</td>
-        <td>${_moEsc((l.ult || '—').slice(0, 5))}${l.terPend ? ` <span class="mo-pend" title="Sem lançamento no último dia de conferência">lançamento ${_moEsc(_moPendente({ lancPendente: l.terPend }))} pendente</span>` : ''}</td></tr>`;
-    }).join('')}</tbody></table></div>`;
+  // Agrupada como a Fila (Hugo, 10/11/2026); grupos pelo maior uso da faixa.
+  return `<div class="mo-queue">${_muralGruposHtml(linhas, {
+    itemHtml: _muralFaixaItemHtml, resumo: _muralResumoFaixa, px: 'fx|', peso: g => Math.max(...g.map(l => l.pct))
+  })}</div>`;
+}
+
+function _muralResumoFaixa(its) {
+  const vLiq = its.reduce((s, l) => s + l.v, 0), pend = its.filter(l => l.terPend).length;
+  const maxPct = Math.max(...its.map(l => l.pct));
+  const cor = vLiq < -0.05 ? 'var(--red)' : vLiq > 0.05 ? 'var(--amber)' : 'var(--text2)';
+  return `<span class="mo-grp-n">${its.length} ite${its.length === 1 ? 'm' : 'ns'}</span>
+    ${pend ? `<span class="mo-grp-tag">${pend} sem lançamento</span>` : ''}
+    <span class="mo-grp-n" title="Maior uso da faixa &quot;bom&quot; no grupo"${maxPct >= 80 ? ' style="color:var(--amber)"' : ''}>até ${Math.round(maxPct)}% da faixa</span>
+    <span class="mo-grp-num" style="color:${cor}">${_moPesoSinal(vLiq)}</span>`;
+}
+
+// Linha da aba Na faixa: clique abre o Raio-X; Movimentações e Comentar
+// como na Fila — o analista também confere e comenta o que está na faixa.
+function _muralFaixaItemHtml(l) {
+  const dataset = `data-central="${_moEsc(l.central)}" data-material="${_moEsc(l.material)}"`;
+  const corV = l.v < -0.05 ? 'var(--red)' : l.v > 0.05 ? 'var(--amber)' : 'var(--text2)';
+  const corUso = l.pct >= 80 ? 'var(--amber)' : 'var(--green)';
+  const nCom = typeof _varComDe === 'function' ? _varComDe(l.central, l.material).filter(r => !r.oc_id).length : 0;
+  return `<article class="mo-fx mo-rx-link" ${dataset} onclick="if (!event.target.closest('button, a, input, select')) muralRaioXAbrir(this)">
+    <div class="mo-fx-main">
+      <div class="mo-title"><span class="mo-mat">${_moEsc(l.material)}</span><span class="mo-where">· ${_moEsc(l.central)} · ${_moEsc(l.categoria)}</span>
+        ${l.voltou ? '<span class="mo-voltou" title="Estava na fila na foto anterior">voltou à faixa</span>' : ''}
+        ${l.terPend ? `<span class="mo-pend" title="Sem lançamento no último dia de conferência">lançamento ${_moEsc(_moPendente({ lancPendente: l.terPend }))} pendente</span>` : ''}</div>
+      <span class="mo-meta"><i class="ti ti-user"></i>${_moEsc(l.dono)} · último lançamento ${_moEsc((l.ult || '—').slice(0, 5))}${nCom ? ` · <i class="ti ti-message-dots"></i>${nCom}` : ''}</span>
+    </div>
+    <div class="mo-fx-uso" title="Quanto da faixa &quot;bom&quot; da categoria a variação já ocupa"><span class="mo-uso"><i style="width:${Math.min(100, l.pct)}%;background:${corUso}"></i></span>${Math.round(l.pct)}%</div>
+    <div class="mo-fx-v"><b style="color:${corV}">${_moKg(l.v)}</b>${l.v30 != null ? `<small>30 dias: ${_moKg(l.v30)}</small>` : ''}</div>
+    <div class="mo-actions">
+      <button class="btn btn-sm" onclick="muralMovimentacoes(this)" ${dataset} title="Detalhe dia a dia do mês, com os movimentos SAP"><i class="ti ti-table"></i> Movimentações</button>
+      <button class="btn btn-sm" onclick="muralComentar(this)" ${dataset} data-diff="${l.v}" data-periodo=""><i class="ti ti-message-plus"></i> Comentar</button>
+    </div>
+  </article>`;
 }
 
 // ── Ações da tela ──────────────────────────────────────────────────────────
@@ -1939,7 +1966,7 @@ function _muralRxHtml(rx, it, catKey) {
       <span class="mo-shape mo-shape-${_moEsc(it.formato)}" title="${_moEsc(MURAL_FORMATO_DESC[it.formato] || '')}">${_moEsc(MURAL_FORMATO_LABEL[it.formato] || it.formato)}</span>
       ${st ? `<span class="mo-status" style="--sc:${st.cor}">${st.label}</span>` : ''}
       <span class="mo-meta"><i class="ti ti-user"></i>${_moEsc(it.avocado ? 'ADM' : it.dono?.nome || '')}</span>`
-    : '<span class="mo-hint">Este par não está na fila de ação.</span>';
+    : '<span class="mo-hint"><i class="ti ti-circle-check" style="color:var(--green)"></i> Na faixa · fora da fila de ação</span>';
   const card = (rot, val, sub, c) => `<div><small>${rot}</small><b${c ? ` style="color:${c}"` : ''}>${val}</b>${sub ? `<span>${_moEsc(sub)}</span>` : ''}</div>`;
   // Inventário a inventário: resumo da reincidência em vez da cascata.
   const meses = modoInvs ? _muralRxMeses(central, material, catKey) : null;
