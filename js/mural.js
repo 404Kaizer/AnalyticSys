@@ -1915,9 +1915,9 @@ function _muralRxBarras(meses, lim) {
       '<div style="margin-top:10px;font-size:13px;color:var(--text2)">Clique para ver o dia a dia do mês</div>');
     const rot = _moPesoSinal(m.v), ly = m.v < 0 ? top + h + 15 : top - 6;
     svg.push(`<g class="mo-rx-pt mo-rx-barra" data-tip="${tip}" data-col="${c}" onclick="muralRaioXPeriodo('${m.aberto ? 'mes' : 'inv:' + m.chave}')">
-      <rect x="${f(cx - slot / 2 + 2)}" y="${_moRxDim.T}" width="${f(slot - 4)}" height="${H - B - _moRxDim.T}" fill="transparent"/>
+      <rect x="${f(cx - bw / 2 - 3)}" y="${f(Math.min(top, top + h / 2 - 7) - 3)}" width="${f(bw + 6)}" height="${f(Math.max(h, 14) + 6)}" fill="transparent"/>
       <rect x="${f(cx - bw / 2)}" y="${f(top)}" width="${f(bw)}" height="${f(h)}" rx="3" fill="${c}" opacity="${m.aberto ? .45 : .85}"${m.aberto ? ` stroke="${c}" stroke-dasharray="4 3"` : ''}/>
-      <text x="${f(cx)}" y="${f(ly)}" text-anchor="middle" class="mo-rx-ax" style="fill:${c};font-weight:600">${rot}</text></g>`);
+      <text x="${f(cx)}" y="${f(ly)}" text-anchor="middle" class="mo-rx-ax" style="fill:${c};font-weight:600;pointer-events:none">${rot}</text></g>`);
   });
   return _muralRxSvg(svg, leg, 'Variação de inventário a inventário');
 }
@@ -1977,7 +1977,11 @@ function muralRaioX(central, mat, periodo = 'invs') { // abre em Inventários (H
       host.addEventListener('mouseout', e => { if (e.target.closest?.('.mo-rx-pt')) _hideTip(); });
     }
     const sc = host.querySelector('.mo-dr-body')?.scrollTop || 0;
-    host.innerHTML = _muralRxHtml(rx, it, catKey);
+    // Desenha na largura real do painel (escala 1): esticar o desenho da
+    // gaveta (740) até ~1050 px aumentava as fontes do gráfico (Hugo, 10/11).
+    const larg = host.clientWidth - 54; // padding do corpo (2×18) + do quadro (2×8) + borda
+    if (larg > 500) _moRxDim = { ...MO_RX_DIM, W: Math.round(larg) };
+    try { host.innerHTML = _muralRxHtml(rx, it, catKey); } finally { _moRxDim = MO_RX_DIM; }
     if (_mo.rx.manterScroll) host.querySelector('.mo-dr-body').scrollTop = sc;
     _mo.rx.manterScroll = false;
     if (document.getElementById('mo-rx-exp-ov')?.classList.contains('open')) muralRxExpandir();
@@ -2138,11 +2142,17 @@ const MURAL_HIPOTESES = {
   erro: ['Confirmar com o operador se houve dígito a mais ou unidade errada', 'Comparar com o lançamento anterior e o seguinte', 'Corrigir o lançamento e reimportar']
 };
 
-function _muralBotoesHtml(it, dataset, periodo) {
-  return `<button class="btn btn-sm" onclick="muralComentar(this)" ${dataset} data-diff="${it.v}" data-periodo="${_moEsc(periodo)}"><i class="ti ti-message-plus"></i> ${it.temOc ? 'Comentar' : 'Comentar / ocorrência'}</button>
-    ${_moEhAdm() && _mo.avocDisponivel ? (it.avocado
-      ? `<button class="btn btn-sm" onclick="muralDevolver('${_moEsc(it.avocado.id)}')" title="Devolver a ${_moEsc(it.dono.nome)}"><i class="ti ti-arrow-back-up"></i> Devolver</button>`
-      : `<button class="btn btn-sm" onclick="muralAvocar(this)" ${dataset} data-categoria="${_moEsc(it.categoriaFoto)}" data-dono="${_moEsc(it.dono.nome)}" title="Assumir este item no lugar do dono"><i class="ti ti-shield-check"></i> Avocar</button>`) : ''}`;
+// Ações do Raio-X no topo, ao lado do fechar (Hugo, 10/11/2026): Comentar /
+// ocorrência em evidência; Movimentações e Avocar/Devolver como ícones, iguais
+// aos da linha da fila. Item da faixa (sem it) também pode ser comentado.
+function _muralBotoesHtml(it, dataset, periodo, diff) {
+  const avocar = it && _moEhAdm() && _mo.avocDisponivel ? (it.avocado
+    ? `<button class="btn btn-sm mo-ico" onclick="muralDevolver('${_moEsc(it.avocado.id)}')" title="Devolver a ${_moEsc(it.dono.nome)}" aria-label="Devolver"><i class="ti ti-arrow-back-up"></i></button>`
+    : `<button class="btn btn-sm mo-ico" onclick="muralAvocar(this)" ${dataset} data-categoria="${_moEsc(it.categoriaFoto)}" data-dono="${_moEsc(it.dono.nome)}" title="Avocar: assumir este item no lugar do dono" aria-label="Avocar"><i class="ti ti-shield-check"></i></button>`) : '';
+  return `<div class="mo-dr-acoes">
+    <button class="btn btn-sm btn-primary" onclick="muralComentar(this)" ${dataset} data-diff="${it ? it.v : diff}" data-periodo="${_moEsc(periodo)}"><i class="ti ti-message-plus"></i> ${it?.temOc ? 'Comentar' : 'Comentar / ocorrência'}</button>
+    <button class="btn btn-sm mo-ico" onclick="muralMovimentacoes(this)" ${dataset} title="Movimentações: detalhe dia a dia, com os movimentos SAP" aria-label="Movimentações"><i class="ti ti-table"></i></button>
+    ${avocar}</div>`;
 }
 
 function _muralRxHtml(rx, it, catKey) {
@@ -2230,6 +2240,7 @@ function _muralRxHtml(rx, it, catKey) {
         <div class="mo-dr-chips">${chips}</div>
         ${it ? `<div class="mo-dr-prazo">${_muralPrazoHtml(it)}</div>` : ''}
       </div>
+      ${_muralBotoesHtml(it, dataset, periodoTxt, s.diff)}
       <button class="btn btn-sm mo-dr-x" onclick="muralRaioXFechar()" aria-label="Fechar o Raio-X"><i class="ti ti-x"></i></button>
     </div>
     <div class="mo-dr-body">
@@ -2247,9 +2258,5 @@ function _muralRxHtml(rx, it, catKey) {
       ${hip.length ? sec('ti-list-check', 'O que conferir', `<ul class="mo-dr-hip">${hip.map(h => `<li>${_moEsc(h)}</li>`).join('')}</ul>`) : ''}
       <div id="mo-dr-hist">${sec('ti-history', 'Histórico de ações no período', `<ul class="mo-rx-list mo-rx-acoes">${hist}</ul>`)}</div>
       ${prio ? sec('ti-sort-descending', 'Por que está nesta posição da fila', `<div class="mo-dr-prio">${prio}</div>`) : ''}
-    </div>
-    <div class="mo-dr-foot">
-      <button class="btn btn-sm" onclick="muralMovimentacoes(this)" ${dataset}><i class="ti ti-table"></i> Movimentações</button>
-      ${it ? _muralBotoesHtml(it, dataset, periodoTxt) : ''}
     </div>`;
 }

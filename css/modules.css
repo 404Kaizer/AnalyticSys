@@ -13386,6 +13386,8 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mo-dr-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .mo-dr-prazo { margin-top: 8px; }
 .mo-dr-x { margin-left: auto; flex-shrink: 0; }
+.mo-dr-acoes { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.mo-dr-acoes + .mo-dr-x { margin-left: 0; }
 .mo-dr-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 14px 18px 24px; display: flex; flex-direction: column; gap: 18px; }
 .mo-dr-periodo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .mo-dr-periodo .mo-aba:disabled { opacity: .45; cursor: not-allowed; }
@@ -13410,7 +13412,6 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mo-dr-prio { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; font-size: 13px; color: var(--text2); }
 .mo-dr-prio b { font-family: var(--mono); font-weight: 500; color: var(--text); text-align: right; }
 .mo-dr-prio .tot { border-top: 1px solid var(--border2); padding-top: 6px; color: var(--text); }
-.mo-dr-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
 .mo-rx-chart { display: block; width: 100%; height: auto; }
 .mo-rx-ax { font-family: var(--mono); font-size: 13px; fill: var(--text3); }
 .mo-rx-leg { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 4px 6px 0; font-size: 12.5px; color: var(--text2); }
@@ -13424,7 +13425,6 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mo-rx-acao circle { transition: r .12s; }
 .mo-rx-barra { cursor: pointer; }
 .mo-rx-barra:hover rect:nth-child(2) { opacity: 1; stroke: var(--text); stroke-width: 1.5; }
-.mo-rx-barra:hover rect:first-child { fill: var(--bg4); opacity: .5; }
 .mo-rx-acao:hover circle { r: 11; }
 .mo-rx-acao:hover line { stroke-width: 2.5; stroke-dasharray: none; }
 .mo-rx-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
@@ -13584,12 +13584,13 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-ult { font-size: 14px; padding: 10px 12px; background: var(--bg3); border-radius: 10px; display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
 .mp-time-l { display: grid; grid-template-columns: minmax(140px, 200px) minmax(0, 1fr) 56px minmax(150px, auto); gap: 14px; align-items: center; padding: 8px 0; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .mp-time-n { font-size: 13px; color: var(--text2); text-align: right; }
-.mp-rx { display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; max-height: calc(100vh - 160px); position: sticky; top: 12px; }
-.mp-rx .mo-dr-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+/* Raio-X no painel: corre com a página, como Regional e Central (Hugo,
+   10/11/2026: sem scroll dentro de scroll); as ações ficam no topo. */
+.mp-rx { display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
+.mp-rx .mo-dr-body, .mp-rx .mo-rx-acoes { flex: none; overflow: visible; max-height: none; }
 @media (max-width: 1100px) {
   .mp-lista { position: static; max-width: none; }
   .mp-lista-corpo { max-height: 420px; }
   .mp-dois, .mp-pend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mp-doc { grid-template-columns: 1fr 1fr; }
-  .mp-rx { position: static; max-height: none; }
 }
