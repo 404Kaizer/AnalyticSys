@@ -19,11 +19,6 @@ const _mpCor = (v) => v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'va
 const _mpChave = (c, m) => c + '|' + m;
 
 // Período do Analítico no topo: deixa claro de onde vêm os números.
-function _mpTopoHtml() {
-  const P = muralPeriodo();
-  return `<div class="mp-switch"><span class="mo-hint"><i class="ti ti-calendar"></i> Período do Analítico: <b>${P ? `${fmtPtDate(P.ini)} a ${fmtPtDate(P.fim)}` : '—'}</b> · mesma conta da Visão Micro</span></div>`;
-}
-
 // ── Pares e saúde ──────────────────────────────────────────────────────────
 // Todo par da análise: fila (fora da faixa, com os filtros da barra), faixa e
 // sem lançamento no último dia (sl: AUSENTE na Micro, com o mesmo valor dela;
@@ -352,16 +347,30 @@ function _mpGruposHtml() {
 // Lista recolhível para a lateral (Hugo, 11/11/2026): vira uma faixa fina e o
 // painel ocupa a largura; a escolha fica guardada neste navegador.
 _mp.listaRecolhida = (() => { try { return localStorage.getItem('mural.listaRecolhida') === '1'; } catch (_) { return false; } })();
+// Animação: a largura e o conteúdo da lista que JÁ está na tela transitam
+// (CSS .mp-anim) e só no fim tudo é redesenhado — assim os gráficos do painel
+// saem na largura final. O conteúdo novo entra com um fade (.entrando).
+const MP_LISTA_ANIM_MS = 260;
 function muralPainelLista() {
+  if (_mp.listaAnim) return;
   _mp.listaRecolhida = !_mp.listaRecolhida;
   try { localStorage.setItem('mural.listaRecolhida', _mp.listaRecolhida ? '1' : '0'); } catch (_) { /* sem storage */ }
   if (typeof _hideTip === 'function') _hideTip();
-  muralRender();
+  const lista = document.querySelector('#mural-root .mp-lista');
+  if (!lista || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return muralRender();
+  _mp.listaAnim = true; _mp.listaEntrando = true;
+  // Congela a largura do conteúdo para ele não refluir enquanto a lista encolhe.
+  [...lista.children].forEach(c => { c.style.width = c.offsetWidth + 'px'; });
+  lista.classList.add('mp-anim');
+  lista.classList.toggle('recolhida', _mp.listaRecolhida);
+  setTimeout(() => { _mp.listaAnim = false; muralRender(); }, MP_LISTA_ANIM_MS);
 }
 function _mpListaHtml(todos) {
+  const ent = _mp.listaEntrando ? ' entrando' : '';
+  _mp.listaEntrando = false;
   if (_mp.listaRecolhida) {
     const n = todos.filter(p => p.it).length;
-    return `<section class="mp-lista recolhida"><button class="mp-lista-abrir" onclick="muralPainelLista()" title="Mostrar a lista" aria-label="Mostrar a lista" aria-expanded="false">
+    return `<section class="mp-lista recolhida${ent}"><button class="mp-lista-abrir" onclick="muralPainelLista()" title="Mostrar a lista" aria-label="Mostrar a lista" aria-expanded="false">
       <i class="ti ti-layout-sidebar-left-expand"></i><span>Lista · ${n} na fila</span></button></section>`;
   }
   const s = _mp.sel, aba = _mp.aba, g = _mp.grupo, termos = _mpTermos();
@@ -417,16 +426,16 @@ function _mpListaHtml(todos) {
   else linhas = ordenar(_mpAgrupar(vis, p => p.regional)).map(blocoReg).join('');
 
   const contaAba = termos.length ? contar : todos;
-  return `<section class="mp-lista">
+  return `<section class="mp-lista${ent}">
     <div class="mp-lista-head">
-      <div class="mp-lista-topo">
       <div class="mo-abas" role="tablist">
         ${[['fila', 'ti-flame', 'Fila', p => !!p.it], ['faixa', 'ti-circle-check', 'Na faixa', p => !!p.fx], ['sem', 'ti-calendar-x', 'Sem lançamento', p => !!p.sl]]
           .map(([k, ic, rot, f]) => `<button class="mo-aba${aba === k ? ' on' : ''}" role="tab" aria-selected="${aba === k}" onclick="muralPainelAba('${k}')"${k === 'sem' ? ' title="Sem lançamento no último dia do período (AUSENTE na Visão Micro)"' : ''}><i class="ti ${ic}"></i>${rot} <b>${contaAba.filter(f).length}</b></button>`).join('')}
       </div>
-      <button class="mp-lista-recolher" onclick="muralPainelLista()" title="Recolher a lista para a lateral" aria-label="Recolher a lista" aria-expanded="true"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
+      <div class="mp-lista-linha">
+        <label class="mp-busca"><i class="ti ti-search"></i><input id="mp-busca" type="text" placeholder="Buscar: regional, central, material… (separe por vírgula)" value="${_moEsc(_mp.busca)}" oninput="muralPainelBusca(this.value)" aria-label="Buscar regional, central ou material"></label>
+        <button class="mp-lista-recolher" onclick="muralPainelLista()" title="Recolher a lista para a lateral" aria-label="Recolher a lista" aria-expanded="true"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
       </div>
-      <label class="mp-busca"><i class="ti ti-search"></i><input id="mp-busca" type="text" placeholder="Buscar: regional, central, material… (separe por vírgula)" value="${_moEsc(_mp.busca)}" oninput="muralPainelBusca(this.value)" aria-label="Buscar regional, central ou material"></label>
     </div>
     <div class="mp-lista-corpo">${linhas || `<div class="empty-state" style="padding:24px"><p>${termos.length ? (contar.length ? 'Nada nesta aba — o número de cada aba mostra onde está.' : 'Nada encontrado.') : 'Nada com esses filtros.'}</p></div>`}</div>
   </section>`;
@@ -560,7 +569,7 @@ function muralPainelRender(el, itens) {
     el.addEventListener('mousemove', e => { if (e.target.closest?.('.mp-inv .mo-rx-pt')) _moveTip(e); });
     el.addEventListener('mouseout', e => { if (e.target.closest?.('.mp-inv .mo-rx-pt')) _hideTip(); });
   }
-  el.innerHTML = _mpTopoHtml() + `<div class="mp-root">${_muralFiltrosHtml(itens)}
+  el.innerHTML = `<div class="mp-root">${_muralFiltrosHtml(itens)}
     <div class="mp">${_mpListaHtml(todos)}
       <section class="mp-painel">${_mpPainelHtml(todos, fila)}</section></div></div>`;
   _mpDepois(todos);

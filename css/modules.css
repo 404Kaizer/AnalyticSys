@@ -13523,16 +13523,24 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 /* ── Operações · visão nova em teste (js/mural-painel.js) ─────────────────
    Lista Regional → Central → Item à esquerda e painel à direita que muda com
    a seleção (Geral → Regional → Central → Item). Hugo, 10/11/2026. */
-.mp-switch { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
 .mp { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; margin-top: 12px; }
-.mp-lista { flex: 1 1 380px; max-width: 470px; min-width: 0; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: sticky; top: 12px; }
+/* Lista fixa na tela: gruda logo abaixo da topbar e ocupa a altura da janela
+   (o corpo rola por dentro), sem sobrar espaço em branco ao rolar o painel. */
+.mp-lista { flex: 1 1 400px; max-width: 470px; min-width: 0; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  position: sticky; top: calc(var(--topbar-h) + 12px); max-height: calc(100vh - var(--topbar-h) - 24px); display: flex; flex-direction: column; }
+/* A página rola na JANELA; o .page-content tem overflow-y:auto sem altura
+   fixa, nunca rola, mas "prende" o sticky e a lista não grudava. Com a lista
+   das Operações na tela ele deixa de ser contêiner de rolagem (o clip do
+   eixo x continua). Hugo, 11/11/2026. */
+.page-content:has(.mp-lista) { overflow-y: visible; }
 .mp-lista-head { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); }
 /* Abas da lista: o texto nunca quebra; se não couberem as três, a aba inteira desce. */
-.mp-lista-head .mo-abas { flex-wrap: wrap; }
-.mp-lista-head .mo-aba { white-space: nowrap; padding: 5px 8px; }
+.mp-lista-head { flex-shrink: 0; }
+.mp-lista-head .mo-abas { flex-wrap: wrap; gap: 2px; }
+.mp-lista-head .mo-aba { white-space: nowrap; padding: 5px 7px; gap: 5px; font-size: 13px; }
 .mp-busca { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 10px; background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; color: var(--text2); }
 .mp-busca input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; font-size: 14px; }
-.mp-lista-corpo { max-height: calc(100vh - 220px); overflow-y: auto; overscroll-behavior: contain; }
+.mp-lista-corpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .mp-row { width: 100%; display: flex; align-items: center; gap: 9px; padding: 11px 14px; border: 0; border-bottom: 1px solid var(--border); border-left: 3px solid transparent; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .mp-row:hover { background: var(--bg3); }
 .mp-row.sel { background: var(--bg3); border-left-color: var(--accent); }
@@ -13554,15 +13562,23 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-row.sel { background: color-mix(in srgb, var(--accent) 12%, var(--bg2)) !important; } /* visões Central e Material: um nível só */
 .mp-grupos-off { opacity: .45; }
 /* Lista recolhível: botão no topo da lista; recolhida, vira uma faixa vertical. */
-.mp-lista-topo { display: flex; align-items: flex-start; gap: 8px; }
-.mp-lista-topo .mo-abas { flex: 1; min-width: 0; }
+/* Botão de recolher ao lado da busca: as três abas ficam com a largura toda. */
+.mp-lista-linha { display: flex; gap: 8px; }
+.mp-lista-linha .mp-busca { flex: 1; min-width: 0; }
 .mp-lista-recolher, .mp-lista-abrir { border: 1px solid var(--border2); background: var(--bg); color: var(--text2); border-radius: 8px; cursor: pointer; font: inherit; }
-.mp-lista-recolher { flex-shrink: 0; width: 32px; height: 32px; display: grid; place-items: center; font-size: 17px; }
+.mp-lista-recolher { flex-shrink: 0; width: 38px; height: 38px; display: grid; place-items: center; font-size: 18px; }
 .mp-lista-recolher:hover, .mp-lista-abrir:hover { color: var(--text); background: var(--bg3); }
 .mp-lista.recolhida { flex: 0 0 46px; max-width: 46px; }
 .mp-lista-abrir { width: 100%; border: 0; border-radius: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; font-size: 13px; font-weight: 600; }
 .mp-lista-abrir .ti { font-size: 18px; }
 .mp-lista-abrir span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
+/* Animação de recolher/expandir (muralPainelLista): a largura transita e o
+   conteúdo atual some rápido; o novo entra com fade. */
+.mp-lista.mp-anim { transition: flex-grow .25s cubic-bezier(.2, .8, .2, 1), flex-basis .25s cubic-bezier(.2, .8, .2, 1), max-width .25s cubic-bezier(.2, .8, .2, 1); }
+.mp-lista.mp-anim > * { opacity: 0; transition: opacity .12s ease-out; }
+.mp-lista.entrando > * { animation: mp-lista-entra .2s ease-out; }
+@keyframes mp-lista-entra { from { opacity: 0; transform: translateX(-6px); } }
+@media (prefers-reduced-motion: reduce) { .mp-lista.mp-anim, .mp-lista.mp-anim > * { transition: none; } .mp-lista.entrando > * { animation: none; } }
 /* Busca: um título por seção (Regionais / Centrais / Materiais). */
 .mp-secao { padding: 8px 14px 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text2); background: var(--bg3); border-bottom: 1px solid var(--border); }
 .mp-secao b { color: var(--text3); font-weight: 500; margin-left: 4px; }
@@ -13622,7 +13638,7 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-rx { display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
 .mp-rx .mo-dr-body, .mp-rx .mo-rx-acoes { flex: none; overflow: visible; max-height: none; }
 @media (max-width: 1100px) {
-  .mp-lista { position: static; max-width: none; }
+  .mp-lista { position: static; max-width: none; max-height: none; }
   .mp-lista-corpo { max-height: 420px; }
   .mp-dois, .mp-pend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mp-doc { grid-template-columns: 1fr 1fr; }
