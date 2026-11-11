@@ -13528,6 +13528,9 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; margin-top: 12px; }
 .mp-lista { flex: 1 1 380px; max-width: 470px; min-width: 0; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: sticky; top: 12px; }
 .mp-lista-head { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); }
+/* Abas da lista: o texto nunca quebra; se não couberem as três, a aba inteira desce. */
+.mp-lista-head .mo-abas { flex-wrap: wrap; }
+.mp-lista-head .mo-aba { white-space: nowrap; padding: 5px 8px; }
 .mp-busca { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 10px; background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; color: var(--text2); }
 .mp-busca input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; font-size: 14px; }
 .mp-lista-corpo { max-height: calc(100vh - 220px); overflow-y: auto; overscroll-behavior: contain; }
@@ -13537,6 +13540,10 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-cen { padding-left: 30px; }
 .mp-item { padding-left: 52px; align-items: flex-start; }
 .mp-item .mp-ico { margin-top: 2px; }
+.mp-item.mp-item-1 { padding-left: 30px; } /* visões Central e Material: um nível só */
+.mp-grupos { align-self: flex-start; }
+.mp-rank-mat { grid-template-columns: 18px minmax(70px, 140px) minmax(0, 1fr) 120px; }
+.mp-rank-mat .mono { text-align: right; }
 .mp-chev { font-size: 14px; color: var(--text2); flex-shrink: 0; }
 .mp-ico { font-size: 16px; flex-shrink: 0; }
 .mp-nome { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }

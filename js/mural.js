@@ -381,7 +381,7 @@ async function muralRecarregar() {
     const fotos = _muralFotosDaMicro(donos);
     _mo.semAnalise = !fotos;
     _mo.fotos = fotos || []; _mo.carregado = true;
-    if (fotos) _muralEnriquecer(_mo.gen).catch(err => console.warn('[Mural] Erro ao calcular as séries:', err));
+    if (fotos) _muralEnriquecer(_mo.gen).catch(err => { _mo.enriquecendo = false; console.warn('[Mural] Erro ao calcular as séries:', err); });
   } catch (err) {
     _mo.erro = err.message || String(err);
   } finally {
@@ -1488,7 +1488,7 @@ function _muralRxHtml(rx, it, catKey) {
   return `<div class="mo-dr-head">
       <div style="min-width:0">
         <h3>${_moEsc(material)}</h3>
-        <p>${_moEsc(central)}${it ? ` · Reg. ${_moEsc(it.regional)} · ${_moEsc(it.categoriaFoto || '')}` : ''}</p>
+        <p>${_moEsc(central)}${it ? ` · ${_moEsc(it.regional)} · ${_moEsc(it.categoriaFoto || '')}` : ''}</p>
         <div class="mo-dr-chips">${chips}</div>
         ${it ? `<div class="mo-dr-prazo">${_muralPrazoHtml(it)}</div>` : ''}
       </div>
