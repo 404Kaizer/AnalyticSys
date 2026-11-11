@@ -2097,10 +2097,17 @@ function _dgVgAjusteDetalheHtml(extra, usuarioSap) {
 // .dg-kpi-detalhe-btn em components.css).
 function _dgVgBotaoDetalhado(entries, title, colorVar, detalheAjuste = false) {
   if (!entries.length) return '';
-  const encoded = encodeURIComponent(JSON.stringify(entries));
+  // Relatório Gerencial: a lista NÃO vai no atributo (eram ~50 MB por mês
+  // e derrubavam a aba) — o gerador recolhe as entries por este gancho, grava
+  // compactadas num bloco por mês e o botão só aponta pra lá (ver
+  // _dgrBdmCodificarMes/_dgrBdmEmpacotar em relatorio.js). Na tela, null.
+  const sink = window._dgVgDetalheSink;
+  const dados = sink
+    ? `data-entries-ref="${escapeHtml(sink(entries))}"`
+    : `data-entries="${encodeURIComponent(JSON.stringify(entries))}"`;
   return `<button type="button" class="dg-kpi-detalhe-btn"
     onclick="event.stopPropagation();openBreakdownModal(event.currentTarget)"
-    data-entries="${encoded}" data-fech-excluidos="" data-diag=""
+    ${dados} data-fech-excluidos="" data-diag=""
     data-title="${escapeHtml(title)}" data-color="${escapeHtml(colorVar)}"
     data-local-count="" data-local-total="" data-mat="" data-central=""
     data-mostrar-central-material="1" data-detalhe-ajuste="${detalheAjuste ? '1' : ''}"

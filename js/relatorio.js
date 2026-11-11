@@ -3601,7 +3601,8 @@ const _DGR_NOMES = {
                 '_DG_VG_NIVEL_COR', '_DG_VG_NIVEL_LABEL', '_DG_VG_NIVEL_ORDEM',
                 '_dgVgNivelBadgeHtml', '_dgVgSaudeDiffCor', 'abrirDetalheSaude', '_dgVgRenderSaudeTabela',
                 '_dgVgFiltrarSaudeLista', 'fecharDetalheSaude', 'abrirDetalheVariacao', 'fecharDetalheVariacao',
-                '_dgVgAjusteStatus', '_dgVgAjusteBadgeHtml', '_dgVgAjusteDetalheHtml']
+                '_dgVgAjusteStatus', '_dgVgAjusteBadgeHtml', '_dgVgAjusteDetalheHtml',
+                '_dgrGunzipB64', '_dgrBdmDecodificarMes']
 };
 
 function _dgrScriptPrelude(chaves) {
@@ -3701,8 +3702,88 @@ function _dgrDetalheBotaoModalHtml() {
 </div>`;
 }
 
-function _dgrScriptDetalheBotao() {
+// ── Listas do "Ver detalhes" compactadas (Compras/Consumo/Ajustes) ──────
+//    Antes cada botão levava a lista inteira em data-entries (JSON + URL
+//    encoding): ~50 MB por mês, arquivo de 150 MB com 3 meses e aba
+//    derrubada por memória na geração. Agora: um bloco por mês, colunar,
+//    com as strings num dicionário único do mês, e gzip por cima.
+//    SEM PERDA: _dgrBdmDecodificarMes devolve as MESMAS tuplas que o
+//    JSON.parse(data-entries) antigo devolvia (mesma ordem, mesmas chaves),
+//    então o modal segue igual. Lista fora do formato esperado (tupla de 6
+//    com extra de chaves uniformes) vai crua, sem compactar — nunca adivinha.
+function _dgrBdmCodificarMes(listas) {
+  const s = [], idx = new Map();
+  const str = v => { let i = idx.get(v); if (i === undefined) { i = s.length; s.push(v); idx.set(v, i); } return i; };
+  return {
+    s,
+    l: listas.map(entries => {
+      const k = Object.keys((entries[0] && entries[0][5]) || {});
+      const sig = k.join('\u0001');
+      const uniforme = entries.every(e => Array.isArray(e) && e.length === 6 && e[5] && typeof e[5] === 'object'
+        && Object.keys(e[5]).join('\u0001') === sig);
+      if (!uniforme) return { raw: entries };
+      const c = [];
+      for (let j = 0; j < 5 + k.length; j++) {
+        const vals = entries.map(e => j < 5 ? e[j] : e[5][k[j - 5]]);
+        c.push(vals.every(v => typeof v === 'string') ? { s: vals.map(str) } : { v: vals });
+      }
+      return { k, c };
+    })
+  };
+}
+
+// Inverso de _dgrBdmCodificarMes — roda DENTRO do arquivo (exportado pelo
+// prelúdio detalheDash), devolve um array de listas na ordem da codificação.
+function _dgrBdmDecodificarMes(m) {
+  return m.l.map(L => {
+    if (L.raw) return L.raw;
+    const col = L.c.map(c => c.s ? c.s.map(i => m.s[i]) : c.v);
+    const n = col.length ? col[0].length : 0;
+    const out = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const extra = {};
+      for (let j = 0; j < L.k.length; j++) extra[L.k[j]] = col[5 + j][i];
+      out[i] = [col[0][i], col[1][i], col[2][i], col[3][i], col[4][i], extra];
+    }
+    return out;
+  });
+}
+
+// gzip nativo do navegador (mesmo recurso do backup em nuvem, cloud-backup.js).
+async function _dgrGzipB64(texto) {
+  const stream = new Blob([texto]).stream().pipeThrough(new CompressionStream('gzip'));
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+// Inverso de _dgrGzipB64 — roda DENTRO do arquivo, no 1º clique de cada mês.
+async function _dgrGunzipB64(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text();
+}
+
+// { idDoMes: { f: 'gz', d: base64 } } — ou { f: 'json', d: objeto } se o
+// navegador que GERA não tiver CompressionStream (arquivo maior, mas certo).
+// Esvazia card.bdmJson conforme avança pra soltar a memória.
+async function _dgrBdmEmpacotar(cards) {
+  const pacotes = {};
+  const gz = typeof CompressionStream !== 'undefined';
+  for (const c of cards) {
+    if (!c.bdmJson) continue;
+    pacotes[c.id] = gz ? { f: 'gz', d: await _dgrGzipB64(c.bdmJson) } : { f: 'json', d: JSON.parse(c.bdmJson) };
+    c.bdmJson = '';
+  }
+  return pacotes;
+}
+
+function _dgrScriptDetalheBotao(pacotes = {}) {
   return `<script>
+window._DGR_BDM = ${JSON.stringify(pacotes).replace(/</g, '\\u003c')};
 (function() {
   var PAGE_SIZE_BDM = 50;
   var _bdmRows = [], _bdmPage = 0, _bdmSortCol = 'dtLanc', _bdmSortDir = 'desc';
@@ -3787,15 +3868,66 @@ function _dgrScriptDetalheBotao() {
     if (labelEl) labelEl.textContent = (t || temSt) ? ('Total ('+ filtrado.length + ' filtrado' + (filtrado.length === 1 ? '' : 's') + ')') : 'Total';
   }
 
+  // Listas compactadas (window._DGR_BDM, ver _dgrBdmEmpacotar): descompacta
+  // o mês INTEIRO no 1º clique e guarda — os outros cards do mês já abrem
+  // na hora. Falhou? Sai do cache pra o próximo clique tentar de novo.
+  var _bdmCache = {}, _bdmPedido = 0;
+  function _bdmCarregarLista(ref) {
+    var p = ref.lastIndexOf(':'), mes = ref.slice(0, p), i = +ref.slice(p + 1);
+    if (!_bdmCache[mes]) {
+      var pac = (window._DGR_BDM || {})[mes];
+      _bdmCache[mes] = !pac ? Promise.reject(new Error('lista do mês não encontrada no arquivo'))
+        : (pac.f === 'gz' ? _dgrGunzipB64(pac.d).then(JSON.parse) : Promise.resolve(pac.d)).then(_dgrBdmDecodificarMes);
+      _bdmCache[mes].catch(function() { delete _bdmCache[mes]; });
+    }
+    return _bdmCache[mes].then(function(listas) {
+      if (!listas[i]) throw new Error('lista ' + ref + ' não encontrada no arquivo');
+      return listas[i];
+    });
+  }
+
   window.openBreakdownModal = function(trigger) {
+    var pedido = ++_bdmPedido;
+    var ref = trigger.dataset.entriesRef;
+    if (!ref) {
+      // Formato antigo (lista no atributo) — mantido por segurança.
+      var entries = [];
+      try { entries = JSON.parse(decodeURIComponent(trigger.dataset.entries || '[]')); } catch (e) {}
+      _bdmAbrir(trigger, entries);
+      return;
+    }
+    var overlay = document.getElementById('dgr-bdm-overlay');
+    var titleEl = document.getElementById('dgr-bdm-title');
+    var summaryEl = document.getElementById('dgr-bdm-summary');
+    var tbody = document.getElementById('dgr-bdm-tbody');
+    var infoEl = document.getElementById('dgr-bdm-page-info');
+    var totalEl = document.getElementById('dgr-bdm-total-val');
+    if (!overlay) return;
+    var aviso = function(txt) {
+      if (summaryEl) { summaryEl.onclick = null; summaryEl.textContent = txt; }
+      if (tbody) { tbody.onclick = null; tbody.innerHTML = ''; }
+      if (infoEl) infoEl.textContent = '—';
+      if (totalEl) { totalEl.textContent = '—'; totalEl.style.color = ''; }
+    };
+    if (titleEl) titleEl.textContent = (trigger.dataset.title || '') + ' — Movimentações';
+    aviso('Carregando movimentações…');
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+    _bdmCarregarLista(ref).then(function(entries) {
+      if (pedido === _bdmPedido) _bdmAbrir(trigger, entries);
+    }).catch(function(err) {
+      if (window.console) console.error('[Relatório] Ver detalhes:', err);
+      if (pedido === _bdmPedido) aviso('Não foi possível carregar as movimentações neste navegador. Abra o arquivo no Chrome ou Edge atualizado.');
+    });
+  };
+
+  function _bdmAbrir(trigger, entries) {
     var overlay = document.getElementById('dgr-bdm-overlay');
     var titleEl = document.getElementById('dgr-bdm-title');
     var summaryEl = document.getElementById('dgr-bdm-summary');
     var searchEl = document.getElementById('dgr-bdm-search-input');
     if (!overlay) return;
 
-    var entries = [];
-    try { entries = JSON.parse(decodeURIComponent(trigger.dataset.entries || '[]')); } catch (e) {}
     var title = trigger.dataset.title || '';
     if (titleEl) titleEl.textContent = title + ' — Movimentações';
 
@@ -3880,9 +4012,10 @@ function _dgrScriptDetalheBotao() {
 
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
-  };
+  }
 
   window.closeBreakdownModal = function() {
+    _bdmPedido++; // lista que ainda estava carregando não reabre o modal
     var overlay = document.getElementById('dgr-bdm-overlay');
     if (!overlay) return;
     overlay.classList.remove('open');
@@ -3928,7 +4061,8 @@ function _dgrExportaveis() {
     _DG_VG_NIVEL_COR, _DG_VG_NIVEL_LABEL, _DG_VG_NIVEL_ORDEM,
     _dgVgNivelBadgeHtml, _dgVgSaudeDiffCor, abrirDetalheSaude, _dgVgRenderSaudeTabela,
     _dgVgFiltrarSaudeLista, fecharDetalheSaude, abrirDetalheVariacao, fecharDetalheVariacao,
-    _dgVgAjusteStatus, _dgVgAjusteBadgeHtml, _dgVgAjusteDetalheHtml
+    _dgVgAjusteStatus, _dgVgAjusteBadgeHtml, _dgVgAjusteDetalheHtml,
+    _dgrGunzipB64, _dgrBdmDecodificarMes
   };
 }
 
@@ -4464,6 +4598,7 @@ function _dgrEvoDetalheCardHtml(l, blocos = DGR_EVO_BLOCOS) {
   const porRegionalKg = _dgVgAggKgPorChave(l.pares, p => p.regional);
   const porCentralKg  = _dgVgAggKgPorChave(l.pares, p => p.central);
   const fechRecs      = l.results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
+  const bdmListas     = [];
 
   const montar = {
     // Resumo do Período do mês — mesmas contas de renderDgVisaoGeralPdf.
@@ -4478,8 +4613,15 @@ function _dgrEvoDetalheCardHtml(l, blocos = DGR_EVO_BLOCOS) {
         // _dgVgRenderKpisHero grava o global da tela pro badge de fechamento —
         // preserva o da tela; o badge do mês abre o modal DO MÊS (_dgrFechModaisHtml).
         const fechTela = window._dgVgFechExcluidosAtual;
-        _dgVgRenderKpisHero(l.kpi.varTotalFisica, l.kpi.custoTotal, estTotais, movTotais, fechRecs,
-                            custoMovTotais, veiculos, l.results, heroEl, l.pares);
+        // Listas dos "Ver detalhes" (Compras/Consumo/Ajustes) recolhidas pelo
+        // gancho de _dgVgBotaoDetalhado — o botão sai só com a referência.
+        window._dgVgDetalheSink = entries => `${l.id}:${bdmListas.push(entries) - 1}`;
+        try {
+          _dgVgRenderKpisHero(l.kpi.varTotalFisica, l.kpi.custoTotal, estTotais, movTotais, fechRecs,
+                              custoMovTotais, veiculos, l.results, heroEl, l.pares);
+        } finally {
+          window._dgVgDetalheSink = null;
+        }
         window._dgVgFechExcluidosAtual = fechTela;
         document.querySelector(`#${heroEl} .dg-fech-badge-compact`)?.setAttribute('onclick', `openFechModal('${l.id}')`);
       });
@@ -4557,7 +4699,10 @@ function _dgrEvoDetalheCardHtml(l, blocos = DGR_EVO_BLOCOS) {
     },
     catFisicaPct: l.catFisicaPct || {},
     entriesRegional: _dgVgTop8SobraDesfalque(porRegionalKg),
-    entriesCentral:  _dgVgTop8SobraDesfalque(porCentralKg)
+    entriesCentral:  _dgVgTop8SobraDesfalque(porCentralKg),
+    // Já compactado aqui (síncrono) pra as entries cruas do mês irem pro GC
+    // antes do próximo; o gzip (assíncrono) fica pra _dgrBdmEmpacotar.
+    bdmJson: bdmListas.length ? JSON.stringify(_dgrBdmCodificarMes(bdmListas)) : ''
   };
 }
 
@@ -5751,6 +5896,10 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
     // Detalhe de cada mês da Evolução: modais de detalhamento (Movimentações
     // SAP, Variação, Saúde) e de Ajustes de Fechamento, com o código real.
     const evoCards = ctx._evoDetalheCards || [];
+    if (incluiu('evolucao') && typeof showLoadingOverlay === 'function') {
+      showLoadingOverlay('Gerando relatório', 'Compactando as movimentações dos meses...');
+    }
+    const bdmPacotes = incluiu('evolucao') ? await _dgrBdmEmpacotar(evoCards) : {};
     const bodyHtml = `<style>${_dgrEstilos()}${ajustesCss}</style>`
       + abasBarHtml + panesHtml
       + (incluiu('evolucao') ? _dgrDetalheBotaoModalHtml() + _dgrClonarModaisDetalhe() + _dgrFechModaisHtml(evoCards) : '')
@@ -5760,7 +5909,7 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
           incluiu('evolucao')  && 'evolucao',
           incluiu('detalhado') && 'detalhado'
         ].filter(Boolean))
-      + (incluiu('evolucao') ? _dgrScriptDetalheBotao() : '')
+      + (incluiu('evolucao') ? _dgrScriptDetalheBotao(bdmPacotes) : '')
       + _dgrScriptPeriodos()
       + (incluiu('evolucao')  ? _dgrScriptEvolucao(periodos) + _dgrScriptEvoDetalhe(evoCards) : '')
       + (incluiu('detalhado') ? _dgrScriptDetalhado(periodos) : '')
