@@ -85,6 +85,7 @@ function _trendIcon(trend) {
 // ─────────────────────────────────────────────────────────────────────
 function renderMacroPanels(results, thresholds, dtIni, dtFim) {
   if (!results || !results.length) return;
+  _macroAvisarMural();
 
   const byLevel    = { critico: [], urgente: [], atencao: [], bom: [] };
   const centralMap = {};   // central → { level, counts, worstDiff, regional }
@@ -428,6 +429,15 @@ function macroApplyFilter() {
   if (typeof notifSync === 'function') notifSync();
 }
 window.macroApplyFilter = macroApplyFilter;
+
+// As Operações leem os pares registrados pela Micro (window.__anPares).
+// Todo rebuild de card da Micro termina chamando renderMacroPanels; avisa as
+// Operações uma vez só, depois que o rebuild terminou.
+let _macroMuralT = null;
+function _macroAvisarMural() {
+  clearTimeout(_macroMuralT);
+  _macroMuralT = setTimeout(() => { if (typeof muralAtualizar === 'function') muralAtualizar(); }, 0);
+}
 
 // ── Tooltip singleton ─────────────────────────────────────────────────
 // Tooltip singleton — shared with help-badges.js via same element id

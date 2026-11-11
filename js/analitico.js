@@ -554,7 +554,7 @@ function rodarAnalitico(iniOverride, fimOverride, onDone) {
   // O Mural de Operações (aba Operações) atualiza junto com o Atualizar do
   // Dashboard — depois da análise, para não disputar o processamento com ela.
   const _aposAnalise = (res) => {
-    if (typeof muralAtualizar === 'function') muralAtualizar();
+    // As Operações atualizam pelo renderMacroPanels (_macroAvisarMural, macro.js), que roda em toda análise.
     if (typeof onDone === 'function') onDone(res);
   };
   requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim, _aposAnalise), 0));
@@ -842,6 +842,9 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
   // Sort by central name
   results.sort((a, b) => String(a.central).localeCompare(String(b.central), 'pt-BR'));
 
+  // Registro dos pares para as Operações: preenchido por buildCentralCard
+  // enquanto a Micro monta os cards (ver window.__anPares lá).
+  window.__anPares = new Map();
   renderAnaliticoMicro(results, dtIni, dtFim, silent);
 
   // Armazena para permitir re-render parcial via togglePendConsiderados
@@ -1597,6 +1600,19 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // é idêntica a snapshot.totalEnt + snapshot.totalSai: Est. Teórico e
       // Variação seguem vindo do snapshot, intactos. Muda só a apresentação.
       const natureza   = repartirSapPorNatureza(sapMat);
+
+      // Registro do par para as Operações (mural.js / mural-painel.js): o
+      // MESMO número deste card, sem recalcular (Hugo, 11/11/2026: "a Micro
+      // é precisa; se as Operações não forem, não dá para usar"). Rebuild do
+      // card (ex.: "Considerar NFs/OS pendentes") atualiza o registro.
+      if (window.__anPares && !matSemCadastro) window.__anPares.set(central + '|' + mat, {
+        central, material: mat, catKey: matCatKey, categoria: matCategoria, nivel: matLevel,
+        diff: snapshot.diff, pesoIni: snapshot.pesoIni, iniAusente: !!(snapshot.pesoIniAusente || !prev),
+        dtIniLabel: snapshot.dtIniLabel, pesoFim: snapshot.pesoFim, ausente: !!snapshot.pesoFimAusente,
+        dtFimLabel: snapshot.dtFimLabel, estTeorico: snapshot.estTeorico, custoMed: custoMedMat,
+        fimEsperado: fim?.expectedLabel || '',
+        totalEnt: natureza.totalEnt, totalSai: natureza.totalSai, totalAju: natureza.totalAju
+      });
       const entEntries = natureza.entRecords.map(toEntry);
       const saiEntries = natureza.saiRecords.map(toEntry);
       const ajuEntries = natureza.ajuRecords.map(toEntry);

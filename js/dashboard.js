@@ -8884,8 +8884,6 @@ async function handleImport(event, modulo) {
     } finally {
       hideLoadingOverlay('Importação concluída');
       if (typeof loadingHideSteps === 'function') loadingHideSteps();
-      // Foto do Mural de Operações com a base nova — em segundo plano.
-      if (typeof muralAgendarPublicacao === 'function') muralAgendarPublicacao();
     }
   };
   reader.onerror = () => {
@@ -9434,10 +9432,9 @@ async function restoreAndRender() {
       if (typeof adminAlertCheckPendente === 'function') adminAlertCheckPendente();
       if (typeof adminAlertRealtimeInit === 'function') adminAlertRealtimeInit();
     }, 300);
-    // Mural de Operações: mostra as fotos já publicadas e recalcula a do
-    // dono depois do boot, quando o navegador folga.
+    // Operações: leem a análise da Visão Micro (window.__anPares); sem
+    // análise ainda, mostram o aviso para analisar.
     if (typeof muralRender === 'function') muralRender();
-    if (typeof muralAgendarPublicacao === 'function') muralAgendarPublicacao();
   }
 }
 

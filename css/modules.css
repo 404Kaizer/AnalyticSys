@@ -13524,7 +13524,6 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
    Lista Regional → Central → Item à esquerda e painel à direita que muda com
    a seleção (Geral → Regional → Central → Item). Hugo, 10/11/2026. */
 .mp-switch { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
-.mp-beta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--purple); margin-right: auto; }
 .mp-root .mo-filter-bar .micro-group-mode, .mp-root .mo-filter-bar .micro-filter-divider { display: none; }
 .mp { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; margin-top: 12px; }
 .mp-lista { flex: 1 1 380px; max-width: 470px; min-width: 0; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: sticky; top: 12px; }
