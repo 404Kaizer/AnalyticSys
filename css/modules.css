@@ -13524,7 +13524,6 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
    Lista Regional → Central → Item à esquerda e painel à direita que muda com
    a seleção (Geral → Regional → Central → Item). Hugo, 10/11/2026. */
 .mp-switch { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
-.mp-root .mo-filter-bar .micro-group-mode, .mp-root .mo-filter-bar .micro-filter-divider { display: none; }
 .mp { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; margin-top: 12px; }
 .mp-lista { flex: 1 1 380px; max-width: 470px; min-width: 0; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: sticky; top: 12px; }
 .mp-lista-head { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); }
@@ -13553,7 +13552,20 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-sub.aberto .mp-cen { padding-left: 14px; }
 .mp-sub.aberto .mp-item { padding-left: 38px; }
 .mp-row.sel { background: color-mix(in srgb, var(--accent) 12%, var(--bg2)) !important; } /* visões Central e Material: um nível só */
-.mp-grupos { align-self: flex-start; }
+.mp-grupos-off { opacity: .45; }
+/* Lista recolhível: botão no topo da lista; recolhida, vira uma faixa vertical. */
+.mp-lista-topo { display: flex; align-items: flex-start; gap: 8px; }
+.mp-lista-topo .mo-abas { flex: 1; min-width: 0; }
+.mp-lista-recolher, .mp-lista-abrir { border: 1px solid var(--border2); background: var(--bg); color: var(--text2); border-radius: 8px; cursor: pointer; font: inherit; }
+.mp-lista-recolher { flex-shrink: 0; width: 32px; height: 32px; display: grid; place-items: center; font-size: 17px; }
+.mp-lista-recolher:hover, .mp-lista-abrir:hover { color: var(--text); background: var(--bg3); }
+.mp-lista.recolhida { flex: 0 0 46px; max-width: 46px; }
+.mp-lista-abrir { width: 100%; border: 0; border-radius: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; font-size: 13px; font-weight: 600; }
+.mp-lista-abrir .ti { font-size: 18px; }
+.mp-lista-abrir span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
+/* Busca: um título por seção (Regionais / Centrais / Materiais). */
+.mp-secao { padding: 8px 14px 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text2); background: var(--bg3); border-bottom: 1px solid var(--border); }
+.mp-secao b { color: var(--text3); font-weight: 500; margin-left: 4px; }
 .mp-rank-mat { grid-template-columns: 18px minmax(70px, 140px) minmax(0, 1fr) 120px; }
 .mp-rank-mat .mono { text-align: right; }
 .mp-chev { font-size: 14px; color: var(--text2); flex-shrink: 0; }

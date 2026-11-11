@@ -29,15 +29,7 @@ function _mpTopoHtml() {
 // sem lançamento no último dia (sl: AUSENTE na Micro, com o mesmo valor dela;
 // entra nos totais, como lá).
 function _mpPares(itens) {
-  // Busca com vários termos separados por vírgula (ou ponto e vírgula): o par
-  // entra se QUALQUER termo casar com a regional, a central ou o material
-  // (Hugo, 11/11/2026: "raulison, matheus" traz as duas regionais).
-  const termos = String(_mp.busca || '').split(/[,;]+/).map(t => normalizeText(t.trim())).filter(Boolean);
-  const casa = (p) => {
-    if (!termos.length) return true;
-    const alvo = normalizeText(`${p.material} ${p.central} ${p.regional}`);
-    return termos.some(t => alvo.includes(t));
-  };
+  // A busca NÃO filtra pares: a lista mostra cada termo como o que ele é (_mpListaHtml).
   const fila = _muralAplicarFiltros(itens).map(i => ({ central: i.central, regional: i.regional || '—', material: i.material,
     v: i.v, rs: i.rs || 0, catKey: i.catKey, nivel: i.nivel, it: i }));
   const faixa = _muralFaixaFiltradas().map(l => ({ central: l.central, regional: l.regional || '—', material: l.material,
@@ -45,7 +37,7 @@ function _mpPares(itens) {
   const sem = _mo.fotos.flatMap(f => (f.atual.payload.semLanc || []).map(x => ({ ...x, dono: _muralDonoDe(f.categoria).nome })))
     .filter(x => _muralAplicarFiltros([{ regional: x.regional, central: x.central, categoriaFoto: x.categoria, material: x.material, v: x.v, dono: { nome: x.dono } }], true).length)
     .map(x => ({ central: x.central, regional: x.regional || '—', material: x.material, v: x.v, rs: x.rs || 0, catKey: x.catKey, nivel: x.nivel, sl: x }));
-  return fila.concat(faixa, sem).filter(casa);
+  return fila.concat(faixa, sem);
 }
 
 // Nível da regional/central: a mesma conta do card da Micro e da Macro
@@ -67,7 +59,7 @@ const _mpPesoGrupo = (ps) => Math.max(...ps.map(_mpPeso));
 
 // Saúde dia a dia no período: o nível de cada par em cada dia sai da série
 // do período (a mesma do Raio-X, _muralSeriePar, com cache) e a saúde do dia
-// é a mesma conta do centro do donut. Calculada em segundo plano (_mpDepois).
+// é a mesma conta do centro do donut e do card da Micro. Calculada em segundo plano (_mpDepois).
 async function _mpSerieSaude(ps, gen) {
   const th = getHealthThresholds(), series = [];
   const ced = { t: performance.now() };
@@ -77,11 +69,8 @@ async function _mpSerieSaude(ps, gen) {
   }
   const nDias = series.find(x => x.s)?.s.acc.length || 0;
   const out = [];
-  for (let d = 0; d < nDias; d++) {
-    const c = { bom: 0, atencao: 0, urgente: 0, critico: 0 };
-    series.forEach(x => { c[x.s ? classifyVariation(Math.abs(x.s.acc[d] || 0), x.catKey, th) : 'bom']++; });
-    out.push(macroScoreFromCounts(c));
-  }
+  for (let d = 0; d < nDias; d++)
+    out.push(calcHealthScore(series.map(x => ({ mat: '', diff: x.s ? (x.s.acc[d] || 0) : 0, catKey: x.catKey })), null, null, th).score);
   return out;
 }
 
@@ -109,7 +98,8 @@ function _mpDonutMats(ps) {
     itens[p.nivel].push(`${p.material} (${p.central})`);
   });
   const levelMeta = Object.fromEntries(Object.entries(meta).map(([l, m]) => [l, { diff: m.diff, custo: m.custo, trend: m.w ? 'worsening' : null }]));
-  return { counts, levelMeta, itens, score: macroScoreFromCounts(counts), total: ps.length };
+  // Centro do donut = Saúde da Micro (calcHealthScore), não a fórmula da Macro (Hugo, 11/11/2026).
+  return { counts, levelMeta, itens, score: _mpSaude(ps).score, total: ps.length };
 }
 
 // Entrada do _renderDonut para centrais: nível de cada central pela saúde;
@@ -126,7 +116,7 @@ function _mpDonutCentrais(ps) {
   const piores = cent.filter(c => c.nivel !== 'bom')
     .sort((a, b) => (b.k.critico - a.k.critico) || (b.k.urgente - a.k.urgente) || (b.k.atencao - a.k.atencao) || (Math.abs(b.v) - Math.abs(a.v)))
     .slice(0, 5);
-  return { counts, levelMeta: _mpDonutMats(ps).levelMeta, itens, score: macroScoreFromCounts(counts), total: porC.size, piores };
+  return { counts, levelMeta: _mpDonutMats(ps).levelMeta, itens, score: _mpSaude(ps).score, total: porC.size, piores };
 }
 
 // ── Pendências (por central, sob demanda, com cache) ──────────────────────
@@ -265,13 +255,19 @@ const _mpNoEscopo = (p, s) => s.tipo === 'regional' ? p.regional === s.regional
   : s.tipo === 'material' ? p.material === s.material : p.central === s.central;
 
 // ── Seleção ────────────────────────────────────────────────────────────────
+// via: de qual bloco da lista a seleção veio — 'reg' (Regional › Central ›
+// itens), 'cen' (Central › itens) ou 'mat' (Material › centrais). Decide qual
+// bloco abre e para onde o "×" do Raio-X volta. Sem via (cliques no painel),
+// vale a da seleção atual ou a da visão escolhida.
+const _MP_VIA_DO_GRUPO = { regional: 'reg', central: 'cen', material: 'mat' };
 function muralPainelSel(el) {
   const d = el.dataset, s = _mp.sel;
+  const via = d.via || (s.tipo !== 'geral' && s.via) || _MP_VIA_DO_GRUPO[_mp.grupo];
   // Clicar de novo no que já está aberto sobe um nível.
   if (d.t === 'regional' && s.tipo === 'regional' && s.regional === d.r) _mp.sel = { tipo: 'geral' };
-  else if (d.t === 'central' && s.tipo === 'central' && s.central === d.c) _mp.sel = _mp.grupo === 'regional' ? { tipo: 'regional', regional: d.r } : { tipo: 'geral' };
+  else if (d.t === 'central' && s.tipo === 'central' && s.central === d.c) _mp.sel = via === 'reg' ? { tipo: 'regional', regional: d.r, via } : { tipo: 'geral' };
   else if (d.t === 'material' && s.tipo === 'material' && s.material === d.m) _mp.sel = { tipo: 'geral' };
-  else _mp.sel = d.t === 'geral' ? { tipo: 'geral' } : { tipo: d.t, regional: d.r, central: d.c, material: d.m };
+  else _mp.sel = d.t === 'geral' ? { tipo: 'geral' } : { tipo: d.t, regional: d.r, central: d.c, material: d.m, via };
   if (_mp.sel.tipo !== 'item') _mo.rx = null;
   if (typeof _hideTip === 'function') _hideTip();
   muralRender();
@@ -279,8 +275,8 @@ function muralPainelSel(el) {
 function muralPainelVoltar() {
   const s = _mp.sel;
   _mp.sel = s.tipo !== 'item' ? { tipo: 'geral' }
-    : _mp.grupo === 'material' ? { tipo: 'material', material: s.material }
-    : { tipo: 'central', regional: s.regional, central: s.central };
+    : s.via === 'mat' ? { tipo: 'material', material: s.material, via: 'mat' }
+    : { tipo: 'central', regional: s.regional, central: s.central, via: s.via };
   muralRender();
 }
 function muralPainelAba(a) { _mp.aba = a; muralRender(); }
@@ -296,17 +292,16 @@ function muralPainelBusca(q) {
     if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   }, 250);
 }
+// Termos da busca: vários, separados por vírgula ou ponto e vírgula.
+function _mpTermos() { return String(_mp.busca || '').split(/[,;]+/).map(t => normalizeText(t.trim())).filter(Boolean); }
 
 // ── Lista (esquerda) ───────────────────────────────────────────────────────
-function _mpLinhaAttrs(t, p) {
-  return `onclick="muralPainelSel(this)" data-t="${t}" data-r="${_moEsc(p.regional || '')}" data-c="${_moEsc(p.central || '')}" data-m="${_moEsc(p.material || '')}"`;
+function _mpLinhaAttrs(t, p, via = '') {
+  return `onclick="muralPainelSel(this)" data-t="${t}" data-r="${_moEsc(p.regional || '')}" data-c="${_moEsc(p.central || '')}" data-m="${_moEsc(p.material || '')}"${via ? ` data-via="${via}"` : ''}`;
 }
 
-// A aba só decide QUAIS ITENS aparecem; o número da regional/central é sempre
-// o total de todos os pares dela (fila + faixa + sem lançamento) — o mesmo do
-// cabeçalho do painel e do card da Visão Micro (Hugo, 11/11/2026).
-// Linha de um par (item). Na visão por Material o título é a central.
-function _mpItemLinha(p, s, recuo) {
+// Linha de um par (item). Sob um Material o título é a central.
+function _mpItemLinha(p, s, recuo, via) {
   let sit, sitCor = 'var(--text2)';
   if (p.it) {
     const pz = _muralPrazoTxt(p.it), pend = _moPendente(p.it);
@@ -318,82 +313,124 @@ function _mpItemLinha(p, s, recuo) {
   } else {
     sit = `${Math.round(p.fx.pct)}% da faixa · lançamento ${(p.fx.ult || '—').slice(0, 5)}`;
   }
-  const porMat = _mp.grupo === 'material';
+  const porMat = via === 'mat';
   const esteItem = s.tipo === 'item' && s.central === p.central && s.material === p.material;
-  return `<button class="mp-row mp-item ${recuo}${esteItem ? ' sel' : s.tipo === 'item' ? ' apagado' : ''}" ${_mpLinhaAttrs('item', p)}>
+  return `<button class="mp-row mp-item ${recuo}${esteItem ? ' sel' : s.tipo === 'item' ? ' apagado' : ''}" ${_mpLinhaAttrs('item', p, via)}>
     ${_mpIco(p.nivel)}<span class="mp-nome"><b>${_moEsc(porMat ? p.central : p.material)}</b><small style="color:${sitCor}">${porMat ? _moEsc(p.regional) + ' · ' : ''}${_moEsc(sit)}</small></span>
     <span class="mp-v" style="color:${_mpCor(p.v)}">${_moPesoSinal(p.v)}</span></button>`;
 }
 
 // Linha de grupo (regional, central ou material): o número é o total de
 // TODOS os pares do grupo, o mesmo do painel e da Micro.
-function _mpGrupoLinha(t, dados, titulo, sub, gTodos, aberta, sel, recuo, apagado = false) {
+function _mpGrupoLinha(t, dados, titulo, sub, gTodos, aberta, sel, recuo, apagado, via) {
   const sG = _mpSaude(gTodos), v = gTodos.reduce((a, p) => a + p.v, 0);
-  return `<button class="mp-row ${recuo}${sel ? ' sel' : apagado ? ' apagado' : ''}" ${_mpLinhaAttrs(t, dados)} title="Saúde ${sG.score}%">
+  return `<button class="mp-row ${recuo}${sel ? ' sel' : apagado ? ' apagado' : ''}" ${_mpLinhaAttrs(t, dados, via)} title="Saúde ${sG.score}%">
     <i class="ti ti-chevron-${aberta ? 'down' : 'right'} mp-chev"></i>${_mpIco(sG.nivel)}
     <span class="mp-nome"><b>${_moEsc(titulo)}</b><small>${sub}</small></span>
     <span class="mp-v" style="color:${_mpCor(v)}">${_moPesoSinal(v)}</span></button>`;
 }
 
+// Botões de visão (Regional / Central / Material): no começo da barra de
+// filtros, antes de "Regional", como na Micro (Hugo, 11/11/2026). Com busca
+// ficam esmaecidos — cada resultado aparece como o que ele é.
+function _mpGruposHtml() {
+  const g = _mp.grupo, busca = _mpTermos().length;
+  const grupos = [['regional', 'ti-users-group', 'Por Regional — regional → central → itens'],
+                  ['central', 'ti-building-warehouse', 'Por Central — central → itens'],
+                  ['material', 'ti-box', 'Por Material — material → centrais']];
+  return `<div class="micro-group-mode mp-grupos${busca ? ' mp-grupos-off' : ''}" role="group" aria-label="Agrupar a lista"${busca ? ' title="Com busca, cada resultado aparece como o que ele é (regional, central ou material)"' : ''}>${grupos.map(([k, ic, t]) =>
+    `<button class="${g === k ? 'active' : ''}" onclick="muralPainelGrupo('${k}')" title="${t}" aria-label="${t}" aria-pressed="${g === k}"><i class="ti ${ic}"></i></button>`).join('')}</div>
+    <div class="micro-filter-divider"></div>`;
+}
+
+// A aba só decide QUAIS ITENS aparecem; o número de cada grupo é sempre o
+// total de todos os pares dele (fila + faixa + sem lançamento) — o mesmo do
+// cabeçalho do painel e do card da Visão Micro (Hugo, 11/11/2026).
+// Sem busca: a visão escolhida (Regional, Central ou Material). Com busca:
+// cada termo aparece COMO O QUE ELE É — regional na seção Regionais, central
+// em Centrais, material em Materiais —, qualquer que seja a visão (Hugo).
+// Lista recolhível para a lateral (Hugo, 11/11/2026): vira uma faixa fina e o
+// painel ocupa a largura; a escolha fica guardada neste navegador.
+_mp.listaRecolhida = (() => { try { return localStorage.getItem('mural.listaRecolhida') === '1'; } catch (_) { return false; } })();
+function muralPainelLista() {
+  _mp.listaRecolhida = !_mp.listaRecolhida;
+  try { localStorage.setItem('mural.listaRecolhida', _mp.listaRecolhida ? '1' : '0'); } catch (_) { /* sem storage */ }
+  if (typeof _hideTip === 'function') _hideTip();
+  muralRender();
+}
 function _mpListaHtml(todos) {
-  const s = _mp.sel, aba = _mp.aba, g = _mp.grupo;
+  if (_mp.listaRecolhida) {
+    const n = todos.filter(p => p.it).length;
+    return `<section class="mp-lista recolhida"><button class="mp-lista-abrir" onclick="muralPainelLista()" title="Mostrar a lista" aria-label="Mostrar a lista" aria-expanded="false">
+      <i class="ti ti-layout-sidebar-left-expand"></i><span>Lista · ${n} na fila</span></button></section>`;
+  }
+  const s = _mp.sel, aba = _mp.aba, g = _mp.grupo, termos = _mpTermos();
   const daAba = (p) => aba === 'faixa' ? !!p.fx : aba === 'sem' ? !!p.sl : !!p.it;
   const vis = todos.filter(daAba);
   const rotAba = { fila: 'na fila', faixa: 'na faixa', sem: 'sem lançamento' }[aba];
   const ordenar = (m) => [...m].sort((a, b) => _mpPesoGrupo(b[1]) - _mpPesoGrupo(a[1]));
   const plural = (n, s1, sN) => `${n} ${n === 1 ? s1 : sN}`;
   const tem = s.tipo !== 'geral'; // com seleção, o que está fora do caminho esmaece
-  const itens = (ps, recuo) => ps.sort((a, b) => _mpPeso(b) - _mpPeso(a)).map(p => _mpItemLinha(p, s, recuo)).join('');
-  let linhas = '';
-  if (g === 'material') {
-    linhas = ordenar(_mpAgrupar(vis, p => p.material)).map(([m, mps]) => {
-      const aberta = s.material === m && (s.tipo === 'material' || s.tipo === 'item');
-      const ncent = new Set(mps.map(p => p.central)).size;
-      return `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _mpGrupoLinha('material', { material: m }, m, `${plural(ncent, 'central', 'centrais')} · ${mps.length} ${rotAba}`,
-        todos.filter(p => p.material === m), aberta, s.tipo === 'material' && s.material === m, 'mp-reg', tem && !aberta) + (aberta ? itens(mps, 'mp-item-1') : '') + '</div>';
-    }).join('');
-  } else if (g === 'central') {
-    linhas = ordenar(_mpAgrupar(vis, p => p.central)).map(([c, cps]) => {
-      const aberta = s.central === c && (s.tipo === 'central' || s.tipo === 'item');
-      return `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _mpGrupoLinha('central', { regional: cps[0].regional, central: c }, c, `${_moEsc(cps[0].regional)} · ${cps.length} ${rotAba}`,
-        todos.filter(p => p.central === c), aberta, s.tipo === 'central' && s.central === c, 'mp-reg', tem && !aberta) + (aberta ? itens(cps, 'mp-item-1') : '') + '</div>';
-    }).join('');
-  } else {
-    linhas = ordenar(_mpAgrupar(vis, p => p.regional)).map(([reg, rps]) => {
-      const aberta = s.regional === reg && s.tipo !== 'geral';
-      const centrais = ordenar(_mpAgrupar(rps, p => p.central));
-      let h = `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _mpGrupoLinha('regional', { regional: reg }, reg, `${plural(centrais.length, 'central', 'centrais')} · ${rps.length} ${rotAba}`,
-        todos.filter(p => p.regional === reg), aberta, s.tipo === 'regional' && s.regional === reg, 'mp-reg', tem && !aberta);
-      if (!aberta) return h + '</div>';
-      // Dentro da regional aberta: com uma central (ou item) escolhida, as outras centrais esmaecem.
-      const naCentral = s.tipo === 'central' || s.tipo === 'item';
-      centrais.forEach(([c, cps]) => {
-        const cAberta = s.central === c && naCentral;
-        h += `<div class="mp-sub${cAberta ? ' aberto' : ''}">` + _mpGrupoLinha('central', { regional: reg, central: c }, c, `${cps.length} ${rotAba}`,
-          todos.filter(p => p.central === c), cAberta, s.tipo === 'central' && s.central === c, 'mp-cen', naCentral && !cAberta);
-        if (cAberta) h += itens(cps, '');
-        h += '</div>';
-      });
-      return h + '</div>';
-    }).join('');
-  }
-  const grupos = [['regional', 'ti-users-group', 'Por Regional — regional → central → itens'],
-                  ['central', 'ti-building-warehouse', 'Por Central — central → itens'],
-                  ['material', 'ti-box', 'Por Material — material → centrais']];
+  const itens = (ps, recuo, via) => ps.sort((a, b) => _mpPeso(b) - _mpPeso(a)).map(p => _mpItemLinha(p, s, recuo, via)).join('');
+  const naCentral = s.tipo === 'central' || s.tipo === 'item';
+
+  const blocoMat = ([m, mps]) => {
+    const aberta = s.via === 'mat' && s.material === m && (s.tipo === 'material' || s.tipo === 'item');
+    const ncent = new Set(mps.map(p => p.central)).size;
+    return `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _mpGrupoLinha('material', { material: m }, m, `${plural(ncent, 'central', 'centrais')} · ${mps.length} ${rotAba}`,
+      todos.filter(p => p.material === m), aberta, s.via === 'mat' && s.tipo === 'material' && s.material === m, 'mp-reg', tem && !aberta, 'mat')
+      + (aberta ? itens(mps, 'mp-item-1', 'mat') : '') + '</div>';
+  };
+  const blocoCen = ([c, cps]) => {
+    const aberta = s.via === 'cen' && s.central === c && naCentral;
+    return `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _mpGrupoLinha('central', { regional: cps[0].regional, central: c }, c, `${_moEsc(cps[0].regional)} · ${cps.length} ${rotAba}`,
+      todos.filter(p => p.central === c), aberta, s.via === 'cen' && s.tipo === 'central' && s.central === c, 'mp-reg', tem && !aberta, 'cen')
+      + (aberta ? itens(cps, 'mp-item-1', 'cen') : '') + '</div>';
+  };
+  const blocoReg = ([reg, rps]) => {
+    const aberta = s.via === 'reg' && s.regional === reg && tem;
+    const centrais = ordenar(_mpAgrupar(rps, p => p.central));
+    let h = `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _mpGrupoLinha('regional', { regional: reg }, reg, `${plural(centrais.length, 'central', 'centrais')} · ${rps.length} ${rotAba}`,
+      todos.filter(p => p.regional === reg), aberta, s.tipo === 'regional' && s.regional === reg, 'mp-reg', tem && !aberta, 'reg');
+    if (!aberta) return h + '</div>';
+    // Dentro da regional aberta: com uma central (ou item) escolhida, as outras centrais esmaecem.
+    centrais.forEach(([c, cps]) => {
+      const cAberta = s.central === c && naCentral;
+      h += `<div class="mp-sub${cAberta ? ' aberto' : ''}">` + _mpGrupoLinha('central', { regional: reg, central: c }, c, `${cps.length} ${rotAba}`,
+        todos.filter(p => p.central === c), cAberta, s.tipo === 'central' && s.central === c, 'mp-cen', naCentral && !cAberta, 'reg');
+      if (cAberta) h += itens(cps, '', 'reg');
+      h += '</div>';
+    });
+    return h + '</div>';
+  };
+
+  let linhas = '', contar = vis;
+  if (termos.length) {
+    const casa = (txt) => { const n = normalizeText(txt); return termos.some(t => n.includes(t)); };
+    const secao = (titulo, grupos, bloco) => grupos.length ? `<div class="mp-secao">${titulo} <b>${grupos.length}</b></div>` + grupos.map(bloco).join('') : '';
+    linhas = secao('Regionais', ordenar(_mpAgrupar(vis.filter(p => casa(p.regional)), p => p.regional)), blocoReg)
+      + secao('Centrais', ordenar(_mpAgrupar(vis.filter(p => casa(p.central)), p => p.central)), blocoCen)
+      + secao('Materiais', ordenar(_mpAgrupar(vis.filter(p => casa(p.material)), p => p.material)), blocoMat);
+    contar = todos.filter(p => casa(p.regional) || casa(p.central) || casa(p.material));
+  } else if (g === 'material') linhas = ordenar(_mpAgrupar(vis, p => p.material)).map(blocoMat).join('');
+  else if (g === 'central') linhas = ordenar(_mpAgrupar(vis, p => p.central)).map(blocoCen).join('');
+  else linhas = ordenar(_mpAgrupar(vis, p => p.regional)).map(blocoReg).join('');
+
+  const contaAba = termos.length ? contar : todos;
   return `<section class="mp-lista">
     <div class="mp-lista-head">
-      <div class="micro-group-mode mp-grupos" role="group" aria-label="Agrupar a lista">${grupos.map(([k, ic, t]) =>
-        `<button class="${g === k ? 'active' : ''}" onclick="muralPainelGrupo('${k}')" title="${t}" aria-label="${t}" aria-pressed="${g === k}"><i class="ti ${ic}"></i></button>`).join('')}</div>
+      <div class="mp-lista-topo">
       <div class="mo-abas" role="tablist">
         ${[['fila', 'ti-flame', 'Fila', p => !!p.it], ['faixa', 'ti-circle-check', 'Na faixa', p => !!p.fx], ['sem', 'ti-calendar-x', 'Sem lançamento', p => !!p.sl]]
-          .map(([k, ic, rot, f]) => `<button class="mo-aba${aba === k ? ' on' : ''}" role="tab" aria-selected="${aba === k}" onclick="muralPainelAba('${k}')"${k === 'sem' ? ' title="Sem lançamento no último dia do período (AUSENTE na Visão Micro)"' : ''}><i class="ti ${ic}"></i>${rot} <b>${todos.filter(f).length}</b></button>`).join('')}
+          .map(([k, ic, rot, f]) => `<button class="mo-aba${aba === k ? ' on' : ''}" role="tab" aria-selected="${aba === k}" onclick="muralPainelAba('${k}')"${k === 'sem' ? ' title="Sem lançamento no último dia do período (AUSENTE na Visão Micro)"' : ''}><i class="ti ${ic}"></i>${rot} <b>${contaAba.filter(f).length}</b></button>`).join('')}
       </div>
-      <label class="mp-busca"><i class="ti ti-search"></i><input id="mp-busca" type="text" placeholder="Buscar: regional, central, material… (separe por vírgula)" value="${_moEsc(_mp.busca)}" oninput="muralPainelBusca(this.value)" aria-label="Buscar material, central ou regional"></label>
+      <button class="mp-lista-recolher" onclick="muralPainelLista()" title="Recolher a lista para a lateral" aria-label="Recolher a lista" aria-expanded="true"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
+      </div>
+      <label class="mp-busca"><i class="ti ti-search"></i><input id="mp-busca" type="text" placeholder="Buscar: regional, central, material… (separe por vírgula)" value="${_moEsc(_mp.busca)}" oninput="muralPainelBusca(this.value)" aria-label="Buscar regional, central ou material"></label>
     </div>
-    <div class="mp-lista-corpo">${linhas || '<div class="empty-state" style="padding:24px"><p>Nada com esses filtros.</p></div>'}</div>
+    <div class="mp-lista-corpo">${linhas || `<div class="empty-state" style="padding:24px"><p>${termos.length ? (contar.length ? 'Nada nesta aba — o número de cada aba mostra onde está.' : 'Nada encontrado.') : 'Nada com esses filtros.'}</p></div>`}</div>
   </section>`;
 }
-
 // ── Painel (direita) ──────────────────────────────────────────────────────
 function _mpCabHtml(titulo, sub, ps) {
   const s = _mp.sel, v = ps.reduce((t, p) => t + p.v, 0), rs = ps.reduce((t, p) => t + p.rs, 0);

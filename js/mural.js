@@ -189,10 +189,12 @@ const MURAL_TEND  = { deriva: 1.5, degrau: 1, herdada: 1, inicio: 1, serrote: 0.
 // 1 kg de aditivo vale muito mais que 1 kg de areia), o físico entra junto
 // (Hugo, 09/11/2026). Financeiro = log10(R$); físico = log2(1 + vezes o
 // limite Crítico da categoria). ponytail: pesos a calibrar com o uso.
-// reincidencia: a parte do acumulado de 30 dias ANTERIOR ao mês, quando vai
-// no mesmo sentido da variação atual (Hugo, 09/11/2026: "se for reincidente,
-// mesmo sinal, o peso é maior") — log2(1 + vezes o limite Crítico).
-const MURAL_PESO_IMPACTO = { financeiro: 1, fisico: 0.5, reincidencia: 1 };
+const MURAL_PESO_IMPACTO = { financeiro: 1, fisico: 0.5 };
+// Saúde da central do item: quanto menor, mais peso — (100 − saúde)% × 6.
+// Reincidência: lançamentos SEGUIDOS, até o mais recente, variando no mesmo
+// sentido da variação atual — +0,5 cada, teto +5 (Hugo, 11/11/2026).
+const MURAL_PESO_SAUDE = 6;
+const MURAL_REINC = { porLanc: 0.5, teto: 5 };
 const MURAL_NIVEL = {
   critico: { label: 'CRÍTICO', cor: 'var(--red)',     icon: 'ti-flame' },
   urgente: { label: 'URGENTE', cor: 'var(--urgente)', icon: 'ti-alert-circle' },
@@ -466,6 +468,17 @@ function muralItensDerivados() {
   const thresholds = getHealthThresholds();
   const fechamento = _muralFechamento(hoje);
   const itens = [];
+  // Saúde de cada central com todos os pares dela (fila, faixa e sem
+  // lançamento) — a mesma conta do painel da central, sem os filtros da barra.
+  const paresCentral = new Map();
+  const somar = (central, mat, diff, catKey) => { if (!paresCentral.has(central)) paresCentral.set(central, []); paresCentral.get(central).push({ mat, diff, catKey }); };
+  _mo.fotos.forEach(f => {
+    const p = f.atual.payload || {};
+    (p.itens || []).forEach(i => somar(i.central, i.material, i.v, i.catKey));
+    (p.faixa || []).forEach(([central, mat, v]) => somar(central, mat, v, getCatKeyDoCadastro(mat) || detectCatKey(f.categoria)));
+    (p.semLanc || []).forEach(x => somar(x.central, x.material, x.v, x.catKey));
+  });
+  const saudeCentral = new Map([...paresCentral].map(([c, ps]) => [c, calcHealthScore(ps, null, null, thresholds).score]));
   _mo.fotos.forEach(f => {
     const p = f.atual.payload || {};
     const janelaIni = parseDate(p.janela?.ini) || hoje;
@@ -516,16 +529,25 @@ function muralItensDerivados() {
       // como 600 kg de areia).
       const limCritico = thresholds[it.catKey]?.urgente || 0;
       const vezesLimite = limCritico ? Math.abs(it.v) / limCritico : 0;
-      // Reincidência pelo acumulado: o trecho dos 30 dias antes do mês (v30 −
-      // atual) no MESMO sentido da variação atual.
-      const anterior = (it.atual && it.v30 != null) ? it.v30 - it.v : 0;
-      const reincidente = anterior !== 0 && Math.sign(anterior) === Math.sign(it.v);
-      const vezesAnterior = reincidente && limCritico ? Math.abs(anterior) / limCritico : 0;
+      // Reincidência: do lançamento mais recente para trás, quantos seguidos
+      // variaram (em relação ao anterior) no mesmo sentido da variação atual.
+      // Lançamento sem variação não conta nem zera. ponytail: limiar fixo de
+      // 0,05 kg; virar limite por categoria se ruído pequeno atrapalhar.
+      const pts = it.pontos || [];
+      let seguidos = 0;
+      for (let k = pts.length - 1; k >= 0; k--) {
+        const d = pts[k][1] - (k ? pts[k - 1][1] : 0);
+        if (Math.abs(d) < 0.05) continue;
+        if (Math.sign(d) !== Math.sign(it.v)) break;
+        seguidos++;
+      }
+      const saude = saudeCentral.get(it.central) ?? 100;
       const partes = [
         ['Gravidade × tendência', (MURAL_GRAV[it.nivel] || 0) * (MURAL_TEND[it.formato] || 1)],
         ['Impacto financeiro (R$)', MURAL_PESO_IMPACTO.financeiro * Math.log10(Math.abs(it.rs || 0) + 1)],
         [`Impacto físico (${vezesLimite.toFixed(1)}× o limite Crítico)`, MURAL_PESO_IMPACTO.fisico * Math.log2(1 + vezesLimite)],
-        [`Reincidência: acumulado antes do mês no mesmo sentido (${vezesAnterior.toFixed(1)}× o limite Crítico)`, MURAL_PESO_IMPACTO.reincidencia * Math.log2(1 + vezesAnterior)],
+        [`Saúde da central ${it.central} (${saude}%)`, (100 - saude) / 100 * MURAL_PESO_SAUDE],
+        [`Reincidência: ${seguidos} lançamento${seguidos === 1 ? '' : 's'} seguido${seguidos === 1 ? '' : 's'} no mesmo sentido`, Math.min(seguidos * MURAL_REINC.porLanc, MURAL_REINC.teto)],
         ['Dias sem ação × 0,3', Math.min(diasSemAcao, 10) * 0.3],
         ['Meses seguidos fora da faixa', ((it.meses || 1) - 1) * 1.5],
         ['Prazo vencido', vencido ? 3 : 0],
@@ -535,7 +557,7 @@ function muralItensDerivados() {
       const avocado = _mo.avocacoes.find(a => a.central === it.central && a.material === it.material) || null;
       itens.push({ ...it, categoriaFoto: f.categoria, dono, avocado, causa, entrada, limite, limitadoPeloFechamento, fechamento, semSerie,
         temOc, semTratamento, ocs, comentarios, diasSemAcao, vencido, ocCrescendo, novo, piorou, residual,
-        herdadaKg, novaKg: it.v - herdadaKg, reincidente, anteriorKg: anterior,
+        herdadaKg, novaKg: it.v - herdadaKg, seguidos, saudeCentral: saude,
         prioridade: partes.reduce((s, x) => s + x[1], 0), partes, status });
     });
   });
@@ -708,7 +730,7 @@ function _muralFiltrosHtml(itens) {
         </div></div></div>`;
   }).join('');
   return `<div class="micro-filter-bar mo-filter-bar">
-    ${filtros}
+    ${typeof _mpGruposHtml === 'function' ? _mpGruposHtml() : ''}${filtros}
     ${_muralFiltrosAtivos() ? '<button class="btn btn-sm mo-limpar" onclick="muralFiltrosLimparTodos()"><i class="ti ti-filter-off"></i> Limpar filtros</button>' : ''}
   </div>`;
 }
@@ -1477,7 +1499,7 @@ function _muralRxHtml(rx, it, catKey) {
   const hip = [...(MURAL_HIPOTESES[it?.formato] || [])];
   const pend = it && _moPendente(it);
   if (pend) hip.unshift(`Cobrar o lançamento ${pend}`);
-  if (it && (it.reincidente || (it.meses || 1) > 1)) hip.push('Ver as justificativas dos meses anteriores no Inventário');
+  if (it && (it.meses || 1) > 1) hip.push('Ver as justificativas dos meses anteriores no Inventário');
   const hist = acoes.length
     ? acoes.slice().reverse().map(a => `<li data-dia="${localISODate(a.quando)}"><i class="ti ${a.oc ? 'ti-file-alert mo-red' : 'ti-message'}"></i><div><small class="mo-hint">${_moEsc(a.titulo)} · ${_moRxDatas(a, true)}</small><div>${_moEsc(a.texto) || '—'}</div></div></li>`).join('')
     : '<li class="mo-hint">Nenhum comentário ou ocorrência no período.</li>';
