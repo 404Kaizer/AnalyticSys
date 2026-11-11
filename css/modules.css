@@ -13540,7 +13540,19 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-cen { padding-left: 30px; }
 .mp-item { padding-left: 52px; align-items: flex-start; }
 .mp-item .mp-ico { margin-top: 2px; }
-.mp-item.mp-item-1 { padding-left: 30px; } /* visões Central e Material: um nível só */
+.mp-item.mp-item-1 { padding-left: 30px; }
+/* Seleção (Hugo, 11/11/2026): fora do caminho esmaece; o grupo aberto vira um
+   bloco (fundo + faixa lateral contínua) e a central aberta dentro da regional,
+   um sub-bloco recuado — fica claro o que pertence a quê. */
+.mp-row.apagado { opacity: .4; transition: opacity .15s; }
+.mp-row.apagado:hover { opacity: .85; }
+.mp-bloco.aberto { margin: 6px 0; background: color-mix(in srgb, var(--accent) 5%, var(--bg2)); box-shadow: inset 3px 0 0 var(--accent); border-top: 1px solid var(--border2); border-bottom: 1px solid var(--border2); }
+.mp-bloco.aberto > .mp-row:first-child { border-bottom-color: var(--border2); }
+.mp-bloco.aberto .mp-row:not(.sel) { background: transparent; }
+.mp-sub.aberto { margin: 4px 8px 6px 18px; border-radius: 8px; background: var(--bg2); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 60%, transparent), 0 0 0 1px var(--border2); overflow: hidden; }
+.mp-sub.aberto .mp-cen { padding-left: 14px; }
+.mp-sub.aberto .mp-item { padding-left: 38px; }
+.mp-row.sel { background: color-mix(in srgb, var(--accent) 12%, var(--bg2)) !important; } /* visões Central e Material: um nível só */
 .mp-grupos { align-self: flex-start; }
 .mp-rank-mat { grid-template-columns: 18px minmax(70px, 140px) minmax(0, 1fr) 120px; }
 .mp-rank-mat .mono { text-align: right; }

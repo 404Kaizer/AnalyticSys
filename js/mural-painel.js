@@ -319,16 +319,17 @@ function _mpItemLinha(p, s, recuo) {
     sit = `${Math.round(p.fx.pct)}% da faixa · lançamento ${(p.fx.ult || '—').slice(0, 5)}`;
   }
   const porMat = _mp.grupo === 'material';
-  return `<button class="mp-row mp-item ${recuo}${s.tipo === 'item' && s.central === p.central && s.material === p.material ? ' sel' : ''}" ${_mpLinhaAttrs('item', p)}>
+  const esteItem = s.tipo === 'item' && s.central === p.central && s.material === p.material;
+  return `<button class="mp-row mp-item ${recuo}${esteItem ? ' sel' : s.tipo === 'item' ? ' apagado' : ''}" ${_mpLinhaAttrs('item', p)}>
     ${_mpIco(p.nivel)}<span class="mp-nome"><b>${_moEsc(porMat ? p.central : p.material)}</b><small style="color:${sitCor}">${porMat ? _moEsc(p.regional) + ' · ' : ''}${_moEsc(sit)}</small></span>
     <span class="mp-v" style="color:${_mpCor(p.v)}">${_moPesoSinal(p.v)}</span></button>`;
 }
 
 // Linha de grupo (regional, central ou material): o número é o total de
 // TODOS os pares do grupo, o mesmo do painel e da Micro.
-function _mpGrupoLinha(t, dados, titulo, sub, gTodos, aberta, sel, recuo) {
+function _mpGrupoLinha(t, dados, titulo, sub, gTodos, aberta, sel, recuo, apagado = false) {
   const sG = _mpSaude(gTodos), v = gTodos.reduce((a, p) => a + p.v, 0);
-  return `<button class="mp-row ${recuo}${sel ? ' sel' : ''}" ${_mpLinhaAttrs(t, dados)} title="Saúde ${sG.score}%">
+  return `<button class="mp-row ${recuo}${sel ? ' sel' : apagado ? ' apagado' : ''}" ${_mpLinhaAttrs(t, dados)} title="Saúde ${sG.score}%">
     <i class="ti ti-chevron-${aberta ? 'down' : 'right'} mp-chev"></i>${_mpIco(sG.nivel)}
     <span class="mp-nome"><b>${_moEsc(titulo)}</b><small>${sub}</small></span>
     <span class="mp-v" style="color:${_mpCor(v)}">${_moPesoSinal(v)}</span></button>`;
@@ -341,35 +342,39 @@ function _mpListaHtml(todos) {
   const rotAba = { fila: 'na fila', faixa: 'na faixa', sem: 'sem lançamento' }[aba];
   const ordenar = (m) => [...m].sort((a, b) => _mpPesoGrupo(b[1]) - _mpPesoGrupo(a[1]));
   const plural = (n, s1, sN) => `${n} ${n === 1 ? s1 : sN}`;
+  const tem = s.tipo !== 'geral'; // com seleção, o que está fora do caminho esmaece
   const itens = (ps, recuo) => ps.sort((a, b) => _mpPeso(b) - _mpPeso(a)).map(p => _mpItemLinha(p, s, recuo)).join('');
   let linhas = '';
   if (g === 'material') {
     linhas = ordenar(_mpAgrupar(vis, p => p.material)).map(([m, mps]) => {
       const aberta = s.material === m && (s.tipo === 'material' || s.tipo === 'item');
       const ncent = new Set(mps.map(p => p.central)).size;
-      return _mpGrupoLinha('material', { material: m }, m, `${plural(ncent, 'central', 'centrais')} · ${mps.length} ${rotAba}`,
-        todos.filter(p => p.material === m), aberta, s.tipo === 'material' && s.material === m, 'mp-reg') + (aberta ? itens(mps, 'mp-item-1') : '');
+      return `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _mpGrupoLinha('material', { material: m }, m, `${plural(ncent, 'central', 'centrais')} · ${mps.length} ${rotAba}`,
+        todos.filter(p => p.material === m), aberta, s.tipo === 'material' && s.material === m, 'mp-reg', tem && !aberta) + (aberta ? itens(mps, 'mp-item-1') : '') + '</div>';
     }).join('');
   } else if (g === 'central') {
     linhas = ordenar(_mpAgrupar(vis, p => p.central)).map(([c, cps]) => {
       const aberta = s.central === c && (s.tipo === 'central' || s.tipo === 'item');
-      return _mpGrupoLinha('central', { regional: cps[0].regional, central: c }, c, `${_moEsc(cps[0].regional)} · ${cps.length} ${rotAba}`,
-        todos.filter(p => p.central === c), aberta, s.tipo === 'central' && s.central === c, 'mp-reg') + (aberta ? itens(cps, 'mp-item-1') : '');
+      return `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _mpGrupoLinha('central', { regional: cps[0].regional, central: c }, c, `${_moEsc(cps[0].regional)} · ${cps.length} ${rotAba}`,
+        todos.filter(p => p.central === c), aberta, s.tipo === 'central' && s.central === c, 'mp-reg', tem && !aberta) + (aberta ? itens(cps, 'mp-item-1') : '') + '</div>';
     }).join('');
   } else {
     linhas = ordenar(_mpAgrupar(vis, p => p.regional)).map(([reg, rps]) => {
       const aberta = s.regional === reg && s.tipo !== 'geral';
       const centrais = ordenar(_mpAgrupar(rps, p => p.central));
-      let h = _mpGrupoLinha('regional', { regional: reg }, reg, `${plural(centrais.length, 'central', 'centrais')} · ${rps.length} ${rotAba}`,
-        todos.filter(p => p.regional === reg), aberta, s.tipo === 'regional' && s.regional === reg, 'mp-reg');
-      if (!aberta) return h;
+      let h = `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _mpGrupoLinha('regional', { regional: reg }, reg, `${plural(centrais.length, 'central', 'centrais')} · ${rps.length} ${rotAba}`,
+        todos.filter(p => p.regional === reg), aberta, s.tipo === 'regional' && s.regional === reg, 'mp-reg', tem && !aberta);
+      if (!aberta) return h + '</div>';
+      // Dentro da regional aberta: com uma central (ou item) escolhida, as outras centrais esmaecem.
+      const naCentral = s.tipo === 'central' || s.tipo === 'item';
       centrais.forEach(([c, cps]) => {
-        const cAberta = s.central === c && (s.tipo === 'central' || s.tipo === 'item');
-        h += _mpGrupoLinha('central', { regional: reg, central: c }, c, `${cps.length} ${rotAba}`,
-          todos.filter(p => p.central === c), cAberta, s.tipo === 'central' && s.central === c, 'mp-cen');
+        const cAberta = s.central === c && naCentral;
+        h += `<div class="mp-sub${cAberta ? ' aberto' : ''}">` + _mpGrupoLinha('central', { regional: reg, central: c }, c, `${cps.length} ${rotAba}`,
+          todos.filter(p => p.central === c), cAberta, s.tipo === 'central' && s.central === c, 'mp-cen', naCentral && !cAberta);
         if (cAberta) h += itens(cps, '');
+        h += '</div>';
       });
-      return h;
+      return h + '</div>';
     }).join('');
   }
   const grupos = [['regional', 'ti-users-group', 'Por Regional — regional → central → itens'],
