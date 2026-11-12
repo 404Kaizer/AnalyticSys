@@ -11632,6 +11632,17 @@ body.dg-ocultar-ajustes .dg-col-ajustes { display: none; }
   white-space: nowrap;
 }
 .da-mat-name { font-weight: 600; }
+/* Tabelas do Detalhado Analítico (tela e relatório — Hugo, 12/11/2026):
+   ocupam o container inteiro e VALOR nunca é abreviado. Anula o
+   "table { table-layout:fixed }" e o "tbody td { max-width:240px; …
+   ellipsis }" genéricos (components.css): cada coluna fica com a largura do
+   próprio valor e a sobra se reparte. Só o NOME pode cortar — com o nome
+   completo no title da célula. Tela estreita demais rola no .da-table-wrap. */
+.da-table.da-detalhado { width: 100%; table-layout: auto; }
+.da-table.da-detalhado td { max-width: none; overflow: visible; text-overflow: clip; }
+.da-table.da-detalhado .da-nome-txt {
+  display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .da-mat-cat {
   display: block;
   font-size: 10.5px;

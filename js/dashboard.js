@@ -3730,8 +3730,8 @@ function _daRenderTabelaMaterial(containerId, dados) {
   const pesoS = v => Math.abs(num(v)) < 0.0001 ? peso(0) : (num(v) > 0 ? '+' : '−') + peso(Math.abs(num(v)));
   const rowsHtml = dados.linhas.map(l => `
     <tr>
-      <td>
-        <span class="da-mat-name">${escapeHtml(l.mat)}</span>
+      <td class="da-nome" title="${escapeHtml(l.mat)}">
+        <span class="da-mat-name da-nome-txt">${escapeHtml(l.mat)}</span>
         ${l.catKey ? `<span class="da-mat-cat">${escapeHtml(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</span>` : ''}
       </td>
       <td class="da-num" style="color:var(--teal)">${peso(l.estIni)}</td>
@@ -3762,7 +3762,7 @@ function _daRenderTabelaMaterial(containerId, dados) {
 
   el.innerHTML = `
     <div class="da-table-wrap">
-      <table class="da-table">
+      <table class="da-table da-detalhado">
         <thead>
           <tr>
             <th>Grupo SAP</th>
@@ -3814,7 +3814,7 @@ function _daRenderRanking(containerId, dados, colNomeLabel) {
       : _daFmtCountSigned(valor);
     return `
     <tr>
-      <td>${escapeHtml(l.nome)}</td>
+      <td class="da-nome" title="${escapeHtml(l.nome)}"><span class="da-nome-txt">${escapeHtml(l.nome)}</span></td>
       <td class="da-num" style="color:${_daColorFor(l.caminhoes)}">${cell('caminhoes', l.caminhoes)}</td>
       <td class="da-num" style="color:${_daColorFor(l.carretas)}">${cell('carretas', l.carretas)}</td>
       <td class="da-num" style="color:${_daColorFor(l.ibcs)}">${cell('ibcs', l.ibcs)}</td>
@@ -3836,7 +3836,7 @@ function _daRenderRanking(containerId, dados, colNomeLabel) {
 
   el.innerHTML = `
     <div class="da-table-wrap">
-      <table class="da-table">
+      <table class="da-table da-detalhado">
         <thead>
           <tr>
             <th>${escapeHtml(colNomeLabel)}</th>
