@@ -3467,6 +3467,10 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
    .bdm-body/.da-table-wrap rolam na horizontal em vez de cortar. */
 .bdm-dialog-wide table { table-layout: auto; }
 .bdm-dialog-wide tbody td { max-width: none; overflow: visible; text-overflow: clip; }
+/* Linha que filtra o item no Detalhado Analítico (só no relatório — ver
+   _dgVgFiltroDetalhadoAttr em dashboard.js). */
+.dg-row-filtravel { cursor: pointer; }
+.dg-row-filtravel:hover td:first-child { color: var(--accent); text-decoration: underline; }
 
 .bdm-header {
   display: flex;

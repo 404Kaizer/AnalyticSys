@@ -3602,7 +3602,7 @@ const _DGR_NOMES = {
                 '_dgVgNivelBadgeHtml', '_dgVgSaudeDiffCor', 'abrirDetalheSaude', '_dgVgRenderSaudeTabela',
                 '_dgVgFiltrarSaudeLista', 'fecharDetalheSaude', 'abrirDetalheVariacao', 'fecharDetalheVariacao',
                 '_dgVgAjusteStatus', '_dgVgAjusteBadgeHtml', '_dgVgAjusteDetalheHtml',
-                '_dgrGunzipB64', '_dgrBdmDecodificarMes']
+                '_dgrGunzipB64', '_dgrBdmDecodificarMes', '_dgVgFiltroDetalhadoAttr']
 };
 
 function _dgrScriptPrelude(chaves) {
@@ -4062,7 +4062,7 @@ function _dgrExportaveis() {
     _dgVgNivelBadgeHtml, _dgVgSaudeDiffCor, abrirDetalheSaude, _dgVgRenderSaudeTabela,
     _dgVgFiltrarSaudeLista, fecharDetalheSaude, abrirDetalheVariacao, fecharDetalheVariacao,
     _dgVgAjusteStatus, _dgVgAjusteBadgeHtml, _dgVgAjusteDetalheHtml,
-    _dgrGunzipB64, _dgrBdmDecodificarMes
+    _dgrGunzipB64, _dgrBdmDecodificarMes, _dgVgFiltroDetalhadoAttr
   };
 }
 
@@ -4371,7 +4371,7 @@ function _dgrEvolucaoTabelaHtml(periodos, blocos = DGR_EVO_BLOCOS) {
 function _dgrEvolucaoChartHtml() {
   return `<div class="oc-chart-card">
     <div class="oc-chart-title"><i class="ti ti-chart-line" style="margin-right:5px"></i>Variação Física e Saúde, mês a mês</div>
-    <div style="position:relative;height:260px"><canvas id="dgr-evo-chart"></canvas></div>
+    <div style="position:relative;height:320px"><canvas id="dgr-evo-chart"></canvas></div>
   </div>`;
 }
 
@@ -4397,7 +4397,9 @@ function _dgrScriptEvolucao(periodos) {
   var rotulos = {
     id: 'dgrEvoRotulos',
     afterDatasetsDraw: function(chart) {
-      var ctx = chart.ctx, t = _dgVgTheme(), area = chart.chartArea, H = 26;
+      // Fontes maiores (Hugo, 12/11/2026 — "quase ilegível"): rótulo 14px +
+      // custo 12.5px (H = altura dos dois), selo 12px.
+      var ctx = chart.ctx, t = _dgVgTheme(), area = chart.chartArea, H = 34;
       var barras = chart.getDatasetMeta(0);
       var metas = LINHAS.map(function(L, j) { return chart.getDatasetMeta(j + 1); });
       ctx.save();
@@ -4414,15 +4416,15 @@ function _dgrScriptEvolucao(periodos) {
             { y: neg ? bar.base + 6 : bar.base - 6 - H, dentro: true, ok: cabeDentro },
             { y: neg ? bar.base - 6 - H : bar.base + 6, dentro: false, ok: true }
           ].filter(function(c) { return c.ok && c.y >= area.top && c.y + H <= area.bottom; });
-          // folga de 26px = ponto + selo (16px + 8 de afastamento), de qualquer lado
-          var c = cands.filter(function(c) { return pts.every(function(pt) { return !pt || pt.y < c.y - 26 || pt.y > c.y + H + 26; }); })[0]
+          // folga de 30px = ponto + selo (20px + 8 de afastamento), de qualquer lado
+          var c = cands.filter(function(c) { return pts.every(function(pt) { return !pt || pt.y < c.y - 30 || pt.y > c.y + H + 30; }); })[0]
                || cands[0] || { y: neg ? bar.y + 6 : bar.y - 6 - H, dentro: false };
-          ctx.font = "700 11px 'DM Mono', monospace";
+          ctx.font = "700 14px 'DM Mono', monospace";
           ctx.fillStyle = c.dentro ? '#fff' : corFisica(p.fisica);
           ctx.fillText(dgFmtPesoSigned(p.fisica, 1), bar.x, c.y);
-          ctx.font = "600 10px 'DM Mono', monospace";
+          ctx.font = "600 12.5px 'DM Mono', monospace";
           ctx.fillStyle = c.dentro ? '#fff' : t.textCol;
-          ctx.fillText(money(p.custo), bar.x, c.y + 13);
+          ctx.fillText(money(p.custo), bar.x, c.y + 18);
           caixa = [c.y, c.y + H];
         }
         var ocupado = caixa ? [caixa] : [];
@@ -4430,8 +4432,8 @@ function _dgrScriptEvolucao(periodos) {
           var pt = pts[j], v = p[L.k];
           if (!pt || v == null) return;
           var txt = v + '%';
-          ctx.font = "700 10px 'DM Mono', monospace";
-          var w = ctx.measureText(txt).width + 10, h = 16;
+          ctx.font = "700 12px 'DM Mono', monospace";
+          var w = ctx.measureText(txt).width + 12, h = 20;
           var bate = function(y) {
             return y < area.top || y + h > area.bottom
               || ocupado.some(function(o) { return y < o[1] && y + h > o[0]; });
@@ -4444,7 +4446,7 @@ function _dgrScriptEvolucao(periodos) {
           if (ctx.roundRect) ctx.roundRect(pt.x - w / 2, yS, w, h, 4); else ctx.rect(pt.x - w / 2, yS, w, h);
           ctx.fill();
           ctx.fillStyle = '#fff';
-          ctx.fillText(txt, pt.x, yS + 3);
+          ctx.fillText(txt, pt.x, yS + 4);
         });
       });
       ctx.restore();
@@ -4453,6 +4455,8 @@ function _dgrScriptEvolucao(periodos) {
   var grafico = null;
   function desenhar() {
     var t = _dgVgTheme();
+    // Eixos/legenda: o tickFont do app (10px) some num canvas de ~1600px.
+    var fonte = Object.assign({}, t.tickFont, { size: 12.5 });
     if (grafico) { try { grafico.destroy(); } catch (e) {} }
     grafico = new Chart(cv, {
       plugins: [rotulos],
@@ -4473,15 +4477,15 @@ function _dgrScriptEvolucao(periodos) {
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { labels: { color: t.textCol, font: t.tickFont, usePointStyle: true, boxWidth: 10 } },
+          legend: { labels: { color: t.textCol, font: Object.assign({}, fonte, { size: 13 }), usePointStyle: true, boxWidth: 12 } },
           tooltip: { enabled: false }
         },
         scales: {
-          x:  { grid: { display: false }, ticks: { color: t.textCol, font: t.tickFont } },
+          x:  { grid: { display: false }, ticks: { color: t.textCol, font: Object.assign({}, fonte, { size: 13, weight: '700' }) } },
           y:  { position: 'left',  grid: { color: t.gridCol }, beginAtZero: true, grace: '50%',
-                ticks: { color: t.textCol, font: t.tickFont, callback: function(v) { return dgFmtPeso(v, 1); } } },
+                ticks: { color: t.textCol, font: fonte, callback: function(v) { return dgFmtPeso(v, 1); } } },
           y2: { position: 'right', min: 0, max: 100, grid: { display: false },
-                ticks: { color: t.textCol, font: t.tickFont, callback: function(v) { return v + '%'; } } }
+                ticks: { color: t.textCol, font: fonte, callback: function(v) { return v + '%'; } } }
         }
       }
     });
@@ -4693,7 +4697,9 @@ function _dgrEvoDetalheCardHtml(l, blocos = DGR_EVO_BLOCOS) {
     // ponytail: pares do mês embutidos de novo (a aba Detalhado tem os
     // seus); se o arquivo pesar, compartilhar um só objeto por período.
     detalhe: {
-      rotulo: l.rotulo, pares: l.pares, thresholds,
+      // periodoId: clique na linha dos modais filtra o Detalhado NESTE mês
+      // (ver _dgVgFiltroDetalhadoAttr / _dgrFiltrarDetalhado).
+      periodoId: l.id, rotulo: l.rotulo, pares: l.pares, thresholds,
       centrais: _dgVgCentraisDoPeriodo(l.results),
       pesoMedio: l.pesoMedio || {}, totalEstTeoricoKpi: l.totalEstTeorico || 0
     },
@@ -4865,6 +4871,29 @@ function _dgrScriptDetalhado(periodos) {
   window._dgrDetLimpar = function() {
     IDS.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
     aplicar();
+  };
+
+  // Clique numa linha dos modais "Ver detalhes" (Variação/Saúde) da Evolução:
+  // fecha o modal, vai pra aba Detalhado, seleciona o MÊS do modal, aplica o
+  // filtro do item (os outros filtros zeram) e abre todas as seções (Hugo,
+  // 12/11/2026). A linha só fica clicável se esta função existe — ver
+  // _dgVgFiltroDetalhadoAttr.
+  window._dgrFiltrarDetalhado = function(tr) {
+    var f;
+    try { f = JSON.parse(tr.dataset.filtro); } catch (e) { return; }
+    if (typeof fecharDetalheVariacao === 'function') fecharDetalheVariacao();
+    if (typeof fecharDetalheSaude === 'function') fecharDetalheSaude();
+    var abaBtn = document.querySelector('.rel-aba-btn[data-aba-id="detalhado"]');
+    if (abaBtn && typeof _dgrSwitchAba === 'function') _dgrSwitchAba('detalhado', abaBtn);
+    var valores = { 'dgr-det-f-regional': f.regional, 'dgr-det-f-central': f.central, 'dgr-det-f-material': f.material };
+    IDS.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = valores[id] || ''; });
+    var perBtn = document.querySelector('.dgr-per-btn[data-aba="detalhado"][data-periodo="' + f.periodo + '"]');
+    if (perBtn && typeof _dgrSwitchPeriodo === 'function') _dgrSwitchPeriodo(perBtn); // já chama aplicar()
+    else aplicar();
+    var pane = document.querySelector('.rel-aba-pane[data-aba-id="detalhado"]');
+    if (!pane) return;
+    pane.querySelectorAll('.dgr-collapse-toggle[aria-expanded="false"]').forEach(function(b) { _dgrToggleSecao(b); });
+    pane.scrollIntoView({ block: 'start' });
   };
   aplicar();
 })();
@@ -5393,7 +5422,8 @@ window._RELATORIO_ABAS_REGISTRY = [
       + _dgrBarraPeriodos(ctx.periodos, 'detalhado')
       + `<div class="dgr-per-alvo">` + ids.map(id => {
           const sec = aba.secoes.find(s => s.id === id);
-          return _dgrSecaoHtml(id, sec.label, `<div class="oc-chart-card"><div id="${sec.alvo}"></div></div>`, true);
+          // Recolhidas de início (Hugo, 12/11/2026); _dgrFiltrarDetalhado abre todas.
+          return _dgrSecaoHtml(id, sec.label, `<div class="oc-chart-card"><div id="${sec.alvo}"></div></div>`, true, true);
         }).join('') + `</div>`
   },
   {
@@ -5419,12 +5449,13 @@ window._RELATORIO_ABAS_REGISTRY = [
 
 // Cabeçalho recolhível + corpo — mesmo formato das seções clonadas, pra a
 // aparência não mudar entre aba clonada e aba gerada.
-function _dgrSecaoHtml(id, label, corpo, natural) {
+// `recolhida`: nasce fechada (impressão abre tudo — ver .dgr-collapsed no shell).
+function _dgrSecaoHtml(id, label, corpo, natural, recolhida = false) {
   return `<section class="${natural ? 'dgr-page-section-natural' : 'dgr-page-section'}" data-secao-id="${id}">`
-    + `<button type="button" class="dgr-collapse-toggle" aria-expanded="true" onclick="_dgrToggleSecao(this)">`
+    + `<button type="button" class="dgr-collapse-toggle" aria-expanded="${recolhida ? 'false' : 'true'}" onclick="_dgrToggleSecao(this)">`
     + `<i class="ti ti-chevron-down"></i><span>${_rankEsc(label)}</span>`
     + `</button>`
-    + `<div class="dgr-collapse-body">${corpo}</div>`
+    + `<div class="dgr-collapse-body${recolhida ? ' dgr-collapsed' : ''}">${corpo}</div>`
     + `</section>`;
 }
 

@@ -2560,6 +2560,17 @@ function _dgVgSaudeDiffCor(v) {
 // filtrar/re-renderizar sem recalcular saúde de novo a cada tecla digitada.
 let _dgVgSaudeListaAtual = [];
 
+// Atributos que tornam a linha de um modal "Ver detalhes" clicável pra
+// filtrar o item no Detalhado Analítico (Hugo, 12/11/2026). Só no relatório
+// exportado: lá o detalhe de cada mês traz `periodoId` e o arquivo define
+// _dgrFiltrarDetalhado (ver _dgrScriptDetalhado). Na tela devolve '' — o
+// Detalhado do app não tem filtros.
+function _dgVgFiltroDetalhadoAttr(d, filtro) {
+  if (!d || !d.periodoId || typeof _dgrFiltrarDetalhado !== 'function') return '';
+  const json = JSON.stringify(Object.assign({ periodo: d.periodoId }, filtro));
+  return ` class="dg-row-filtravel" data-filtro="${escapeHtml(json)}" onclick="_dgrFiltrarDetalhado(this)" title="Filtrar no Detalhado Analítico"`;
+}
+
 // `dados` opcional: um período específico ({ pares, thresholds }) em vez do
 // período da tela — usado pelo detalhe de cada mês na aba Evolução do
 // relatório, que não tem filtro de Regional/Categoria (por isso ignora os
@@ -2585,7 +2596,7 @@ function abrirDetalheSaude(tipo, dados) {
       .sort((a, b) => _DG_VG_NIVEL_ORDEM[a.level] - _DG_VG_NIVEL_ORDEM[b.level] || Math.abs(b.diff) - Math.abs(a.diff))
       .map(l => ({
         searchText: l.central.toLowerCase(),
-        html: `<tr>
+        html: `<tr${_dgVgFiltroDetalhadoAttr(dados, { central: l.central })}>
           <td>${escapeHtml(l.central)}</td>
           <td>${_dgVgNivelBadgeHtml(l.level)}</td>
           <td class="da-num" style="color:${_dgVgSaudeDiffCor(l.diff)}">${dgFmtPesoSigned(l.diff, 1)}</td>
@@ -2604,7 +2615,7 @@ function abrirDetalheSaude(tipo, dados) {
       .sort((a, b) => _DG_VG_NIVEL_ORDEM[a.levelSaude] - _DG_VG_NIVEL_ORDEM[b.levelSaude] || Math.abs(b.diffSaude) - Math.abs(a.diffSaude))
       .map(p => ({
         searchText: (p.central + ' ' + p.mat).toLowerCase(),
-        html: `<tr>
+        html: `<tr${_dgVgFiltroDetalhadoAttr(dados, { central: p.central, material: p.mat })}>
           <td>${escapeHtml(p.central)}</td>
           <td>${escapeHtml(p.mat)}</td>
           <td>${_dgVgNivelBadgeHtml(p.levelSaude)}</td>
@@ -2767,7 +2778,12 @@ function abrirDetalheVariacao(tipo, chave, periodo) {
   }
 
   const dados = _daBuildRanking(paresEscopo, pesoMedio, keyFn, d.totalEstTeoricoKpi, labelFn);
-  _daRenderRankingVariacao('dg-var-detalhe-body', dados, colLabel, nivelFn, catFn);
+  // Linha → filtro do Detalhado (só no relatório, ver _dgVgFiltroDetalhadoAttr).
+  const filtroDe = k => colLabel === 'Regional' ? { regional: k }
+    : colLabel === 'Central' ? { central: k }
+    : { central: chave, material: k };   // Material só existe dentro de uma central
+  _daRenderRankingVariacao('dg-var-detalhe-body', dados, colLabel, nivelFn, catFn,
+    k => _dgVgFiltroDetalhadoAttr(periodo, filtroDe(k)));
 
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
@@ -3847,7 +3863,8 @@ function _daRenderRanking(containerId, dados, colNomeLabel) {
 // |variação da linha| ÷ Σ |variação| das linhas, com o sinal da linha — as
 // linhas somam 100%. Não é a % sobre o Est. Teórico do período do
 // _daBuildRanking (essa segue nos rankings do Detalhado Analítico).
-function _daRenderRankingVariacao(containerId, dados, colNomeLabel, nivelFn, catFn) {
+// rowAttrFn(key) opcional: atributos extras do <tr> (clique → filtro do Detalhado).
+function _daRenderRankingVariacao(containerId, dados, colNomeLabel, nivelFn, catFn, rowAttrFn) {
   const el = document.getElementById(containerId);
   if (!el) return;
   if (!dados.linhas.length) {
@@ -3886,7 +3903,7 @@ function _daRenderRankingVariacao(containerId, dados, colNomeLabel, nivelFn, cat
             <th class="da-num">Custo Total</th>
           </tr>
         </thead>
-        <tbody>${dados.linhas.map(l => `<tr><td>${escapeHtml(l.nome)}</td><td>${saude(l.key)}</td>${catTd(l)}${linha(l)}</tr>`).join('')}</tbody>
+        <tbody>${dados.linhas.map(l => `<tr${rowAttrFn ? rowAttrFn(l.key) : ''}><td>${escapeHtml(l.nome)}</td><td>${saude(l.key)}</td>${catTd(l)}${linha(l)}</tr>`).join('')}</tbody>
         <tfoot><tr class="da-total-row"><td>Total</td><td></td>${catFn ? '<td></td>' : ''}${totalCols}</tr></tfoot>
       </table>
     </div>`;
