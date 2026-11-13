@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Solicitação de Movimentação de Estoque · AnalyticSys</title>
+<title>Registro Operacional · AnalyticSys</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2036%2036%22%3E%0A%3Cpolygon%20points%3D%2218%2C2%2030%2C9%2018%2C16%206%2C9%22%20fill%3D%22%23ff6b35%22%2F%3E%0A%3Cpolygon%20points%3D%2218%2C16%2030%2C9%2030%2C23%2018%2C30%22%20fill%3D%22%23c44e1f%22%2F%3E%0A%3Cpolygon%20points%3D%2218%2C16%206%2C9%206%2C23%2018%2C30%22%20fill%3D%22%23ff9060%22%2F%3E%0A%3Cpolyline%20points%3D%2221%2C26%2024%2C21%2027%2C23%2030%2C18%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.55%29%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%0A%3Ccircle%20cx%3D%2230%22%20cy%3D%2218%22%20r%3D%221.5%22%20fill%3D%22white%22%20opacity%3D%220.8%22%2F%3E%0A%3C%2Fsvg%3E" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -12,15 +12,16 @@
   /* Página isolada — não depende de tokens.css/layout.css/components.css
      do app principal (nem faz sentido carregar o bundle inteiro pra uma
      única tela pública). Paleta própria, no mesmo espírito visual do
-     auth-gate.css (dark, acento laranja da marca). */
+     auth-gate.css, mas em tema claro (13/11/2026) com o acento laranja da marca. */
   :root {
-    --bg: #080c14; --bg2: #0d1220; --bg3: #131929; --bg4: #1a2236;
-    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
-    --text: #dde3f0; --text2: #7b85a0; --text3: #48526a;
-    --orange: #ff6b35; --orange-hover: #e85a28; --orange-dim: rgba(255,107,53,0.14);
-    --green: #10b981; --green-bg: rgba(16,185,129,0.10); --green-border: rgba(16,185,129,0.25);
-    --red: #f43f5e; --red-bg: rgba(244,63,94,0.10); --red-border: rgba(244,63,94,0.25);
-    --amber: #f59e0b; --amber-bg: rgba(245,158,11,0.10); --amber-border: rgba(245,158,11,0.25);
+    color-scheme: light;
+    --bg: #f4f6fa; --bg2: #ffffff; --bg3: #f7f8fb; --bg4: #eef1f6;
+    --border: rgba(15,23,42,0.08); --border2: rgba(15,23,42,0.16);
+    --text: #1b2333; --text2: #4f5b72; --text3: #8590a6;
+    --orange: #f2652d; --orange-hover: #dc5320; --orange-dim: rgba(242,101,45,0.10);
+    --green: #059669; --green-bg: rgba(5,150,105,0.08); --green-border: rgba(5,150,105,0.25);
+    --red: #e11d48; --red-bg: rgba(225,29,72,0.07); --red-border: rgba(225,29,72,0.25);
+    --amber: #b45309; --amber-bg: rgba(245,158,11,0.10); --amber-border: rgba(217,119,6,0.30);
     --radius: 8px; --radius-lg: 14px;
     --font: 'Outfit', sans-serif; --mono: 'DM Mono', monospace;
   }
@@ -28,7 +29,7 @@
   html, body { height: 100%; }
   body {
     font-family: var(--font); background: var(--bg); color: var(--text);
-    min-height: 100vh; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+    min-height: 100vh; font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
   }
   .sol-shell { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
 
@@ -41,10 +42,10 @@
   .sol-tag-inline { font-family: var(--mono); font-size: 9px; letter-spacing: .16em; color: var(--text3); text-transform: uppercase; white-space: nowrap; line-height: 1; }
 
   .sol-title { font-size: 24px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 6px; }
-  .sol-sub { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 28px; }
+  .sol-sub { font-size: 14px; color: var(--text2); line-height: 1.6; margin-bottom: 28px; }
 
   .sol-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 18px; }
-  .sol-card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .sol-card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
   .sol-card-title i { color: var(--orange); font-size: 15px; }
 
   .sol-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -52,46 +53,46 @@
   @media (max-width: 620px) { .sol-grid, .sol-grid-3 { grid-template-columns: 1fr; } }
 
   .sol-fg { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-  .sol-label { font-size: 11.5px; font-weight: 500; color: var(--text2); }
+  .sol-label { font-size: 12.5px; font-weight: 500; color: var(--text2); }
   .sol-required { color: var(--orange); }
-  .sol-hint { font-size: 10.5px; color: var(--text3); font-weight: 400; }
+  .sol-hint { font-size: 11.5px; color: var(--text3); font-weight: 400; }
   .sol-input, .sol-select, .sol-textarea {
     background: var(--bg3); border: 1px solid var(--border2); color: var(--text);
-    border-radius: var(--radius); padding: 10px 12px; font-size: 13px; font-family: var(--font);
+    border-radius: var(--radius); padding: 10px 12px; font-size: 14px; font-family: var(--font);
     width: 100%; outline: none; transition: border-color .15s;
   }
   .sol-input::placeholder, .sol-textarea::placeholder { color: var(--text3); }
   .sol-input:focus, .sol-select:focus, .sol-textarea:focus { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-dim); }
   .sol-textarea { resize: vertical; min-height: 90px; }
-  .sol-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237b85a0'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px; }
+  .sol-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234f5b72'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px; }
 
   .sol-dropzone {
     border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 22px;
-    text-align: center; cursor: pointer; color: var(--text2); font-size: 12.5px; transition: border-color .15s, background .15s;
+    text-align: center; cursor: pointer; color: var(--text2); font-size: 13.5px; transition: border-color .15s, background .15s;
   }
   .sol-dropzone:hover, .sol-dropzone.drag { border-color: var(--orange); background: var(--orange-dim); }
   .sol-dropzone i { font-size: 22px; color: var(--orange); display: block; margin-bottom: 6px; }
 
   .sol-anexo-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-  .sol-anexo-chip { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 7px 10px; font-size: 12px; }
+  .sol-anexo-chip { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 7px 10px; font-size: 13px; }
   .sol-anexo-chip i.ti-paperclip { color: var(--text3); }
   .sol-anexo-chip-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sol-anexo-chip-tam { color: var(--text3); font-family: var(--mono); font-size: 10.5px; }
-  .sol-anexo-chip-status { font-size: 10.5px; }
+  .sol-anexo-chip-tam { color: var(--text3); font-family: var(--mono); font-size: 11.5px; }
+  .sol-anexo-chip-status { font-size: 11.5px; }
   .sol-anexo-chip-status.ok { color: var(--green); }
   .sol-anexo-chip-status.up { color: var(--amber); }
   .sol-anexo-chip-status.err { color: var(--red); }
-  .sol-anexo-chip-rm { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 13px; padding: 2px; }
+  .sol-anexo-chip-rm { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 2px; }
   .sol-anexo-chip-rm:hover { color: var(--red); }
 
   .sol-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     background: var(--bg3); border: 1px solid var(--border2); color: var(--text);
-    border-radius: var(--radius); padding: 11px 18px; font-size: 13px; font-weight: 500;
+    border-radius: var(--radius); padding: 11px 18px; font-size: 14px; font-weight: 500;
     cursor: pointer; font-family: var(--font); transition: all .15s;
   }
   .sol-btn:hover { border-color: var(--border2); background: var(--bg4); }
-  .sol-btn-primary { background: var(--orange); border-color: var(--orange); color: #0a0704; font-weight: 700; }
+  .sol-btn-primary { background: var(--orange); border-color: var(--orange); color: #fff; font-weight: 700; }
   .sol-btn-primary:hover { background: var(--orange-hover); border-color: var(--orange-hover); }
   .sol-btn:disabled { opacity: .5; cursor: not-allowed; }
   .sol-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-top: 22px; }
@@ -108,44 +109,44 @@
     cursor: pointer; font-size: 14px; margin-top: 20px;
   }
   .sol-item-row-rm:hover { color: var(--red); border-color: var(--red-border); background: var(--red-bg); }
-  .sol-add-row-btn { font-size: 12px; padding: 8px 14px; margin-bottom: 6px; }
+  .sol-add-row-btn { font-size: 13px; padding: 8px 14px; margin-bottom: 6px; }
 
   .sol-informante-card { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; position: relative; }
-  .sol-informante-card .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 12px; }
+  .sol-informante-card .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 13px; }
 
   .sol-item-balanca { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; position: relative; }
-  .sol-item-balanca .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 12px; }
+  .sol-item-balanca .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 13px; }
   .sol-cantos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 10px; margin-bottom: 14px; }
-  .sol-var-display { background: var(--bg4); border: 1px solid var(--border2); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; font-family: var(--mono); color: var(--text); }
+  .sol-var-display { background: var(--bg4); border: 1px solid var(--border2); border-radius: var(--radius); padding: 10px 12px; font-size: 14px; font-family: var(--mono); color: var(--text); }
   .sol-var-display.alerta { color: var(--amber); border-color: var(--amber-border); background: var(--amber-bg); }
 
-  .sol-alert { border-radius: var(--radius); padding: 12px 14px; font-size: 12.5px; line-height: 1.6; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; }
+  .sol-alert { border-radius: var(--radius); padding: 12px 14px; font-size: 13.5px; line-height: 1.6; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; }
   .sol-alert i { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-  .sol-alert-error { background: var(--red-bg); border: 1px solid var(--red-border); color: #ff9a8a; }
-  .sol-alert-info { background: var(--orange-dim); border: 1px solid rgba(255,107,53,0.3); color: #ffb497; }
+  .sol-alert-error { background: var(--red-bg); border: 1px solid var(--red-border); color: #be123c; }
+  .sol-alert-info { background: var(--orange-dim); border: 1px solid rgba(242,101,45,0.3); color: #b5410f; }
 
   .sol-success { text-align: center; padding: 50px 24px; }
   .sol-success .sol-success-icon { font-size: 52px; color: var(--green); margin-bottom: 18px; display: block; }
-  .sol-protocolo { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; color: var(--text2); font-size: 13.5px; margin-top: 6px; }
-  .sol-btn-copiar { padding: 6px 12px; font-size: 12px; }
+  .sol-protocolo { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; color: var(--text2); font-size: 14.5px; margin-top: 6px; }
+  .sol-btn-copiar { padding: 6px 12px; font-size: 13px; }
   .sol-success h2 { font-size: 21px; margin-bottom: 10px; }
-  .sol-success p { color: var(--text2); font-size: 13.5px; line-height: 1.7; max-width: 420px; margin: 0 auto 6px; }
+  .sol-success p { color: var(--text2); font-size: 14.5px; line-height: 1.7; max-width: 420px; margin: 0 auto 6px; }
   .sol-success .sol-numero { font-family: var(--mono); color: var(--orange); font-weight: 700; font-size: 15px; }
 
-  .sol-loading { text-align: center; padding: 60px 20px; color: var(--text2); font-size: 13px; }
+  .sol-loading { text-align: center; padding: 60px 20px; color: var(--text2); font-size: 14px; }
   .sol-loading i { font-size: 26px; display: block; margin-bottom: 10px; animation: sol-spin 1s linear infinite; }
   @keyframes sol-spin { to { transform: rotate(360deg); } }
 
   .sol-steps-indicator { display: flex; gap: 6px; margin-bottom: 10px; }
   .sol-steps-indicator .seg { flex: 1; height: 4px; border-radius: 2px; background: var(--border2); transition: background .2s; }
   .sol-steps-indicator .seg.active, .sol-steps-indicator .seg.done { background: var(--orange); }
-  .sol-steps-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); margin-bottom: 18px; }
+  .sol-steps-label { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); margin-bottom: 18px; }
   .sol-step-footer { display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; align-items: center; margin: -4px 0 22px; }
   .sol-step-footer-right { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
   .sol-brand-row { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
   .sol-logo-badge { display: flex; align-items: center; flex-shrink: 0; }
-  .sol-logo-badge img { height: 38px; display: block; filter: invert(1) hue-rotate(178deg); }
+  .sol-logo-badge img { height: 38px; display: block; }
   .sol-brand-divider { width: 1px; height: 30px; background: var(--border2); flex-shrink: 0; }
 
   .sol-card-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 12px; letter-spacing: -0.01em; }
@@ -153,38 +154,38 @@
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     width: 34px; height: 34px; border-radius: 10px; background: var(--orange-dim); color: var(--orange); font-size: 16px;
   }
-  .sol-card-desc { font-size: 12px; color: var(--text2); line-height: 1.6; margin: 0 0 18px; padding-left: 46px; }
+  .sol-card-desc { font-size: 13px; color: var(--text2); line-height: 1.6; margin: 0 0 18px; padding-left: 46px; }
 
   .sol-checklist { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-  .sol-checklist li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--text2); line-height: 1.5; }
+  .sol-checklist li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--text2); line-height: 1.5; }
   .sol-checklist li i { color: var(--orange); font-size: 17px; flex-shrink: 0; margin-top: 1px; }
   .sol-checklist strong { color: var(--text); font-weight: 600; }
 
-  .sol-alert-warn { background: var(--amber-bg); border: 1px solid var(--amber-border); color: #fcd28a; }
+  .sol-alert-warn { background: var(--amber-bg); border: 1px solid var(--amber-border); color: #92400e; }
   .sol-check { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; cursor: pointer; color: var(--text); }
   .sol-check input { margin-top: 3px; accent-color: var(--orange); width: 15px; height: 15px; flex-shrink: 0; }
 
   .sol-assinatura { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
-  .sol-assinatura-decl { font-size: 12.5px; color: var(--text2); line-height: 1.7; margin-bottom: 12px; }
+  .sol-assinatura-decl { font-size: 13.5px; color: var(--text2); line-height: 1.7; margin-bottom: 12px; }
   .sol-assinatura-decl strong { color: var(--text); }
   .sol-assinatura-pad { position: relative; background: #fff; border-radius: var(--radius); height: 160px; touch-action: none; }
   .sol-assinatura-pad canvas { display: block; width: 100%; height: 100%; border-radius: var(--radius); cursor: crosshair; }
   .sol-assinatura-pad .linha { position: absolute; left: 24px; right: 24px; bottom: 34px; border-top: 1px dashed #b9b3a5; pointer-events: none; }
-  .sol-assinatura-pad .vazio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #a39d90; font-size: 12px; pointer-events: none; }
-  .sol-assinatura-rodape { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11.5px; color: var(--text3); }
+  .sol-assinatura-pad .vazio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #a39d90; font-size: 13px; pointer-events: none; }
+  .sol-assinatura-rodape { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12.5px; color: var(--text3); }
   .sol-assinatura-rodape .ok { color: var(--green); }
 
   .sol-item-cubagem { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; position: relative; }
-  .sol-item-cubagem .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 12px; }
-  .sol-sub-title { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text3); margin: 4px 0 10px; }
+  .sol-item-cubagem .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 13px; }
+  .sol-sub-title { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text3); margin: 4px 0 10px; }
   .sol-valores { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-bottom: 10px; }
   .sol-valor { display: flex; gap: 4px; align-items: flex-end; }
   .sol-valor .sol-fg { margin-bottom: 0; flex: 1; }
   .sol-valor .sol-item-row-rm { position: static; width: 30px; height: 38px; flex-shrink: 0; }
   .sol-resultado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 6px; }
   @media (max-width: 620px) { .sol-resultado { grid-template-columns: 1fr; } }
-  .sol-resultado .sol-var-display { font-size: 12.5px; }
-  .sol-resultado-nota { font-size: 11px; color: var(--amber); margin-top: 8px; }
+  .sol-resultado .sol-var-display { font-size: 13.5px; }
+  .sol-resultado-nota { font-size: 12px; color: var(--amber); margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -214,8 +215,8 @@
     </div>
   </div>
 
-  <div class="sol-title">Solicitação de Movimentação de Estoque</div>
-  <div class="sol-sub">Utilize este formulário para registrar qualquer movimentação de estoque que não seja registrada via automação / PUZL, como pesagem manual, transferência entre centrais, perda de material, coleta, entre outros, para que o analista responsável verifique e faça o devido ajuste sistêmico. Ao utilizar este formulário, você afirma e confirma que toda informação preenchida é correta e verídica.</div>
+  <div class="sol-title">Registro Operacional</div>
+  <div class="sol-sub">Utilize este formulário para registrar procedimentos operacionais (cubagem, teste de canto, pesagem manual) e movimentações de estoque que não passam pela automação / PUZL (perda de material, coleta, transferência entre centrais, entre outros), para que o analista responsável verifique e faça o devido ajuste sistêmico. Ao utilizar este formulário, você afirma e confirma que toda informação preenchida é correta e verídica.</div>
 
   <div id="sol-loading" class="sol-loading">
     <i class="ti ti-loader-2"></i> Carregando formulário…
@@ -237,7 +238,7 @@
     <div class="sol-step" data-step="1">
       <div class="sol-card">
         <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-camera"></i></span> Antes de começar</div>
-        <div class="sol-card-desc">Tenha em mãos os registros do ocorrido — são eles que comprovam a sua solicitação.</div>
+        <div class="sol-card-desc">Tenha em mãos os registros do ocorrido — são eles que comprovam o seu registro.</div>
         <ul class="sol-checklist">
           <li><i class="ti ti-photo"></i> <span><strong>Fotos do ocorrido</strong> — material, local, balança, caçamba, medições.</span></li>
           <li><i class="ti ti-file-invoice"></i> <span><strong>Nota fiscal</strong> (DANFE) da carga envolvida, quando houver.</span></li>
@@ -381,9 +382,9 @@
       <div class="sol-step-footer">
         <button type="button" class="sol-btn" onclick="voltarStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
         <div class="sol-step-footer-right">
-          <span style="font-size:11px;color:var(--text3)">Campos com <span class="sol-required">*</span> são obrigatórios.</span>
+          <span style="font-size:12px;color:var(--text3)">Campos com <span class="sol-required">*</span> são obrigatórios.</span>
           <button type="submit" class="sol-btn sol-btn-primary" id="sol-btn-enviar">
-            <i class="ti ti-send"></i> Enviar solicitação
+            <i class="ti ti-send"></i> Enviar registro
           </button>
         </div>
       </div>

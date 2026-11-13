@@ -306,7 +306,7 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
     if (!isStr(filialDestino, LIMITES.central)) erros.push('Filial de destino é obrigatória para transferência entre filiais.');
     else if (normText(filialDestino) === normText(central)) erros.push('A filial de destino não pode ser igual à central de origem.');
   }
-  if (anexosIn.length > LIMITES.anexosMax) erros.push(`Máximo de ${LIMITES.anexosMax} anexos por solicitação.`);
+  if (anexosIn.length > LIMITES.anexosMax) erros.push(`Máximo de ${LIMITES.anexosMax} anexos por registro.`);
   if (!anexosIn.length && !semComprovante) erros.push('Sem anexos, é preciso confirmar a declaração de ausência de comprovante.');
 
   const doisAnosAtras = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -314,11 +314,11 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
   else if (dataOcorrido < doisAnosAtras) erros.push('Data do ocorrido muito antiga — contate o administrador.');
 
   if (!itensIn.length) erros.push('Adicione ao menos um item.');
-  if (itensIn.length > LIMITES.itensMax) erros.push(`Máximo de ${LIMITES.itensMax} itens por solicitação.`);
+  if (itensIn.length > LIMITES.itensMax) erros.push(`Máximo de ${LIMITES.itensMax} itens por registro.`);
 
   // Informantes + assinaturas
   if (!informantesIn.length) erros.push('Informe ao menos um informante.');
-  if (informantesIn.length > LIMITES.informantesMax) erros.push(`Máximo de ${LIMITES.informantesMax} informantes por solicitação.`);
+  if (informantesIn.length > LIMITES.informantesMax) erros.push(`Máximo de ${LIMITES.informantesMax} informantes por registro.`);
   const informantesParsed: { nome: string; cargo: string; contato: string; png: Uint8Array }[] = [];
   for (const raw of informantesIn) {
     if (!raw || typeof raw !== 'object') { erros.push('Informante inválido.'); break; }
@@ -533,7 +533,7 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
   const { error: insertErr } = await admin.from('solicitacoes').insert(rows);
   if (insertErr) {
     console.error('[solicitacao] Falha ao inserir solicitação:', insertErr);
-    return json({ error: 'Falha ao registrar a solicitação. Tente novamente em instantes.' }, 500);
+    return json({ error: 'Falha ao gravar o registro. Tente novamente em instantes.' }, 500);
   }
 
   return json({ ok: true, protocolo });

@@ -209,7 +209,7 @@ function validarSecaoFinal() {
 function _turnstileRender() {
   if (turnstileWidgetId !== null) return;
   if (typeof turnstile === 'undefined') { setTimeout(_turnstileRender, 400); return; }
-  turnstileWidgetId = turnstile.render('#turnstile-solicitacao-widget', { sitekey: TURNSTILE_SITEKEY, theme: 'dark' });
+  turnstileWidgetId = turnstile.render('#turnstile-solicitacao-widget', { sitekey: TURNSTILE_SITEKEY, theme: 'light' });
 }
 function _turnstileGetToken() {
   if (typeof turnstile === 'undefined' || turnstileWidgetId === null) return null;
@@ -828,7 +828,7 @@ function _renderAssinaturas() {
   el.innerHTML = _informantes.map((inf) => `
     <div class="sol-assinatura">
       <div class="sol-assinatura-decl">
-        Eu, <strong>${escapeHtml(inf.nome)}</strong>${inf.cargo ? ` (${escapeHtml(inf.cargo)})` : ''}, DECLARO que as informações por mim prestadas nesta solicitação são verídicas e assumo a responsabilidade por elas perante o setor de Estoque/Insumos e a diretoria da Concrelagos, ciente das consequências da prestação de informações falsas ou inexatas.
+        Eu, <strong>${escapeHtml(inf.nome)}</strong>${inf.cargo ? ` (${escapeHtml(inf.cargo)})` : ''}, DECLARO que as informações por mim prestadas neste registro são verídicas e assumo a responsabilidade por elas perante o setor de Estoque/Insumos e a diretoria da Concrelagos, ciente das consequências da prestação de informações falsas ou inexatas.
       </div>
       <div class="sol-assinatura-pad">
         <canvas id="sol-pad-${inf.id}"></canvas>
@@ -969,7 +969,7 @@ async function _uploadAnexo(anexo) {
 
 function adicionarAnexos(files) {
   const restantes = ANEXO_MAX_COUNT - _anexos.length;
-  if (restantes <= 0) { mostrarAlerta(`Máximo de ${ANEXO_MAX_COUNT} anexos por solicitação.`, 'error'); return; }
+  if (restantes <= 0) { mostrarAlerta(`Máximo de ${ANEXO_MAX_COUNT} anexos por registro.`, 'error'); return; }
   Array.from(files).slice(0, restantes).forEach((f) => {
     if (f.size > ANEXO_MAX_MB * 1024 * 1024) { mostrarAlerta(`"${f.name}" excede ${ANEXO_MAX_MB}MB e não foi anexado.`, 'error'); return; }
     if (!ANEXO_TIPOS_ACEITOS.test(f.type)) { mostrarAlerta(`"${f.name}" tem um formato não aceito (use imagem, PDF ou Word).`, 'error'); return; }
@@ -990,7 +990,7 @@ window.removerAnexo = removerAnexo;
 function _setBtnEnviarLoading(loading) {
   const btn = document.getElementById('sol-btn-enviar');
   btn.disabled = loading;
-  btn.innerHTML = loading ? '<i class="ti ti-loader-2" style="animation:sol-spin 1s linear infinite"></i> Enviando…' : '<i class="ti ti-send"></i> Enviar solicitação';
+  btn.innerHTML = loading ? '<i class="ti ti-loader-2" style="animation:sol-spin 1s linear infinite"></i> Enviando…' : '<i class="ti ti-send"></i> Enviar registro';
 }
 
 function _itensPayload(situacao) {
@@ -1049,7 +1049,7 @@ async function enviarSolicitacao(ev) {
     const data = await resp.json();
     if (!resp.ok || !data.ok) {
       _turnstileReset();
-      mostrarAlerta(data?.error || 'Não foi possível enviar a solicitação. Tente novamente.', 'error');
+      mostrarAlerta(data?.error || 'Não foi possível enviar o registro. Tente novamente.', 'error');
       _setBtnEnviarLoading(false);
       return;
     }
@@ -1068,8 +1068,8 @@ function _mostrarSucesso(protocolo) {
   el.style.display = 'block';
   el.innerHTML = `
     <i class="ti ti-circle-check sol-success-icon"></i>
-    <h2>Solicitação enviada com sucesso</h2>
-    <p>Sua solicitação já está com o(s) analista(s) responsável(is).</p>
+    <h2>Registro enviado com sucesso</h2>
+    <p>Seu registro já está com o(s) analista(s) responsável(is).</p>
     ${protocolo ? `
       <div class="sol-protocolo">
         <span>Protocolo:</span>
@@ -1078,9 +1078,9 @@ function _mostrarSucesso(protocolo) {
       </div>
       <div class="sol-alert sol-alert-warn" style="text-align:left;max-width:460px;margin:18px auto 0">
         <i class="ti ti-alert-triangle"></i>
-        <div><strong>Envie este protocolo ao analista responsável</strong> (por WhatsApp, por exemplo). É com ele que o analista localiza a sua solicitação.</div>
+        <div><strong>Envie este protocolo ao analista responsável</strong> (por WhatsApp, por exemplo). É com ele que o analista localiza o seu registro.</div>
       </div>` : ''}
-    <button type="button" class="sol-btn" style="margin-top:22px" onclick="location.reload()"><i class="ti ti-plus"></i> Enviar outra solicitação</button>
+    <button type="button" class="sol-btn" style="margin-top:22px" onclick="location.reload()"><i class="ti ti-plus"></i> Enviar outro registro</button>
   `;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

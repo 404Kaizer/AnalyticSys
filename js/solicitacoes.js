@@ -29,17 +29,8 @@ const SOL_FILTROS = [
   ['todas', 'Todas', () => true],
 ];
 const SOL_CATEGORIAS_AGREGADO = ['Agregado Graúdo', 'Agregado Miúdo'];
-// Situações que são procedimento operacional; o resto é movimentação de
-// estoque. Mesma divisão dos <optgroup> de solicitacao.html.
-// ponytail: derivado do texto da situação no cliente (sem coluna no banco) —
-// se a lista crescer ou precisar de filtro no servidor, vira coluna `tipo`.
-const SOL_PROCEDIMENTOS = new Set(['Teste de canto', 'Cubagem de agregados', 'Pesagem manual (fora da automação)']);
-const SOL_TIPOS = [
-  ['procedimento', 'Procedimentos operacionais', 'ti-clipboard-check', (s) => SOL_PROCEDIMENTOS.has(s.categoria_situacao)],
-  ['movimentacao', 'Movimentações de estoque', 'ti-arrows-exchange', (s) => !SOL_PROCEDIMENTOS.has(s.categoria_situacao)],
-];
 
-const _sol = { lista: [], tipo: 'procedimento', filtro: 'abertas', busca: '', carregando: false, erro: '', abertaId: null };
+const _sol = { lista: [], tipo: 'procedimento', proc: 'cubagem', filtro: 'abertas', busca: '', carregando: false, erro: '', abertaId: null };
 
 const _solEsc = (s) => escapeHtml(String(s ?? ''));
 const _solNum = (n, casas = 2) => (n === null || n === undefined || !Number.isFinite(Number(n)))
@@ -59,6 +50,57 @@ const _solVar = (kg, pct, unidade) => {
   const cor = Math.abs(pct) >= 1 ? 'var(--amber)' : 'var(--text)';
   return `<span style="color:${cor}">${sinal}${_solNum(pct)}% (${sinal}${_solNum(kg)} ${unidade || 'kg'})</span>`;
 };
+
+// ── Tipos e colunas ──────────────────────────────────────────────────
+// Colunas: [título, (solicitação, item) => html, alinhar à direita?].
+// Nos procedimentos a tabela tem uma linha por item (carreta, teste…).
+const _SOL_C = {
+  protocolo: ['Protocolo', (s) => `<span style="font-family:var(--mono);font-size:11.5px">${_solEsc(s.protocolo)}</span>`],
+  recebida: ['Recebida', (s) => _solDataHora(s.created_at)],
+  ocorrido: ['Ocorrido', (s) => _solData(s.data_ocorrido)],
+  central: ['Central', (s) => _solEsc(s.central)],
+  analista: ['Analista', (s) => _solEsc(_solAnalista(s))],
+  status: ['Status', (s) => {
+    const st = SOL_STATUS[s.status] || SOL_STATUS.pendente;
+    return `<span class="badge ${st.badge}">${st.label}</span>${s.sem_comprovante ? ' <i class="ti ti-paperclip-off" style="color:var(--amber)" title="Sem comprovante anexado"></i>' : ''}`;
+  }],
+};
+const { protocolo: _cP, recebida: _cR, ocorrido: _cO, central: _cC, analista: _cA, status: _cS } = _SOL_C;
+// Procedimentos operacionais: [chave, rótulo, situação, ícone, colunas].
+// Mesma divisão dos <optgroup> de solicitacao.html; o resto é movimentação.
+// ponytail: tipo derivado do texto da situação no cliente (sem coluna no
+// banco) — se precisar de filtro no servidor, vira coluna `tipo`.
+const SOL_PROC = [
+  ['cubagem', 'Cubagem', 'Cubagem de agregados', 'ti-box', [_cP, _cR, _cC,
+    ['Material', (s, i) => _solEsc(i.grupoMaterial)],
+    ['Fornecedor', (s, i) => _solEsc(i.fornecedor)],
+    ['Documento', (s, i) => i.nf ? `${i.docTipo === 'TICKET' ? 'Ticket' : 'NF'} ${_solEsc(i.nf)}` : '—'],
+    ['Recebimento', (s, i) => _solData(i.dataRecebimento)],
+    ['Documento (kg)', (s, i) => _solNum(i.nfKg), true],
+    ['Aferido (kg)', (s, i) => _solNum(i.aferidoKg), true],
+    ['Variação', (s, i) => _solVar(i.variacaoKg, i.variacaoPct), true],
+    _cA, _cS]],
+  ['canto', 'Teste de canto', 'Teste de canto', 'ti-scale', [_cP, _cR, _cO, _cC,
+    ['Categoria', (s, i) => _solEsc(i.categoriaMaterial)],
+    ['Referência', (s, i) => `${_solNum(i.referencia)} ${_solEsc(i.unidade)}`, true],
+    ['Média', (s, i) => `${_solNum(i.media)} ${_solEsc(i.unidade)}`, true],
+    ['Variação', (s, i) => _solVar(i.variacaoAbs, i.variacaoPct, i.unidade), true],
+    _cA, _cS]],
+  ['pesagem', 'Pesagem manual', 'Pesagem manual (fora da automação)', 'ti-weight', [_cP, _cR, _cO, _cC,
+    ['Material', (s, i) => _solEsc(i.grupoMaterial)],
+    ['Peso (kg)', (s, i) => _solNum(i.peso), true],
+    _cA, _cS]],
+];
+const SOL_COLS_MOV = [_cP, _cR, _cO, _cC,
+  ['Situação', (s) => _solEsc(s.categoria_situacao)],
+  ['Categoria', (s) => _solEsc(s.categoria)],
+  _cA, _cS];
+const SOL_PROCEDIMENTOS = new Set(SOL_PROC.map((p) => p[2]));
+const SOL_TIPOS = [
+  ['procedimento', 'Procedimentos operacionais', 'ti-clipboard-check', (s) => SOL_PROCEDIMENTOS.has(s.categoria_situacao)],
+  ['movimentacao', 'Movimentações de estoque', 'ti-arrows-exchange', (s) => !SOL_PROCEDIMENTOS.has(s.categoria_situacao)],
+];
+const _solProcAtual = () => SOL_PROC.find(([k]) => k === _sol.proc) || SOL_PROC[0];
 
 // ── Carga ────────────────────────────────────────────────────────────
 // Carga completa ao abrir a página; depois disso, solRealtimeInit mantém a
@@ -110,7 +152,7 @@ function solRealtimeInit() {
     else _sol.lista.unshift(row);
     _sol.lista.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     solRender();
-    if (tipo === 'INSERT' && typeof toast === 'function') toast(`Nova solicitação ${row.protocolo} — ${row.categoria_situacao}.`, 'success');
+    if (tipo === 'INSERT' && typeof toast === 'function') toast(`Novo registro ${row.protocolo} — ${row.categoria_situacao}.`, 'success');
     // Detalhe aberto da mesma solicitação: atualiza só o selo de status
     // (re-renderizar o modal apagaria a observação sendo digitada).
     if (tipo === 'UPDATE' && _sol.abertaId === row.id) {
@@ -137,11 +179,16 @@ window.solFiltro = solFiltro;
 function solTipo(k) { _sol.tipo = k; solRender(); }
 window.solTipo = solTipo;
 
+function solProc(k) { _sol.proc = k; solRender(); }
+window.solProc = solProc;
+
 function solBuscar(v) { _sol.busca = v; solRender(); }
 window.solBuscar = solBuscar;
 
 // ── Lista ────────────────────────────────────────────────────────────
-const _solDoTipo = () => _sol.lista.filter((SOL_TIPOS.find(([k]) => k === _sol.tipo) || SOL_TIPOS[0])[3]);
+const _solDoTipo = () => _sol.tipo === 'procedimento'
+  ? _sol.lista.filter((s) => s.categoria_situacao === _solProcAtual()[2])
+  : _sol.lista.filter(SOL_TIPOS[1][3]);
 
 function _solFiltradas() {
   const [, , fn] = SOL_FILTROS.find(([k]) => k === _sol.filtro) || SOL_FILTROS[0];
@@ -164,29 +211,26 @@ function solRender() {
   const abas = SOL_TIPOS.map(([k, rot, icon, fn]) =>
     `<button class="tab-btn${k === _sol.tipo ? ' active' : ''}" type="button" onclick="solTipo('${k}')"><i class="ti ${icon}"></i> ${rot} <b>${_sol.lista.filter((s) => fn(s) && abertas(s)).length}</b></button>`).join('');
 
-  const rows = _solFiltradas();
-  const vazio = (icon, txt) => `<tr><td colspan="8"><div class="empty-state"><i class="ti ${icon}"></i><p>${txt}</p></div></td></tr>`;
+  const proc = _sol.tipo === 'procedimento';
+  const subAbas = proc ? `<div class="tabs" style="margin-bottom:12px">${SOL_PROC.map(([k, rot, sit, icon]) =>
+    `<button class="tab-btn${k === _sol.proc ? ' active' : ''}" type="button" onclick="solProc('${k}')"><i class="ti ${icon}"></i> ${rot} <b>${_sol.lista.filter((s) => s.categoria_situacao === sit && abertas(s)).length}</b></button>`).join('')}</div>` : '';
+  const cols = proc ? _solProcAtual()[4] : SOL_COLS_MOV;
+  const td = (dir) => dir ? ' style="text-align:right"' : '';
+
+  // Procedimentos: uma linha por item (carreta, teste…); movimentações: uma por solicitação.
+  const rows = _solFiltradas().flatMap((s) => (proc && s.itens?.length ? s.itens : [{}]).map((i) => [s, i]));
+  const vazio = (icon, txt) => `<tr><td colspan="${cols.length}"><div class="empty-state"><i class="ti ${icon}"></i><p>${txt}</p></div></td></tr>`;
   const corpo = _sol.carregando && !_sol.lista.length ? vazio('ti-loader', 'Carregando…')
     : _sol.erro ? vazio('ti-alert-triangle', 'Falha ao carregar: ' + _solEsc(_sol.erro))
-    : !rows.length ? vazio('ti-inbox', 'Nenhuma solicitação neste filtro.')
-    : rows.map((s) => {
-      const st = SOL_STATUS[s.status] || SOL_STATUS.pendente;
-      return `<tr style="cursor:pointer" onclick="solAbrir('${s.id}')">
-        <td style="font-family:var(--mono);font-size:11.5px">${_solEsc(s.protocolo)}</td>
-        <td>${_solDataHora(s.created_at)}</td>
-        <td>${_solData(s.data_ocorrido)}</td>
-        <td>${_solEsc(s.central)}</td>
-        <td>${_solEsc(s.categoria_situacao)}</td>
-        <td>${_solEsc(s.categoria)}</td>
-        <td>${_solEsc(_solAnalista(s))}</td>
-        <td><span class="badge ${st.badge}">${st.label}</span>${s.sem_comprovante ? ' <i class="ti ti-paperclip-off" style="color:var(--amber)" title="Sem comprovante anexado"></i>' : ''}</td>
-      </tr>`;
-    }).join('');
+    : !rows.length ? vazio('ti-inbox', 'Nenhum registro neste filtro.')
+    : rows.map(([s, i]) => `<tr style="cursor:pointer" onclick="solAbrir('${s.id}')">
+        ${cols.map(([, fn, dir]) => `<td${td(dir)}>${fn(s, i)}</td>`).join('')}
+      </tr>`).join('');
 
-  el.innerHTML = `<div class="tabs" title="O número é de solicitações em aberto">${abas}</div>
+  el.innerHTML = `<div class="tabs" style="margin-bottom:12px" title="O número é de registros em aberto">${abas}</div>${subAbas}
   <div class="table-card">
     <div class="table-header">
-      <span class="table-title"><i class="ti ti-inbox"></i> Solicitações do formulário público</span>
+      <span class="table-title"><i class="ti ti-inbox"></i> Registros do formulário público</span>
       <div class="table-toolbar">
         ${pills}
         <input class="form-input" style="width:220px" type="text" placeholder="Buscar protocolo, central, NF…" value="${_solEsc(_sol.busca)}" oninput="solBuscar(this.value)">
@@ -194,7 +238,7 @@ function solRender() {
       </div>
     </div>
     <div class="table-scroll" style="max-height:calc(100vh - 200px)"><table>
-      <thead><tr><th>Protocolo</th><th>Recebida</th><th>Ocorrido</th><th>Central</th><th>Situação</th><th>Categoria</th><th>Analista</th><th>Status</th></tr></thead>
+      <thead><tr>${cols.map(([rot, , dir]) => `<th${td(dir)}>${rot}</th>`).join('')}</tr></thead>
       <tbody>${corpo}</tbody>
     </table></div></div>`;
 }
@@ -363,7 +407,7 @@ async function solMudarStatus(status) {
   const { error } = await window.supabaseClient.from('solicitacoes').update(patch).eq('id', s.id);
   if (error) { toast('Falha ao salvar: ' + error.message, 'error'); return; }
   Object.assign(s, patch);
-  toast(`Solicitação ${s.protocolo}: ${SOL_STATUS[status].label}.`, 'success');
+  toast(`Registro ${s.protocolo}: ${SOL_STATUS[status].label}.`, 'success');
   solRender();
   solAbrir(s.id);
 }
