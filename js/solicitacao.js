@@ -966,13 +966,45 @@ function _mostrarSucesso(protocolo) {
   const el = document.getElementById('sol-success');
   el.style.display = 'block';
   el.innerHTML = `
-    <i class="ti ti-circle-check"></i>
+    <i class="ti ti-circle-check sol-success-icon"></i>
     <h2>Solicitação enviada com sucesso</h2>
     <p>Sua solicitação já está com o(s) analista(s) responsável(is).</p>
-    ${protocolo ? `<p>Protocolo: <span class="sol-numero">${escapeHtml(protocolo)}</span></p>` : ''}
-    <button type="button" class="sol-btn" style="margin-top:18px" onclick="location.reload()"><i class="ti ti-plus"></i> Enviar outra solicitação</button>
+    ${protocolo ? `
+      <div class="sol-protocolo">
+        <span>Protocolo:</span>
+        <span class="sol-numero" id="sol-protocolo-txt">${escapeHtml(protocolo)}</span>
+        <button type="button" class="sol-btn sol-btn-copiar" id="sol-btn-copiar" onclick="copiarProtocolo()"><i class="ti ti-copy"></i> Copiar</button>
+      </div>
+      <div class="sol-alert sol-alert-warn" style="text-align:left;max-width:460px;margin:18px auto 0">
+        <i class="ti ti-alert-triangle"></i>
+        <div><strong>Envie este protocolo ao analista responsável</strong> (por WhatsApp, por exemplo). É com ele que o analista localiza a sua solicitação.</div>
+      </div>` : ''}
+    <button type="button" class="sol-btn" style="margin-top:22px" onclick="location.reload()"><i class="ti ti-plus"></i> Enviar outra solicitação</button>
   `;
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function copiarProtocolo() {
+  const txt = document.getElementById('sol-protocolo-txt')?.textContent || '';
+  const btn = document.getElementById('sol-btn-copiar');
+  const ok = () => { btn.innerHTML = '<i class="ti ti-check"></i> Copiado'; setTimeout(() => { btn.innerHTML = '<i class="ti ti-copy"></i> Copiar'; }, 2000); };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(txt).then(ok).catch(() => _copiarFallback(txt) && ok());
+  } else if (_copiarFallback(txt)) ok();
+}
+window.copiarProtocolo = copiarProtocolo;
+
+// Navegadores antigos / página fora de HTTPS não têm navigator.clipboard.
+function _copiarFallback(txt) {
+  const ta = document.createElement('textarea');
+  ta.value = txt;
+  ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { /* sem suporte */ }
+  ta.remove();
+  return ok;
 }
 
 // ── Boot ────────────────────────────────────────────────────────────

@@ -52,9 +52,9 @@ const _solVar = (kg, pct, unidade) => {
 };
 
 // ── Carga ────────────────────────────────────────────────────────────
-// ponytail: carrega ao abrir a página (sem realtime) — o volume é de
-// dezenas por mês e só o analista da categoria mexe. Se virar fila
-// disputada, assinar postgres_changes como dai.js faz.
+// Carga completa ao abrir a página; depois disso, solRealtimeInit mantém a
+// lista viva (INSERT/UPDATE chegam sem recarregar — RLS filtra o que cada
+// um recebe, igual ao SELECT).
 async function solCarregar() {
   if (!window.supabaseClient || _sol.carregando) return;
   _sol.carregando = true;
@@ -68,10 +68,57 @@ async function solCarregar() {
     _sol.erro = error.message || 'Falha ao carregar.';
   } else {
     _sol.lista = data || [];
+    // analista_nome guarda o pedaço do e-mail (ver adminSalvarAnalistaCategoria)
+    // — mostra o nome de exibição do perfil, quando houver.
+    await _solCarregarNomes(_sol.lista.map((s) => s.user_id));
   }
   solRender();
 }
+
+async function _solCarregarNomes(userIds) {
+  if (!_sol.nomes) _sol.nomes = new Map();
+  const ids = [...new Set(userIds)].filter((id) => id && !_sol.nomes.has(id));
+  if (!ids.length) return;
+  const { data: perfis } = await window.supabaseClient.from('profiles').select('id, nome_exibicao').in('id', ids);
+  (perfis || []).forEach((p) => _sol.nomes.set(p.id, p.nome_exibicao || ''));
+}
+
+const _solAnalista = (s) => _sol.nomes?.get(s.user_id) || s.analista_nome || '—';
 window.solCarregar = solCarregar;
+
+// ── Tempo real ───────────────────────────────────────────────────────
+// Assinado no boot (analitico.js), então a lista já está viva quando a
+// página abre. Exige a tabela na publicação supabase_realtime (migração
+// 20261113_solicitacoes_realtime.sql).
+let _solChannel = null;
+function solRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _solChannel) return;
+  const handle = async (row, tipo) => {
+    if (!row?.id) return;
+    await _solCarregarNomes([row.user_id]);
+    const idx = _sol.lista.findIndex((s) => s.id === row.id);
+    if (idx >= 0) _sol.lista[idx] = row;
+    else _sol.lista.unshift(row);
+    _sol.lista.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    solRender();
+    if (tipo === 'INSERT' && typeof toast === 'function') toast(`Nova solicitação ${row.protocolo} — ${row.categoria_situacao}.`, 'success');
+    // Detalhe aberto da mesma solicitação: atualiza só o selo de status
+    // (re-renderizar o modal apagaria a observação sendo digitada).
+    if (tipo === 'UPDATE' && _sol.abertaId === row.id) {
+      const st = SOL_STATUS[row.status] || SOL_STATUS.pendente;
+      const badge = document.querySelector('#sol-modal-title .badge');
+      if (badge) { badge.className = 'badge ' + st.badge; badge.textContent = st.label; }
+    }
+  };
+  _solChannel = window.supabaseClient
+    .channel('solicitacoes_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'solicitacoes' }, (p) => handle(p.new, 'INSERT'))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'solicitacoes' }, (p) => handle(p.new, 'UPDATE'))
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Solicitações] Canal Realtime com problema:', status);
+    });
+}
+window.solRealtimeInit = solRealtimeInit;
 
 pageRenderers.solicitacoes = () => { solCarregar(); };
 
@@ -86,7 +133,7 @@ function _solFiltradas() {
   const [, , fn] = SOL_FILTROS.find(([k]) => k === _sol.filtro) || SOL_FILTROS[0];
   const q = _solNorm(_sol.busca);
   return _sol.lista.filter((s) => fn(s) && (!q || _solNorm([
-    s.protocolo, s.central, s.categoria_situacao, s.categoria, s.analista_nome,
+    s.protocolo, s.central, s.categoria_situacao, s.categoria, _solAnalista(s),
     ...(s.informantes || []).map((i) => i.nome),
     ...(s.itens || []).map((i) => [i.grupoMaterial, i.fornecedor, i.nf].join(' ')),
   ].join(' ')).includes(q)));
@@ -112,7 +159,7 @@ function solRender() {
         <td>${_solEsc(s.central)}</td>
         <td>${_solEsc(s.categoria_situacao)}</td>
         <td>${_solEsc(s.categoria)}</td>
-        <td>${_solEsc(s.analista_nome || '—')}</td>
+        <td>${_solEsc(_solAnalista(s))}</td>
         <td><span class="badge ${st.badge}">${st.label}</span>${s.sem_comprovante ? ' <i class="ti ti-paperclip-off" style="color:var(--amber)" title="Sem comprovante anexado"></i>' : ''}</td>
       </tr>`;
     }).join('');
@@ -228,7 +275,7 @@ async function solAbrir(id) {
       ${_solCampo('Regional', _solEsc(s.regional_central || '—'))}
       ${_solCampo('Data do ocorrido', _solData(s.data_ocorrido))}
       ${s.filial_destino ? _solCampo('Filial de destino', _solEsc(s.filial_destino)) : ''}
-      ${_solCampo('Analista', _solEsc(s.analista_nome || '—'))}
+      ${_solCampo('Analista', _solEsc(_solAnalista(s)))}
     </div>
     <div class="sol-det-sec">Itens</div>
     ${_solItensHtml(s)}

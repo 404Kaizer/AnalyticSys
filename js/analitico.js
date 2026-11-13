@@ -4816,6 +4816,7 @@ async function init() {
   updateImportPrereqUI();
   cobIniciar();   // admin edita; perfil Usuário só consulta
   solPublicarFornecedores(); // ADM: fornecedores de agregados → formulário público (só se mudou)
+  solRealtimeInit();         // Solicitações chegam na tabela sem recarregar
   // updateDashboard já foi chamado dentro de restoreAndRender — não chamar novamente
 
   // Start clock
