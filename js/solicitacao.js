@@ -29,6 +29,12 @@ const CATEGORIA_TRANSFERENCIA = 'Transferência de material entre filiais';
 const CATEGORIA_CANTO = 'Teste de canto';
 const CATEGORIA_CUBAGEM = 'Cubagem de agregados';
 const CATEGORIA_COLETA = 'Coleta de material';
+// Situações com motivo obrigatório: [rótulo, opções]. "Outro" é acrescentado
+// e chega ao servidor como "Outro: <texto>". Mesma lista de MOTIVOS na Edge Function.
+const MOTIVOS = {
+  [CATEGORIA_COLETA]: ['Motivo da coleta', ['Contaminação', 'Qualidade', 'Prazo de validade', 'Substituição', 'Sem uso', 'Sem identificação', 'Teste em laboratório', 'Uso na central']],
+  'Perda de material': ['Motivo da perda', ['Contaminação', 'Clima ou terreno']],
+};
 // Só na coleta: material sem identificação, com a categoria escolhida pelo
 // operador (decide o analista).
 const SEM_IDENTIFICACAO = 'SEM IDENTIFICAÇÃO';
@@ -152,10 +158,11 @@ function validarSecaoOQueAconteceu() {
     if (!filialDestino) return _erro('Selecione a filial de destino.');
     if (filialDestino === central) return _erro('A filial de destino não pode ser igual à central de origem.');
   }
-  if (categoriaSituacao === CATEGORIA_COLETA) {
+  if (MOTIVOS[categoriaSituacao]) {
+    const rot = MOTIVOS[categoriaSituacao][0].toLowerCase();
     const motivo = _valorAtual('sol-motivo');
-    if (!motivo) return _erro('Selecione o motivo da coleta.');
-    if (motivo === 'Outro' && !_valorAtual('sol-motivo-outro')) return _erro('Descreva o motivo da coleta.');
+    if (!motivo) return _erro(`Selecione o ${rot}.`);
+    if (motivo === 'Outro' && !_valorAtual('sol-motivo-outro')) return _erro(`Descreva o ${rot}.`);
   }
   if (!_itensMateriais.length) return _erro('Adicione ao menos um item.');
 
@@ -276,7 +283,14 @@ function onCategoriaSituacaoChange() {
     sel.value = '';
   }
   document.getElementById('sol-campos-situacao').style.display = val ? '' : 'none';
-  document.getElementById('sol-fg-motivo').style.display = val === CATEGORIA_COLETA ? '' : 'none';
+  const motivos = MOTIVOS[val];
+  document.getElementById('sol-fg-motivo').style.display = motivos ? '' : 'none';
+  if (motivos) {
+    document.getElementById('sol-motivo-label').textContent = motivos[0];
+    document.getElementById('sol-motivo').innerHTML = '<option value="">Selecione o motivo</option>'
+      + [...motivos[1], 'Outro'].map((m) => `<option>${escapeHtml(m)}</option>`).join('');
+    onMotivoChange();
+  }
   if (val !== CATEGORIA_COLETA) {
     _itensMateriais.forEach((it) => { if (it.material === SEM_IDENTIFICACAO) it.material = ''; });
   }
@@ -1083,7 +1097,7 @@ async function enviarSolicitacao(ev) {
         dataOcorrido: _valorAtual('sol-data'),
         categoriaSituacao,
         filialDestino: categoriaSituacao === CATEGORIA_TRANSFERENCIA ? _valorAtual('sol-filial-destino') : null,
-        motivo: categoriaSituacao !== CATEGORIA_COLETA ? null
+        motivo: !MOTIVOS[categoriaSituacao] ? null
           : _valorAtual('sol-motivo') === 'Outro' ? 'Outro: ' + _valorAtual('sol-motivo-outro') : _valorAtual('sol-motivo'),
         descricao: _valorAtual('sol-descricao'),
         itens: _itensPayload(categoriaSituacao),

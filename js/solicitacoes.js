@@ -173,6 +173,16 @@ window.solRealtimeInit = solRealtimeInit;
 
 pageRenderers.solicitacoes = () => { solCarregar(); };
 
+// Ferramentas ▸ Link do Registro Operacional: o formulário fica na mesma
+// pasta do app — resolve relativo à URL atual, sem host fixo.
+function solCopiarLinkFormulario() {
+  const link = new URL('solicitacao.html', window.location.href).href;
+  navigator.clipboard?.writeText(link)
+    .then(() => toast('Link do Registro Operacional copiado.', 'success'))
+    .catch(() => toast('Não foi possível copiar — link: ' + link, 'error'));
+}
+window.solCopiarLinkFormulario = solCopiarLinkFormulario;
+
 function solFiltro(k) { _sol.filtro = k; solRender(); }
 window.solFiltro = solFiltro;
 
@@ -341,7 +351,7 @@ async function solAbrir(id) {
       ${_solCampo('Regional', _solEsc(s.regional_central || '—'))}
       ${_solCampo('Data do ocorrido', _solData(s.data_ocorrido))}
       ${s.filial_destino ? _solCampo('Filial de destino', _solEsc(s.filial_destino)) : ''}
-      ${s.motivo ? _solCampo('Motivo da coleta', _solEsc(s.motivo)) : ''}
+      ${s.motivo ? _solCampo('Motivo', _solEsc(s.motivo)) : ''}
       ${_solCampo('Analista', _solEsc(_solAnalista(s)))}
     </div>
     <div class="sol-det-sec">Itens</div>

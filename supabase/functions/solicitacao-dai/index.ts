@@ -76,15 +76,17 @@ const CATEGORIA_COLETA = 'Coleta de material';
 const CATEGORIAS_SITUACAO_VALIDAS = [
   CATEGORIA_CANTO,
   CATEGORIA_CUBAGEM,
-  'Perda de material devido a contaminação',
-  'Perda de material por motivos climáticos ou de terreno',
+  'Perda de material',
   CATEGORIA_COLETA,
   'Pesagem manual (fora da automação)',
   CATEGORIA_TRANSFERENCIA,
 ];
-// Motivo da coleta — mesma lista do <select id="sol-motivo">; "Outro" chega
-// como "Outro: <texto do operador>".
-const MOTIVOS_COLETA = ['Contaminação', 'Qualidade', 'Prazo de validade', 'Substituição', 'Sem uso', 'Sem identificação', 'Teste em laboratório', 'Uso na central'];
+// Situações com motivo obrigatório — mesma lista de MOTIVOS em
+// js/solicitacao.js; "Outro" chega como "Outro: <texto do operador>".
+const MOTIVOS: Record<string, string[]> = {
+  [CATEGORIA_COLETA]: ['Contaminação', 'Qualidade', 'Prazo de validade', 'Substituição', 'Sem uso', 'Sem identificação', 'Teste em laboratório', 'Uso na central'],
+  'Perda de material': ['Contaminação', 'Clima ou terreno'],
+};
 const MOTIVO_MAX = 200;
 // Na coleta o material pode ser "SEM IDENTIFICAÇÃO": aí o operador informa a
 // categoria, que decide o analista.
@@ -310,9 +312,10 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
   else if (!descricao && categoriaSituacao !== CATEGORIA_CUBAGEM) erros.push('Descrição do ocorrido é obrigatória.');
   if (!CATEGORIAS_SITUACAO_VALIDAS.includes(categoriaSituacao)) erros.push('Categoria de situação inválida.');
   const motivoIn = String(payload.motivo ?? '').trim();
-  const motivo = categoriaSituacao !== CATEGORIA_COLETA ? null
-    : MOTIVOS_COLETA.includes(motivoIn) || (/^Outro: \S/.test(motivoIn) && motivoIn.length <= MOTIVO_MAX) ? motivoIn : '';
-  if (motivo === '') erros.push('Informe o motivo da coleta.');
+  const motivosSit = MOTIVOS[categoriaSituacao];
+  const motivo = !motivosSit ? null
+    : motivosSit.includes(motivoIn) || (/^Outro: \S/.test(motivoIn) && motivoIn.length <= MOTIVO_MAX) ? motivoIn : '';
+  if (motivo === '') erros.push('Informe o motivo.');
   if (categoriaSituacao === CATEGORIA_TRANSFERENCIA) {
     if (!isStr(filialDestino, LIMITES.central)) erros.push('Filial de destino é obrigatória para transferência entre filiais.');
     else if (normText(filialDestino) === normText(central)) erros.push('A filial de destino não pode ser igual à central de origem.');
