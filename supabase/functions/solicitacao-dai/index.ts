@@ -517,7 +517,7 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
   }
 
   // Protocolo do envio — comum a todos os registros gerados.
-  const protocolo = `SOL-${hojeBR().replace(/-/g, '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+  const protocolo = `REG-${hojeBR().replace(/-/g, '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 
   // Assinaturas → Storage (Service Role; o público nunca lê o bucket).
   const informantes: { nome: string; cargo: string; contato: string; assinatura: string }[] = [];

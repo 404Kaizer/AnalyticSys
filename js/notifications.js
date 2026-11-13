@@ -160,6 +160,7 @@ const _NTM = {
   conferencia:  { icon:'ti-calendar-event'  },
   mural:        { icon:'ti-target-arrow'    },
   comentario:   { icon:'ti-message-dots'    },
+  registro:     { icon:'ti-inbox'           },
   atividade:    { icon:'ti-bolt'            },
   auth:         { icon:'ti-fingerprint'     },
   // Prioridade do Supervisor (31/07) — ícone e cor próprios (ver
@@ -223,9 +224,11 @@ function notifNavigate(id, event) {
   event?.stopPropagation();
   const n = (state.notifications||[]).find(n=>n.id===id);
   if (n) { n.read=true; if(typeof persist==='function') persist(); }
-  const page = _NOTIF_ROUTE[id] || (n?.type === 'mural' || n?.type === 'comentario' ? 'analitico' : null);
+  const page = _NOTIF_ROUTE[id] || (n?.type === 'mural' || n?.type === 'comentario' ? 'analitico' : n?.type === 'registro' ? 'solicitacoes' : null);
   notifClose();
   if (page && typeof navigate==='function') navigate(page);
+  // Novo registro do formulário: abre o detalhe dele.
+  if (n?.type === 'registro' && typeof solAbrir === 'function') solAbrir(n.registroId);
   // Aviso do Mural: abre a aba Operações já no filtro do aviso.
   if (n?.type === 'mural') {
     if (typeof anSwitchView === 'function') anSwitchView('operacoes');
@@ -290,6 +293,29 @@ function notifPushComentario(r) {
   notifPlaySound();
 }
 
+// ── Novo Registro Operacional (formulário público, 13/11/2026) ──
+// Disparada pelo tempo real de solicitacoes.js (INSERT). O RLS já filtra:
+// chega só ao analista da categoria e ao ADM. O clique abre o registro.
+function notifPushRegistro(r) {
+  if (!r?.id) return;
+  if (!Array.isArray(state.notifications)) state.notifications = [];
+  const id = `reg-${r.id}`;
+  if (state.notifications.some(n => n.id === id)) return;
+  const inf = (r.informantes || [])[0] || {};
+  const mats = [...new Set((r.itens || []).map(i => i.grupoMaterial || i.categoriaMaterial).filter(Boolean))].join(', ');
+  const titulo = `Novo registro · ${r.categoria_situacao}`;
+  const corpo = `${r.central}${mats ? ` · ${mats}` : ''}${r.motivo ? ` · ${r.motivo}` : ''} — por ${inf.nome || '—'}${inf.contato ? ` · ${inf.contato}` : ''}`;
+  state.notifications.unshift({
+    id, type: 'registro', level: 'info', title: titulo, body: corpo.slice(0, 160),
+    createdAt: Date.now(), read: false, registroId: r.id,
+  });
+  if (typeof persist === 'function') persist();
+  _notifRenderBadge();
+  if (_notifOpen) _notifRenderDropdown();
+  notifShowActivityToast(titulo, corpo.slice(0, 160));
+  notifPlaySound();
+}
+
 function notifAbrirOcorrenciaPrioritaria(notifId, event) {
   event?.stopPropagation();
   const n = (state.notifications||[]).find(x => x.id === notifId);
@@ -323,8 +349,9 @@ function _notifRenderDropdown() {
     const iconCol = n.type === 'auth' ? _AUTH_COLOR
       : n.type === 'atividade' ? (_ACTIVITY_MODULE_COLOR[n.activityTable] || _ACTIVITY_DEFAULT_COLOR)
       : temOcorrenciaVinculada ? (_SUPERVISOR_PRIORITY_COLOR[n.type] || 'var(--purple)')
+      : n.type === 'registro' ? 'var(--purple)' // mesma cor da aba Registros
       : lm.col;
-    const hasRoute = isAtividade ? !!n.activityLogId : temOcorrenciaVinculada ? true : (!!_NOTIF_ROUTE[n.id] || n.type === 'comentario');
+    const hasRoute = isAtividade ? !!n.activityLogId : temOcorrenciaVinculada ? true : (!!_NOTIF_ROUTE[n.id] || n.type === 'comentario' || n.type === 'registro');
     const clickAttr = !hasRoute ? '' : isAtividade
       ? `onclick="notifAbrirDetalheAtividade('${_notifEsc(n.id)}',event)"`
       : temOcorrenciaVinculada
@@ -1036,6 +1063,7 @@ Object.assign(window,{
   notifPlaySound,notifShowActivityToast,notifHideActivityToast,
   notifAbrirDetalheAtividade,
   notifPushOcorrenciaSupervisor,notifAbrirOcorrenciaPrioritaria,notifPushMudancaOcorrencia,
+  notifPushRegistro,
   _activityRealtimeInit,_activityRealtimeStop,
   adminAlertCheckPendente,adminAlertConfirmar,adminAlertEnviar,
   adminAlertAbrirCompose,adminAlertSelecionarPreset,adminAlertFecharCompose,

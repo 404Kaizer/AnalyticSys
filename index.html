@@ -213,6 +213,8 @@
 
       <button class="tab-item" onclick="navigate('solicitacoes')" data-page="solicitacoes" data-label="Registros">
         <span class="tab-icon" style="--tab-color: var(--purple)"><i class="ti ti-inbox"></i></span>
+        <!-- Pendentes (solicitacoes.js _solAtualizarBadge); fora do .tab-icon, que é semitransparente -->
+        <span class="msgs-badge" id="sol-tab-badge" style="display:none;top:4px;right:auto;left:34px" title="Registros pendentes">0</span>
         <span class="tab-text">
           <span class="tab-title">Registros</span>
           <span class="tab-sub">procedimentos e movimentações</span>

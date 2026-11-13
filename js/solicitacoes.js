@@ -106,8 +106,12 @@ const _solProcAtual = () => SOL_PROC.find(([k]) => k === _sol.proc) || SOL_PROC[
 // Carga completa ao abrir a página; depois disso, solRealtimeInit mantém a
 // lista viva (INSERT/UPDATE chegam sem recarregar — RLS filtra o que cada
 // um recebe, igual ao SELECT).
-async function solCarregar() {
-  if (!window.supabaseClient || _sol.carregando) return;
+// Reaproveita a carga em andamento (solAbrir vindo do sininho espera por ela).
+function solCarregar() {
+  if (!window.supabaseClient) return Promise.resolve();
+  return _sol.carga || (_sol.carga = _solCarregar().finally(() => { _sol.carga = null; }));
+}
+async function _solCarregar() {
   _sol.carregando = true;
   _sol.erro = '';
   solRender();
@@ -124,6 +128,19 @@ async function solCarregar() {
     await _solCarregarNomes(_sol.lista.map((s) => s.user_id));
   }
   solRender();
+  _solAtualizarBadge();
+}
+
+// Bolinha na aba Registros = registros pendentes (ainda não iniciados) que
+// este usuário enxerga (RLS). Contagem sem trazer linhas.
+async function _solAtualizarBadge() {
+  const el = document.getElementById('sol-tab-badge');
+  if (!el || !window.supabaseClient) return;
+  const { count, error } = await window.supabaseClient.from('solicitacoes')
+    .select('id', { count: 'exact', head: true }).eq('status', 'pendente');
+  if (error) return;
+  el.textContent = count > 99 ? '99+' : String(count || 0);
+  el.style.display = count ? '' : 'none';
 }
 
 async function _solCarregarNomes(userIds) {
@@ -144,6 +161,7 @@ window.solCarregar = solCarregar;
 let _solChannel = null;
 function solRealtimeInit() {
   if (!window.supabaseClient || !window.currentUser || _solChannel) return;
+  _solAtualizarBadge();
   const handle = async (row, tipo) => {
     if (!row?.id) return;
     await _solCarregarNomes([row.user_id]);
@@ -152,7 +170,11 @@ function solRealtimeInit() {
     else _sol.lista.unshift(row);
     _sol.lista.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     solRender();
-    if (tipo === 'INSERT' && typeof toast === 'function') toast(`Novo registro ${row.protocolo} — ${row.categoria_situacao}.`, 'success');
+    _solAtualizarBadge();
+    if (tipo === 'INSERT') {
+      if (typeof notifPushRegistro === 'function') notifPushRegistro(row);
+      else if (typeof toast === 'function') toast(`Novo registro ${row.protocolo} — ${row.categoria_situacao}.`, 'success');
+    }
     // Detalhe aberto da mesma solicitação: atualiza só o selo de status
     // (re-renderizar o modal apagaria a observação sendo digitada).
     if (tipo === 'UPDATE' && _sol.abertaId === row.id) {
@@ -281,49 +303,67 @@ function _solCampo(rot, val) {
   return `<div><div class="sol-det-rot">${rot}</div><div class="sol-det-val">${val}</div></div>`;
 }
 
+// Números-chave em destaque: [rótulo, valor, subtexto, classe].
+function _solKpis(lista) {
+  return `<div class="sol-det-kpis">${lista.map(([rot, val, sub, cls]) => `
+    <div class="sol-det-kpi ${cls || ''}"><div class="sol-det-rot">${rot}</div><div class="sol-det-kpi-val">${val}</div>${sub ? `<div class="sol-det-kpi-sub">${sub}</div>` : ''}</div>`).join('')}</div>`;
+}
+// Variação: ±1% ou mais em âmbar, abaixo disso em verde.
+function _solKpiVar(abs, pct, unidade) {
+  if (abs === null || abs === undefined || pct === null || pct === undefined) return ['Variação', '—', 'sem conversão para kg', ''];
+  const sinal = abs >= 0 ? '+' : '';
+  return ['Variação', `${sinal}${_solNum(pct)}%`, `${sinal}${_solNum(abs)} ${unidade || 'kg'}`, Math.abs(pct) >= 1 ? 'alerta' : 'ok'];
+}
+function _solGrupo(titulo, campos) {
+  return `<div class="sol-det-grupo"><div class="sol-det-grupo-tit">${titulo}</div><div class="sol-det-grupo-campos">${campos}</div></div>`;
+}
+
 function _solItensHtml(s) {
   const itens = s.itens || [];
   if (!itens.length) return '<p class="sol-det-vazio">Nenhum item.</p>';
 
   if (itens[0].tipo === 'material' || !itens[0].tipo) {
-    return `<table><thead><tr><th>Material</th><th style="text-align:right">Quantidade</th></tr></thead><tbody>
-      ${itens.map((i) => `<tr><td>${_solEsc(i.grupoMaterial)}</td><td style="text-align:right">${_solNum(i.peso)} ${_solEsc(i.unidade || 'kg')}</td></tr>`).join('')}
-    </tbody></table>`;
+    return `<div class="sol-det-item" style="padding:0;overflow:hidden"><table class="sol-det-tabela"><thead><tr><th>Material</th><th style="text-align:right">Quantidade</th></tr></thead><tbody>
+      ${itens.map((i) => `<tr><td>${_solEsc(i.grupoMaterial)}</td><td style="text-align:right;font-weight:600">${_solNum(i.peso)} ${_solEsc(i.unidade || 'kg')}</td></tr>`).join('')}
+    </tbody></table></div>`;
   }
 
   if (itens[0].tipo === 'teste_canto') {
     return itens.map((i) => `<div class="sol-det-item">
-      <div class="sol-det-grid">
-        ${_solCampo('Categoria', _solEsc(i.categoriaMaterial))}
-        ${_solCampo('Referência', `${_solNum(i.referencia)} ${_solEsc(i.unidade)}`)}
-        ${_solCampo('Leituras', (i.cantos || []).map((c, idx) => `C${idx + 1}: ${_solNum(c)}`).join(' · '))}
-        ${_solCampo('Média', `${_solNum(i.media)} ${_solEsc(i.unidade)}`)}
-        ${_solCampo('Variação', _solVar(i.variacaoAbs, i.variacaoPct, i.unidade))}
-      </div></div>`).join('');
+      <div class="sol-det-item-tit">${_solEsc(i.categoriaMaterial)}</div>
+      ${_solKpis([
+        ['Referência', `${_solNum(i.referencia)} ${_solEsc(i.unidade)}`],
+        ['Média lida', `${_solNum(i.media)} ${_solEsc(i.unidade)}`],
+        _solKpiVar(i.variacaoAbs, i.variacaoPct, i.unidade),
+      ])}
+      <div class="sol-det-grupos">${_solGrupo('Leituras', (i.cantos || []).map((c, idx) => _solCampo(`Canto ${idx + 1}`, `${_solNum(c)} ${_solEsc(i.unidade)}`)).join(''))}</div>
+    </div>`).join('');
   }
 
   // cubagem
   return itens.map((i) => {
-    const volume = _solCampo('Volume', i.volumeM3 !== null ? `${_solNum(i.volumeM3, 3)} m³` : '—');
-    const metodo = i.metodo === 'pesagem'
-      ? _solCampo('Pesagens (kg)', (i.pesagens || []).map((p) => _solNum(p)).join(' + '))
+    const doc = i.docTipo === 'TICKET' ? 'Ticket' : 'NF';
+    const volume = i.volumeM3 !== null && i.volumeM3 !== undefined ? _solCampo('Volume', `${_solNum(i.volumeM3, 3)} m³`) : '';
+    const medidas = i.metodo === 'pesagem'
+      ? _solCampo('Pesagens', (i.pesagens || []).map((p) => _solNum(p)).join(' + ') + ' kg')
       : i.metodo === 'cone'
-      ? _solCampo('Cones (raio × altura)', (i.cones || []).map((c) => `${_solNum(c.raio)} × ${_solNum(c.altura)} m`).join(' · ')) + volume
-      : _solCampo('Caçamba', `${_solNum(i.comprimento)} m × ${_solNum(i.largura)} m · alturas ${(i.alturas || []).map((a) => _solNum(a)).join(' / ')} m`) + volume;
+      ? _solCampo('Cones (raio × altura)', (i.cones || []).map((c) => `${_solNum(c.raio)} × ${_solNum(c.altura)} m`).join('<br>')) + volume
+      : _solCampo('Caçamba', `${_solNum(i.comprimento)} × ${_solNum(i.largura)} m`) + _solCampo('Alturas dos furos', (i.alturas || []).map((a) => _solNum(a)).join(' / ') + ' m') + volume;
     const semFator = (i.umNf === 'M3' || i.metodo !== 'pesagem') && !i.fator;
     return `<div class="sol-det-item">
-      <div class="sol-det-grid">
-        ${_solCampo('Material', _solEsc(i.grupoMaterial))}
-        ${_solCampo('Fornecedor', _solEsc(i.fornecedor))}
-        ${_solCampo(i.docTipo === 'TICKET' ? 'Ticket' : 'NF', _solEsc(i.nf))}
-        ${_solCampo('Emissão / Recebimento', `${_solData(i.dataEmissao)} / ${_solData(i.dataRecebimento)}`)}
-        ${_solCampo('Peso na NF', `${_solNum(i.pesoNf)} ${_solEsc(i.umNf)}`)}
-        ${_solCampo('Método', { pesagem: 'Pesagem', cone: 'Cone', volume: 'Volume (furos)' }[i.metodo] || '—')}
-        ${metodo}
-        ${_solCampo('Fator M³→KG', i.fator ? _solNum(i.fator, 4) : '—')}
-        ${_solCampo('NF em kg', _solKg(i.nfKg))}
-        ${_solCampo('Total aferido', _solKg(i.aferidoKg))}
-        ${_solCampo('Variação', _solVar(i.variacaoKg, i.variacaoPct))}
+      <div class="sol-det-item-tit">${_solEsc(i.grupoMaterial)} <span>· ${_solEsc(i.fornecedor)}</span></div>
+      ${_solKpis([
+        [`${doc} em kg`, _solKg(i.nfKg), `${_solNum(i.pesoNf)} ${_solEsc(i.umNf)} declarado`],
+        ['Total aferido', _solKg(i.aferidoKg), { pesagem: 'por pesagem', cone: 'por cone', volume: 'por volume (furos)' }[i.metodo] || ''],
+        _solKpiVar(i.variacaoKg, i.variacaoPct),
+      ])}
+      <div class="sol-det-grupos">
+        ${_solGrupo('Documento', `
+          ${_solCampo(doc, _solEsc(i.nf))}
+          ${_solCampo('Emissão', _solData(i.dataEmissao))}
+          ${_solCampo('Recebimento', _solData(i.dataRecebimento))}
+          ${_solCampo('Fator M³→KG', i.fator ? _solNum(i.fator, 4) : '—')}`)}
+        ${_solGrupo('Medição', medidas)}
       </div>
       ${semFator ? '<div class="sol-nf-alerta"><i class="ti ti-scale"></i> Sem fator de densidade no envio — converta m³ para kg manualmente.</div>' : ''}
       ${i.docTipo === 'TICKET' ? '' : _solVinculoNf(i)}
@@ -331,39 +371,59 @@ function _solItensHtml(s) {
   }).join('');
 }
 
+// Contato que parece telefone vira link do WhatsApp.
+function _solContato(c) {
+  const dig = String(c || '').replace(/\D/g, '');
+  if (dig.length < 10 || dig.length > 13) return _solEsc(c);
+  const num = dig.length <= 11 ? '55' + dig : dig;
+  return `<a href="https://wa.me/${num}" target="_blank" rel="noopener"><i class="ti ti-brand-whatsapp"></i> ${_solEsc(c)}</a>`;
+}
+
 async function solAbrir(id) {
-  const s = _sol.lista.find((x) => x.id === id);
+  let s = _sol.lista.find((x) => x.id === id);
+  if (!s) { await solCarregar(); s = _sol.lista.find((x) => x.id === id); } // ex.: clique no sininho logo após abrir o app
   if (!s) return;
   _sol.abertaId = id;
   const st = SOL_STATUS[s.status] || SOL_STATUS.pendente;
 
   document.getElementById('sol-modal-title').innerHTML = `<i class="ti ti-inbox"></i> ${_solEsc(s.protocolo)} <span class="badge ${st.badge}" style="margin-left:8px">${st.label}</span>`;
-  document.getElementById('sol-modal-sub').textContent = `${s.categoria_situacao} · ${s.categoria} · recebida em ${_solDataHora(s.created_at)}`;
+  document.getElementById('sol-modal-sub').textContent = `${s.categoria_situacao}${s.motivo ? ' · ' + s.motivo : ''} · ${s.categoria} · recebida em ${_solDataHora(s.created_at)}`;
 
   const informantes = s.informantes || [];
   const anexos = s.anexos || [];
+  const inf0 = informantes[0] || {};
 
+  // Topo: quem preencheu (1º informante) + onde/quando, lado a lado.
   document.getElementById('sol-modal-body').innerHTML = `
-    <div class="sol-det-sec">Onde e quando</div>
-    <div class="sol-det-grid">
-      ${_solCampo('Central', _solEsc(s.central))}
-      ${_solCampo('CNPJ', _solEsc(s.cnpj_central || '—'))}
-      ${_solCampo('Regional', _solEsc(s.regional_central || '—'))}
-      ${_solCampo('Data do ocorrido', _solData(s.data_ocorrido))}
-      ${s.filial_destino ? _solCampo('Filial de destino', _solEsc(s.filial_destino)) : ''}
-      ${s.motivo ? _solCampo('Motivo', _solEsc(s.motivo)) : ''}
-      ${_solCampo('Analista', _solEsc(_solAnalista(s)))}
+    <div class="sol-det-top">
+      <div class="sol-det-pessoa">
+        <div class="sol-det-pessoa-ico"><i class="ti ti-user"></i></div>
+        <div style="min-width:0">
+          <div class="sol-det-rot">Informado por</div>
+          <div class="sol-det-pessoa-nome">${_solEsc(inf0.nome || '—')}</div>
+          <div class="sol-det-pessoa-sub">${_solEsc(inf0.cargo || '')}${inf0.contato ? ' · ' + _solContato(inf0.contato) : ''}</div>
+          ${informantes.length > 1 ? `<div class="sol-det-pessoa-sub">+ ${informantes.length - 1} informante(s): ${informantes.slice(1).map((i) => _solEsc(i.nome)).join(', ')}</div>` : ''}
+        </div>
+      </div>
+      <div class="sol-det-onde">
+        ${_solCampo('Central', _solEsc(s.central))}
+        ${_solCampo('Data do ocorrido', _solData(s.data_ocorrido))}
+        ${_solCampo('Regional', _solEsc(s.regional_central || '—'))}
+        ${_solCampo('Analista', _solEsc(_solAnalista(s)))}
+        ${s.filial_destino ? _solCampo('Filial de destino', _solEsc(s.filial_destino)) : ''}
+        ${s.motivo ? _solCampo('Motivo', _solEsc(s.motivo)) : ''}
+        ${s.cnpj_central ? _solCampo('CNPJ', _solEsc(s.cnpj_central)) : ''}
+      </div>
     </div>
-    <div class="sol-det-sec">Itens</div>
+    <div class="sol-det-sec">${(s.itens || []).length > 1 ? `Itens (${s.itens.length})` : 'Item'}</div>
     ${_solItensHtml(s)}
-    <div class="sol-det-sec">Descrição do ocorrido</div>
-    <div class="sol-det-desc">${_solEsc(s.descricao) || "—"}</div>
-    <div class="sol-det-sec">Informantes e assinaturas</div>
+    ${s.descricao ? `<div class="sol-det-sec">Descrição do ocorrido</div><div class="sol-det-desc">${_solEsc(s.descricao)}</div>` : ''}
+    <div class="sol-det-sec">Assinaturas</div>
     <div class="sol-det-assin">${informantes.map((inf, idx) => `
       <div class="sol-det-assin-card">
-        <div style="font-weight:600">${_solEsc(inf.nome)}</div>
-        <div style="font-size:11.5px;color:var(--text2)">${_solEsc(inf.cargo)}${inf.contato ? ' · ' + _solEsc(inf.contato) : ''}</div>
         <div class="sol-det-assin-img" id="sol-assin-${idx}">${inf.assinatura ? '<i class="ti ti-loader"></i>' : 'Sem assinatura'}</div>
+        <div style="font-weight:600;margin-top:6px">${_solEsc(inf.nome)}</div>
+        <div style="font-size:11.5px;color:var(--text2)">${_solEsc(inf.cargo)}</div>
       </div>`).join('')}</div>
     <div class="sol-det-sec">Comprovantes</div>
     <div id="sol-det-anexos">${anexos.length
@@ -420,6 +480,7 @@ async function solMudarStatus(status) {
   Object.assign(s, patch);
   toast(`Registro ${s.protocolo}: ${SOL_STATUS[status].label}.`, 'success');
   solRender();
+  _solAtualizarBadge();
   solAbrir(s.id);
 }
 window.solMudarStatus = solMudarStatus;
