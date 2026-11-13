@@ -300,11 +300,26 @@
             <optgroup label="Movimentação de estoque">
               <option value="Perda de material devido a contaminação">Perda de material devido a contaminação</option>
               <option value="Perda de material por motivos climáticos ou de terreno">Perda de material por motivos climáticos ou de terreno</option>
-              <option value="Coleta de material contaminado">Coleta de material contaminado</option>
-              <option value="Coleta de material para substituição">Coleta de material para substituição</option>
+              <option value="Coleta de material">Coleta de material</option>
               <option value="Transferência de material entre filiais">Transferência de material entre filiais</option>
             </optgroup>
           </select>
+        </div>
+        <!-- Só na Coleta. Mesma lista de MOTIVOS_COLETA na Edge Function. -->
+        <div class="sol-fg" id="sol-fg-motivo" style="display:none">
+          <label class="sol-label">Motivo da coleta <span class="sol-required">*</span></label>
+          <select id="sol-motivo" class="sol-select" onchange="onMotivoChange()">
+            <option value="">Selecione o motivo</option>
+            <option>Contaminação</option>
+            <option>Qualidade</option>
+            <option>Substituição</option>
+            <option>Sem uso</option>
+            <option>Sem identificação</option>
+            <option>Teste em laboratório</option>
+            <option>Uso na central</option>
+            <option>Outro</option>
+          </select>
+          <input id="sol-motivo-outro" class="sol-input" type="text" maxlength="180" placeholder="Descreva o motivo" style="display:none">
         </div>
         <div class="sol-fg" id="sol-fg-filial-destino" style="display:none">
           <label class="sol-label">Filial de Destino <span class="sol-required">*</span></label>

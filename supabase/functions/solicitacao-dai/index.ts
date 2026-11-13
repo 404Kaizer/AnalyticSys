@@ -72,16 +72,23 @@ const CARGOS_VALIDOS = ['Operador', 'Regional', 'Líder Técnico'];
 const CATEGORIA_TRANSFERENCIA = 'Transferência de material entre filiais';
 const CATEGORIA_CANTO = 'Teste de canto';
 const CATEGORIA_CUBAGEM = 'Cubagem de agregados';
+const CATEGORIA_COLETA = 'Coleta de material';
 const CATEGORIAS_SITUACAO_VALIDAS = [
   CATEGORIA_CANTO,
   CATEGORIA_CUBAGEM,
   'Perda de material devido a contaminação',
   'Perda de material por motivos climáticos ou de terreno',
-  'Coleta de material contaminado',
-  'Coleta de material para substituição',
+  CATEGORIA_COLETA,
   'Pesagem manual (fora da automação)',
   CATEGORIA_TRANSFERENCIA,
 ];
+// Motivo da coleta — mesma lista do <select id="sol-motivo">; "Outro" chega
+// como "Outro: <texto do operador>".
+const MOTIVOS_COLETA = ['Contaminação', 'Qualidade', 'Substituição', 'Sem uso', 'Sem identificação', 'Teste em laboratório', 'Uso na central'];
+const MOTIVO_MAX = 200;
+// Na coleta o material pode ser "SEM IDENTIFICAÇÃO": aí o operador informa a
+// categoria, que decide o analista.
+const SEM_IDENTIFICACAO = 'SEM IDENTIFICAÇÃO';
 
 const UNIDADES_CANTO = ['kg', 'L'];
 const CANTOS_UNICO_CATEGORIAS = ['Aditivo', 'Adição'];
@@ -302,6 +309,10 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
   if (descricao.length > LIMITES.descricao) erros.push('Descrição muito longa.');
   else if (!descricao && categoriaSituacao !== CATEGORIA_CUBAGEM) erros.push('Descrição do ocorrido é obrigatória.');
   if (!CATEGORIAS_SITUACAO_VALIDAS.includes(categoriaSituacao)) erros.push('Categoria de situação inválida.');
+  const motivoIn = String(payload.motivo ?? '').trim();
+  const motivo = categoriaSituacao !== CATEGORIA_COLETA ? null
+    : MOTIVOS_COLETA.includes(motivoIn) || (/^Outro: \S/.test(motivoIn) && motivoIn.length <= MOTIVO_MAX) ? motivoIn : '';
+  if (motivo === '') erros.push('Informe o motivo da coleta.');
   if (categoriaSituacao === CATEGORIA_TRANSFERENCIA) {
     if (!isStr(filialDestino, LIMITES.central)) erros.push('Filial de destino é obrigatória para transferência entre filiais.');
     else if (normText(filialDestino) === normText(central)) erros.push('A filial de destino não pode ser igual à central de origem.');
@@ -479,10 +490,15 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
       const grupoMaterial = String(rec.grupoMaterial ?? '').trim();
       const peso = numOk(rec.peso, LIMITES.pesoMax);
       if (!isStr(grupoMaterial, LIMITES.grupoMaterial)) return json({ error: 'Material inválido em um dos itens.' }, 400);
-      const categoria = categoriaDoGrupo(grupoMaterial);
-      if (!categoria) return json({ error: `Material "${grupoMaterial}" não reconhecido. Selecione uma opção da lista.` }, 400);
+      const semId = categoriaSituacao === CATEGORIA_COLETA && normText(grupoMaterial) === normText(SEM_IDENTIFICACAO);
+      const categoria = semId
+        ? (CATEGORIAS_FIXAS.includes(String(rec.categoria ?? '')) ? String(rec.categoria) : null)
+        : categoriaDoGrupo(grupoMaterial);
+      if (!categoria) {
+        return json({ error: semId ? 'Selecione a categoria do material sem identificação.' : `Material "${grupoMaterial}" não reconhecido. Selecione uma opção da lista.` }, 400);
+      }
       if (peso === null) return json({ error: `Peso inválido para "${grupoMaterial}".` }, 400);
-      itens.push({ tipo: 'material', categoria, grupoMaterial, peso });
+      itens.push({ tipo: 'material', categoria, grupoMaterial: semId ? SEM_IDENTIFICACAO : grupoMaterial, peso });
     }
   }
 
@@ -522,6 +538,7 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
     regional_central: filial.regional || null,
     data_ocorrido: dataOcorrido,
     categoria_situacao: categoriaSituacao,
+    motivo,
     filial_destino: filialDestinoValidada || null,
     descricao,
     itens: itens.filter((i) => i.categoria === categoria),

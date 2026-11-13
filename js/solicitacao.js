@@ -28,6 +28,10 @@ const ANEXO_TIPOS_ACEITOS = /^image\/|^application\/pdf$|^application\/msword$|w
 const CATEGORIA_TRANSFERENCIA = 'Transferência de material entre filiais';
 const CATEGORIA_CANTO = 'Teste de canto';
 const CATEGORIA_CUBAGEM = 'Cubagem de agregados';
+const CATEGORIA_COLETA = 'Coleta de material';
+// Só na coleta: material sem identificação, com a categoria escolhida pelo
+// operador (decide o analista).
+const SEM_IDENTIFICACAO = 'SEM IDENTIFICAÇÃO';
 const CATEGORIAS_MATERIAL_CANTO = ['Aglomerante', 'Agregado Graúdo', 'Agregado Miúdo', 'Aditivo', 'Adição'];
 const CANTOS_UNICO_CATEGORIAS = ['Aditivo', 'Adição'];
 const CATEGORIAS_AGREGADO = ['Agregado Graúdo', 'Agregado Miúdo'];
@@ -148,6 +152,11 @@ function validarSecaoOQueAconteceu() {
     if (!filialDestino) return _erro('Selecione a filial de destino.');
     if (filialDestino === central) return _erro('A filial de destino não pode ser igual à central de origem.');
   }
+  if (categoriaSituacao === CATEGORIA_COLETA) {
+    const motivo = _valorAtual('sol-motivo');
+    if (!motivo) return _erro('Selecione o motivo da coleta.');
+    if (motivo === 'Outro' && !_valorAtual('sol-motivo-outro')) return _erro('Descreva o motivo da coleta.');
+  }
   if (!_itensMateriais.length) return _erro('Adicione ao menos um item.');
 
   for (const it of _itensMateriais) {
@@ -177,6 +186,7 @@ function validarSecaoOQueAconteceu() {
       }
     } else {
       if (!it.material) return _erro('Selecione o material em todas as linhas adicionadas (ou remova as vazias).');
+      if (it.material === SEM_IDENTIFICACAO && !it.categoriaSemId) return _erro('Selecione a categoria do material sem identificação.');
       if (!_positivo(it.peso)) return _erro(`Informe um peso válido para "${it.material}".`);
     }
   }
@@ -238,9 +248,10 @@ function popularCentrais() {
     + _catalogo.centrais.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 }
 
-function _materialOptionsHtml(selecionado, soCategorias) {
+function _materialOptionsHtml(selecionado, soCategorias, comSemId) {
   const grupos = _catalogo.materiaisPorCategoria || {};
   let html = '<option value="">Selecione o material</option>';
+  if (comSemId) html += `<option value="${SEM_IDENTIFICACAO}" ${selecionado === SEM_IDENTIFICACAO ? 'selected' : ''}>${SEM_IDENTIFICACAO}</option>`;
   Object.keys(grupos).forEach((categoria) => {
     if (soCategorias && !soCategorias.includes(categoria)) return;
     const itens = grupos[categoria];
@@ -265,6 +276,10 @@ function onCategoriaSituacaoChange() {
     sel.value = '';
   }
   document.getElementById('sol-campos-situacao').style.display = val ? '' : 'none';
+  document.getElementById('sol-fg-motivo').style.display = val === CATEGORIA_COLETA ? '' : 'none';
+  if (val !== CATEGORIA_COLETA) {
+    _itensMateriais.forEach((it) => { if (it.material === SEM_IDENTIFICACAO) it.material = ''; });
+  }
   // Cubagem não pede descrição — os dados da carreta já dizem tudo.
   document.getElementById('sol-fg-descricao').style.display = val === CATEGORIA_CUBAGEM ? 'none' : '';
   const addLabel = document.getElementById('sol-add-item-label');
@@ -275,6 +290,20 @@ function onCategoriaSituacaoChange() {
   _renderItensMateriais();
 }
 window.onCategoriaSituacaoChange = onCategoriaSituacaoChange;
+
+function onMotivoChange() {
+  const outro = document.getElementById('sol-motivo-outro');
+  outro.style.display = _valorAtual('sol-motivo') === 'Outro' ? '' : 'none';
+  if (outro.style.display) outro.value = '';
+}
+window.onMotivoChange = onMotivoChange;
+
+// "SEM IDENTIFICAÇÃO" mostra/esconde o campo de categoria → re-renderiza.
+function _onMaterialChange(id, value) {
+  _setCampo(id, 'material', value);
+  _renderItensMateriais();
+}
+window._onMaterialChange = _onMaterialChange;
 
 function _popularFilialDestino() {
   const origem = _valorAtual('sol-central');
@@ -291,7 +320,7 @@ function _popularFilialDestino() {
 function _novoItemMaterial() {
   return {
     id: 'im' + (_itemSeq++),
-    material: '', peso: '',
+    material: '', peso: '', categoriaSemId: '',
     // teste de canto
     categoriaMaterial: '', unidade: 'kg', qtdCantos: 4, referencia: '', cantos: ['', '', '', ''],
     // cubagem
@@ -458,14 +487,23 @@ function _inputNum(id, campo, valor, placeholder) {
 }
 
 function _htmlItemMaterial(it) {
+  const coleta = _valorAtual('sol-categoria-situacao') === CATEGORIA_COLETA;
+  const semId = coleta && it.material === SEM_IDENTIFICACAO;
   return `
     <div class="sol-item-row" data-item-id="${it.id}">
       <div class="sol-fg">
         <label class="sol-label">Material <span class="sol-required">*</span> <span class="sol-hint">(grupo SAP)</span></label>
-        <select class="sol-select" onchange="_setCampo('${it.id}', 'material', this.value)">
-          ${_materialOptionsHtml(it.material)}
+        <select class="sol-select" onchange="_onMaterialChange('${it.id}', this.value)">
+          ${_materialOptionsHtml(it.material, null, coleta)}
         </select>
       </div>
+      ${semId ? `<div class="sol-fg">
+        <label class="sol-label">Categoria <span class="sol-required">*</span></label>
+        <select class="sol-select" onchange="_setCampo('${it.id}', 'categoriaSemId', this.value)">
+          <option value="">Selecione</option>
+          ${CATEGORIAS_MATERIAL_CANTO.map((c) => `<option value="${c}" ${it.categoriaSemId === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>` : ''}
       <div class="sol-fg sol-fg-peso">
         <label class="sol-label">Peso (kg) <span class="sol-required">*</span></label>
         ${_inputNum(it.id, 'peso', it.peso)}
@@ -1012,7 +1050,10 @@ function _itensPayload(situacao) {
         : { comprimento: _num(i.comprimento), largura: _num(i.largura), alturas: i.alturas.map(_num) }),
     }));
   }
-  return _itensMateriais.map((i) => ({ grupoMaterial: i.material, peso: _num(i.peso) }));
+  return _itensMateriais.map((i) => ({
+    grupoMaterial: i.material, peso: _num(i.peso),
+    ...(i.material === SEM_IDENTIFICACAO ? { categoria: i.categoriaSemId } : {}),
+  }));
 }
 
 async function enviarSolicitacao(ev) {
@@ -1039,6 +1080,8 @@ async function enviarSolicitacao(ev) {
         dataOcorrido: _valorAtual('sol-data'),
         categoriaSituacao,
         filialDestino: categoriaSituacao === CATEGORIA_TRANSFERENCIA ? _valorAtual('sol-filial-destino') : null,
+        motivo: categoriaSituacao !== CATEGORIA_COLETA ? null
+          : _valorAtual('sol-motivo') === 'Outro' ? 'Outro: ' + _valorAtual('sol-motivo-outro') : _valorAtual('sol-motivo'),
         descricao: _valorAtual('sol-descricao'),
         itens: _itensPayload(categoriaSituacao),
         informantes: _informantes.map((i) => ({ nome: i.nome, cargo: i.cargo, contato: i.contato, assinatura: i.assinatura })),

@@ -92,7 +92,7 @@ const SOL_PROC = [
     _cA, _cS]],
 ];
 const SOL_COLS_MOV = [_cP, _cR, _cO, _cC,
-  ['Situação', (s) => _solEsc(s.categoria_situacao)],
+  ['Situação', (s) => _solEsc(s.categoria_situacao) + (s.motivo ? ` <span style="color:var(--text3)">· ${_solEsc(s.motivo)}</span>` : '')],
   ['Categoria', (s) => _solEsc(s.categoria)],
   _cA, _cS];
 const SOL_PROCEDIMENTOS = new Set(SOL_PROC.map((p) => p[2]));
@@ -194,7 +194,7 @@ function _solFiltradas() {
   const [, , fn] = SOL_FILTROS.find(([k]) => k === _sol.filtro) || SOL_FILTROS[0];
   const q = _solNorm(_sol.busca);
   return _solDoTipo().filter((s) => fn(s) && (!q || _solNorm([
-    s.protocolo, s.central, s.categoria_situacao, s.categoria, _solAnalista(s),
+    s.protocolo, s.central, s.categoria_situacao, s.motivo, s.categoria, _solAnalista(s),
     ...(s.informantes || []).map((i) => i.nome),
     ...(s.itens || []).map((i) => [i.grupoMaterial, i.fornecedor, i.nf].join(' ')),
   ].join(' ')).includes(q)));
@@ -341,6 +341,7 @@ async function solAbrir(id) {
       ${_solCampo('Regional', _solEsc(s.regional_central || '—'))}
       ${_solCampo('Data do ocorrido', _solData(s.data_ocorrido))}
       ${s.filial_destino ? _solCampo('Filial de destino', _solEsc(s.filial_destino)) : ''}
+      ${s.motivo ? _solCampo('Motivo da coleta', _solEsc(s.motivo)) : ''}
       ${_solCampo('Analista', _solEsc(_solAnalista(s)))}
     </div>
     <div class="sol-det-sec">Itens</div>
