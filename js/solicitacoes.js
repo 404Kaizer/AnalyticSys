@@ -18,19 +18,33 @@ const SOL_STATUS = {
   pendente:   { label: 'Pendente',   badge: 'badge-amber' },
   em_analise: { label: 'Em análise', badge: 'badge-blue' },
   concluida:  { label: 'Concluída',  badge: 'badge-green' },
-  recusada:   { label: 'Recusada',   badge: 'badge-red' },
+  recusada:   { label: 'Recusada',   badge: 'badge-red' },   // legado (Recusar saiu em 13/11/2026)
+  excluida:   { label: 'Excluído',   badge: 'badge-red' },
 };
+// Cubagem é só registro: sem status nem andamento (13/11/2026). O banco
+// grava 'pendente' por padrão — a tela ignora.
+const SOL_CUBAGEM = 'Cubagem de agregados';
+const _solSemStatus = (s) => s.categoria_situacao === SOL_CUBAGEM;
+const _solAtivo = (s) => s.status !== 'excluida';
+const _solAberta = (s) => !_solSemStatus(s) && (s.status === 'pendente' || s.status === 'em_analise');
 const SOL_FILTROS = [
-  ['abertas', 'Abertas', (s) => s.status === 'pendente' || s.status === 'em_analise'],
+  ['abertas', 'Abertas', _solAberta],
   ['pendente', 'Pendentes', (s) => s.status === 'pendente'],
   ['em_analise', 'Em análise', (s) => s.status === 'em_analise'],
   ['concluida', 'Concluídas', (s) => s.status === 'concluida'],
-  ['recusada', 'Recusadas', (s) => s.status === 'recusada'],
-  ['todas', 'Todas', () => true],
+  ['todas', 'Todas', _solAtivo],
+  ['excluida', 'Excluídos', (s) => s.status === 'excluida'],
+];
+const SOL_FILTROS_CUBAGEM = [
+  ['todas', 'Registros', _solAtivo],
+  ['excluida', 'Excluídos', (s) => s.status === 'excluida'],
 ];
 const SOL_CATEGORIAS_AGREGADO = ['Agregado Graúdo', 'Agregado Miúdo'];
 
-const _sol = { lista: [], tipo: 'procedimento', proc: 'cubagem', filtro: 'abertas', busca: '', carregando: false, erro: '', abertaId: null };
+const _sol = {
+  lista: [], tipo: 'procedimento', proc: 'cubagem', filtro: 'abertas', busca: '', carregando: false, erro: '', abertaId: null,
+  f: { regional: '', central: '', categoria: '', material: '', de: '', ate: '' }, // filtros da barra
+};
 
 const _solEsc = (s) => escapeHtml(String(s ?? ''));
 const _solNum = (n, casas = 2) => (n === null || n === undefined || !Number.isFinite(Number(n)))
@@ -79,7 +93,7 @@ const SOL_PROC = [
     ['Documento (kg)', (s, i) => _solNum(i.nfKg), true],
     ['Aferido (kg)', (s, i) => _solNum(i.aferidoKg), true],
     ['Variação', (s, i) => _solVar(i.variacaoKg, i.variacaoPct), true],
-    _cA, _cS]],
+    _cA]],
   ['canto', 'Teste de canto', 'Teste de canto', 'ti-scale', [_cP, _cR, _cO, _cC,
     ['Categoria', (s, i) => _solEsc(i.categoriaMaterial)],
     ['Referência', (s, i) => `${_solNum(i.referencia)} ${_solEsc(i.unidade)}`, true],
@@ -137,7 +151,7 @@ async function _solAtualizarBadge() {
   const el = document.getElementById('sol-tab-badge');
   if (!el || !window.supabaseClient) return;
   const { count, error } = await window.supabaseClient.from('solicitacoes')
-    .select('id', { count: 'exact', head: true }).eq('status', 'pendente');
+    .select('id', { count: 'exact', head: true }).eq('status', 'pendente').neq('categoria_situacao', SOL_CUBAGEM);
   if (error) return;
   el.textContent = count > 99 ? '99+' : String(count || 0);
   el.style.display = count ? '' : 'none';
@@ -187,6 +201,10 @@ function solRealtimeInit() {
     .channel('solicitacoes_realtime')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'solicitacoes' }, (p) => handle(p.new, 'INSERT'))
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'solicitacoes' }, (p) => handle(p.new, 'UPDATE'))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'solicitacoes' }, (p) => {
+      _sol.lista = _sol.lista.filter((s) => s.id !== p.old?.id); // "Apagar excluídos de vez" em outra sessão
+      solRender();
+    })
     .subscribe((status) => {
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Solicitações] Canal Realtime com problema:', status);
     });
@@ -208,22 +226,47 @@ window.solCopiarLinkFormulario = solCopiarLinkFormulario;
 function solFiltro(k) { _sol.filtro = k; solRender(); }
 window.solFiltro = solFiltro;
 
-function solTipo(k) { _sol.tipo = k; solRender(); }
+// Trocar de aba volta para "Abertas" (a cubagem cai em "Registros" sozinha).
+function solTipo(k) { _sol.tipo = k; _sol.filtro = 'abertas'; solRender(); }
 window.solTipo = solTipo;
 
-function solProc(k) { _sol.proc = k; solRender(); }
+function solProc(k) { _sol.proc = k; _sol.filtro = 'abertas'; solRender(); }
 window.solProc = solProc;
 
-function solBuscar(v) { _sol.busca = v; solRender(); }
+function solBuscar(v) {
+  _sol.busca = v;
+  solRender();
+  // solRender recria a barra — devolve o foco ao campo de busca.
+  const i = document.getElementById('sol-busca');
+  if (i) { i.focus(); i.setSelectionRange(v.length, v.length); }
+}
 window.solBuscar = solBuscar;
 
+function solFiltroCampo(campo, v) { _sol.f[campo] = v; solRender(); }
+window.solFiltroCampo = solFiltroCampo;
+function solLimparFiltros() { Object.keys(_sol.f).forEach((k) => { _sol.f[k] = ''; }); solRender(); }
+window.solLimparFiltros = solLimparFiltros;
+
 // ── Lista ────────────────────────────────────────────────────────────
-const _solDoTipo = () => _sol.tipo === 'procedimento'
+const _solMateriais = (s) => (s.itens || []).map((i) => i.grupoMaterial || i.categoriaMaterial).filter(Boolean);
+// Barra de filtros (regional, central, categoria, material, período do ocorrido).
+const _solPassaFiltros = (s) => {
+  const f = _sol.f;
+  return (!f.regional || s.regional_central === f.regional)
+    && (!f.central || s.central === f.central)
+    && (!f.categoria || s.categoria === f.categoria)
+    && (!f.material || _solMateriais(s).includes(f.material))
+    && (!f.de || String(s.data_ocorrido) >= f.de)
+    && (!f.ate || String(s.data_ocorrido) <= f.ate);
+};
+const _solDoTipo = () => (_sol.tipo === 'procedimento'
   ? _sol.lista.filter((s) => s.categoria_situacao === _solProcAtual()[2])
-  : _sol.lista.filter(SOL_TIPOS[1][3]);
+  : _sol.lista.filter(SOL_TIPOS[1][3])).filter(_solPassaFiltros);
+const _solFiltrosStatus = () => (_sol.tipo === 'procedimento' && _sol.proc === 'cubagem' ? SOL_FILTROS_CUBAGEM : SOL_FILTROS);
 
 function _solFiltradas() {
-  const [, , fn] = SOL_FILTROS.find(([k]) => k === _sol.filtro) || SOL_FILTROS[0];
+  const lista = _solFiltrosStatus();
+  const [, , fn] = lista.find(([k]) => k === _sol.filtro) || lista[0];
   const q = _solNorm(_sol.busca);
   return _solDoTipo().filter((s) => fn(s) && (!q || _solNorm([
     s.protocolo, s.central, s.categoria_situacao, s.motivo, s.categoria, _solAnalista(s),
@@ -236,17 +279,24 @@ function solRender() {
   const el = document.getElementById('sol-page-body');
   if (!el) return;
   const doTipo = _solDoTipo();
-  const pills = SOL_FILTROS.map(([k, rot, fn]) =>
+  const filtros = _solFiltrosStatus();
+  if (!filtros.some(([k]) => k === _sol.filtro)) _sol.filtro = filtros[0][0];
+  const pills = filtros.map(([k, rot, fn]) =>
     `<button class="pim-month-pill${k === _sol.filtro ? ' active' : ''}" type="button" onclick="solFiltro('${k}')">${rot} <b>${doTipo.filter(fn).length}</b></button>`).join('');
-  // Contador da aba = solicitações em aberto (pendente/em análise) daquele tipo.
-  const abertas = SOL_FILTROS[0][2];
+  // Contador da aba = registros em aberto (pendente/em análise) daquele tipo; cubagem não tem.
   const abas = SOL_TIPOS.map(([k, rot, icon, fn]) =>
-    `<button class="tab-btn${k === _sol.tipo ? ' active' : ''}" type="button" onclick="solTipo('${k}')"><i class="ti ${icon}"></i> ${rot} <b>${_sol.lista.filter((s) => fn(s) && abertas(s)).length}</b></button>`).join('');
+    `<button class="tab-btn${k === _sol.tipo ? ' active' : ''}" type="button" onclick="solTipo('${k}')"><i class="ti ${icon}"></i> ${rot} <b>${_sol.lista.filter((s) => fn(s) && _solAberta(s)).length}</b></button>`).join('');
 
   const proc = _sol.tipo === 'procedimento';
-  const subAbas = proc ? `<div class="tabs" style="margin-bottom:12px">${SOL_PROC.map(([k, rot, sit, icon]) =>
-    `<button class="tab-btn${k === _sol.proc ? ' active' : ''}" type="button" onclick="solProc('${k}')"><i class="ti ${icon}"></i> ${rot} <b>${_sol.lista.filter((s) => s.categoria_situacao === sit && abertas(s)).length}</b></button>`).join('')}</div>` : '';
-  const cols = proc ? _solProcAtual()[4] : SOL_COLS_MOV;
+  const subAbas = proc ? `<div class="tabs" style="margin-bottom:12px">${SOL_PROC.map(([k, rot, sit, icon]) => {
+    const n = sit === SOL_CUBAGEM ? '' : ` <b>${_sol.lista.filter((s) => s.categoria_situacao === sit && _solAberta(s)).length}</b>`;
+    return `<button class="tab-btn${k === _sol.proc ? ' active' : ''}" type="button" onclick="solProc('${k}')"><i class="ti ${icon}"></i> ${rot}${n}</button>`;
+  }).join('')}</div>` : '';
+  const excluidos = _sol.filtro === 'excluida';
+  // Última coluna: excluir (ou restaurar, na lista de excluídos).
+  const cols = [...(proc ? _solProcAtual()[4] : SOL_COLS_MOV), ['', (s) => excluidos
+    ? `<button class="btn btn-sm" title="Restaurar" onclick="event.stopPropagation();solRestaurar('${s.id}')"><i class="ti ti-arrow-back-up"></i></button>`
+    : `<button class="btn btn-sm sol-btn-excluir" title="Excluir" onclick="event.stopPropagation();solExcluir('${s.id}')"><i class="ti ti-trash"></i></button>`, true]];
   const td = (dir) => dir ? ' style="text-align:right"' : '';
 
   // Procedimentos: uma linha por item (carreta, teste…); movimentações: uma por solicitação.
@@ -255,9 +305,27 @@ function solRender() {
   const corpo = _sol.carregando && !_sol.lista.length ? vazio('ti-loader', 'Carregando…')
     : _sol.erro ? vazio('ti-alert-triangle', 'Falha ao carregar: ' + _solEsc(_sol.erro))
     : !rows.length ? vazio('ti-inbox', 'Nenhum registro neste filtro.')
-    : rows.map(([s, i]) => `<tr style="cursor:pointer" onclick="solAbrir('${s.id}')">
+    : rows.map(([s, i]) => `<tr style="cursor:pointer" onclick="solAbrir('${s.id}')"${excluidos && s.status_obs ? ` title="Excluído por ${_solEsc(s.status_por || '—')}: ${_solEsc(s.status_obs)}"` : ''}>
         ${cols.map(([, fn, dir]) => `<td${td(dir)}>${fn(s, i)}</td>`).join('')}
       </tr>`).join('');
+
+  // Opções dos filtros = valores que existem nos registros carregados.
+  const opts = (campo, rot, valores) => {
+    const v = [...new Set(valores.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
+    return `<select class="form-input sol-filtro" onchange="solFiltroCampo('${campo}', this.value)">
+      <option value="">${rot}</option>${v.map((x) => `<option value="${_solEsc(x)}"${x === _sol.f[campo] ? ' selected' : ''}>${_solEsc(x)}</option>`).join('')}</select>`;
+  };
+  const algumFiltro = Object.values(_sol.f).some(Boolean);
+  const barra = `<div class="sol-filtros">
+    ${opts('regional', 'Todas as regionais', _sol.lista.map((s) => s.regional_central))}
+    ${opts('central', 'Todas as centrais', _sol.lista.map((s) => s.central))}
+    ${opts('categoria', 'Todas as categorias', _sol.lista.map((s) => s.categoria))}
+    ${opts('material', 'Todos os materiais', _sol.lista.flatMap(_solMateriais))}
+    <label class="sol-filtro-data">Ocorrido de <input class="form-input" type="date" value="${_solEsc(_sol.f.de)}" onchange="solFiltroCampo('de', this.value)"></label>
+    <label class="sol-filtro-data">até <input class="form-input" type="date" value="${_solEsc(_sol.f.ate)}" onchange="solFiltroCampo('ate', this.value)"></label>
+    ${algumFiltro ? '<button class="btn btn-sm" onclick="solLimparFiltros()"><i class="ti ti-filter-off"></i> Limpar filtros</button>' : ''}
+    ${excluidos && rows.length ? '<button class="btn btn-sm sol-btn-excluir" style="margin-left:auto" onclick="solLimparExcluidos()"><i class="ti ti-trash-x"></i> Apagar excluídos de vez</button>' : ''}
+  </div>`;
 
   el.innerHTML = `<div class="tabs" style="margin-bottom:12px" title="O número é de registros em aberto">${abas}</div>${subAbas}
   <div class="table-card">
@@ -265,10 +333,11 @@ function solRender() {
       <span class="table-title"><i class="ti ti-inbox"></i> Registros do formulário público</span>
       <div class="table-toolbar">
         ${pills}
-        <input class="form-input" style="width:220px" type="text" placeholder="Buscar protocolo, central, NF…" value="${_solEsc(_sol.busca)}" oninput="solBuscar(this.value)">
+        <input class="form-input" id="sol-busca" style="width:220px" type="text" placeholder="Buscar protocolo, central, NF…" value="${_solEsc(_sol.busca)}" oninput="solBuscar(this.value)">
         <button class="btn" onclick="solCarregar()" title="Recarregar"><i class="ti ti-refresh"></i></button>
       </div>
     </div>
+    ${barra}
     <div class="table-scroll" style="max-height:calc(100vh - 200px)"><table>
       <thead><tr>${cols.map(([rot, , dir]) => `<th${td(dir)}>${rot}</th>`).join('')}</tr></thead>
       <tbody>${corpo}</tbody>
@@ -385,8 +454,9 @@ async function solAbrir(id) {
   if (!s) return;
   _sol.abertaId = id;
   const st = SOL_STATUS[s.status] || SOL_STATUS.pendente;
+  const semStatus = _solSemStatus(s) && s.status !== 'excluida'; // cubagem: só registro
 
-  document.getElementById('sol-modal-title').innerHTML = `<i class="ti ti-inbox"></i> ${_solEsc(s.protocolo)} <span class="badge ${st.badge}" style="margin-left:8px">${st.label}</span>`;
+  document.getElementById('sol-modal-title').innerHTML = `<i class="ti ti-inbox"></i> ${_solEsc(s.protocolo)}${semStatus ? '' : ` <span class="badge ${st.badge}" style="margin-left:8px">${st.label}</span>`}`;
   document.getElementById('sol-modal-sub').textContent = `${s.categoria_situacao}${s.motivo ? ' · ' + s.motivo : ''} · ${s.categoria} · recebida em ${_solDataHora(s.created_at)}`;
 
   const informantes = s.informantes || [];
@@ -429,18 +499,20 @@ async function solAbrir(id) {
     <div id="sol-det-anexos">${anexos.length
       ? anexos.map((a, idx) => `<div class="dai-anexo-chip"><i class="ti ti-paperclip"></i><span class="dai-anexo-chip-nome" id="sol-anexo-${idx}">${_solEsc(a.nome)}</span><span class="dai-anexo-chip-tam">${formatBytes(a.tamanho)}</span></div>`).join('')
       : '<div class="sol-nf-alerta"><i class="ti ti-paperclip-off"></i> Nenhum comprovante anexado — o informante declarou se responsabilizar pela falta de prova.</div>'}</div>
-    <div class="sol-det-sec">Andamento</div>
+    ${semStatus ? '' : `<div class="sol-det-sec">Andamento</div>
     ${s.status_em ? `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">${st.label} por ${_solEsc(s.status_por || '—')} em ${_solDataHora(s.status_em)}${s.status_obs ? `<div class="sol-det-desc" style="margin-top:6px">${_solEsc(s.status_obs)}</div>` : ''}</div>` : ''}
-    <textarea class="form-input" id="sol-modal-obs" rows="3" placeholder="Observação do analista (obrigatória para concluir ou recusar)" style="width:100%;resize:vertical"></textarea>`;
+    ${s.status === 'excluida' ? '' : '<textarea class="form-input" id="sol-modal-obs" rows="2" placeholder="Observação do analista (opcional)" style="width:100%;resize:vertical"></textarea>'}`}`;
 
-  const btn = (status, icon, rot, cls) => `<button class="btn ${cls || ''}" onclick="solMudarStatus('${status}')"><i class="ti ${icon}"></i> ${rot}</button>`;
+  // Pendente → Iniciar análise → Concluir (abre a DAI preenchida). Cubagem e
+  // excluídos não têm ações aqui (excluir/restaurar ficam na linha da tabela).
+  const btn = (onclick, icon, rot, cls) => `<button class="btn ${cls || ''}" onclick="${onclick}"><i class="ti ${icon}"></i> ${rot}</button>`;
+  const ativo = !semStatus && s.status !== 'excluida';
   const fechado = s.status === 'concluida' || s.status === 'recusada';
   document.getElementById('sol-modal-actions').innerHTML = `
     <button class="btn" style="margin-right:auto" onclick="closeModal('sol-modal')">Fechar</button>
-    ${s.status === 'pendente' ? btn('em_analise', 'ti-player-play', 'Iniciar análise') : ''}
-    ${fechado ? btn('em_analise', 'ti-arrow-back-up', 'Reabrir') : ''}
-    ${!fechado ? btn('recusada', 'ti-x', 'Recusar', 'admin-btn-danger') : ''}
-    ${!fechado ? btn('concluida', 'ti-check', 'Concluir', 'btn-primary') : ''}`;
+    ${ativo && s.status === 'pendente' ? btn("solMudarStatus('em_analise')", 'ti-player-play', 'Iniciar análise') : ''}
+    ${ativo && fechado ? btn("solMudarStatus('em_analise')", 'ti-arrow-back-up', 'Reabrir') : ''}
+    ${ativo && !fechado ? btn('solConcluirComDai()', 'ti-file-text', 'Concluir com DAI', 'btn-primary') : ''}`;
 
   openModal('sol-modal');
 
@@ -461,14 +533,8 @@ async function solAbrir(id) {
 }
 window.solAbrir = solAbrir;
 
-async function solMudarStatus(status) {
-  const s = _sol.lista.find((x) => x.id === _sol.abertaId);
-  if (!s) return;
-  const obs = (document.getElementById('sol-modal-obs')?.value || '').trim();
-  if ((status === 'concluida' || status === 'recusada') && !obs) {
-    toast('Escreva uma observação para concluir ou recusar.', 'error');
-    return;
-  }
+// Grava o andamento (só colunas de status — o resto é imutável para o analista).
+async function _solSalvarStatus(s, status, obs) {
   const patch = {
     status,
     status_obs: obs || null,
@@ -476,14 +542,123 @@ async function solMudarStatus(status) {
     status_em: new Date().toISOString(),
   };
   const { error } = await window.supabaseClient.from('solicitacoes').update(patch).eq('id', s.id);
-  if (error) { toast('Falha ao salvar: ' + error.message, 'error'); return; }
+  if (error) { toast('Falha ao salvar: ' + error.message, 'error'); return false; }
   Object.assign(s, patch);
-  toast(`Registro ${s.protocolo}: ${SOL_STATUS[status].label}.`, 'success');
   solRender();
   _solAtualizarBadge();
+  return true;
+}
+
+async function solMudarStatus(status) {
+  const s = _sol.lista.find((x) => x.id === _sol.abertaId);
+  if (!s) return;
+  const obs = (document.getElementById('sol-modal-obs')?.value || '').trim();
+  if (!await _solSalvarStatus(s, status, obs)) return;
+  toast(`Registro ${s.protocolo}: ${SOL_STATUS[status].label}.`, 'success');
   solAbrir(s.id);
 }
 window.solMudarStatus = solMudarStatus;
+
+// ── Excluir / restaurar / apagar de vez ──────────────────────────────
+function solExcluir(id) {
+  const s = _sol.lista.find((x) => x.id === id);
+  if (!s) return;
+  confirmarDestrutivo({
+    title: `Excluir ${s.protocolo}?`,
+    sub: `${s.categoria_situacao} · ${s.central}`,
+    body: `O registro sai das listas e vai para "Excluídos", de onde pode ser restaurado.
+      <textarea class="form-input" id="sol-excluir-obs" rows="3" placeholder="Motivo da exclusão (obrigatório)" style="width:100%;margin-top:10px;resize:vertical"></textarea>`,
+    confirmLabel: 'Excluir',
+    onConfirm: async () => {
+      const obs = (document.getElementById('sol-excluir-obs')?.value || '').trim();
+      if (!obs) { toast('Informe o motivo da exclusão.', 'error'); return; }
+      if (await _solSalvarStatus(s, 'excluida', obs)) toast(`Registro ${s.protocolo} excluído.`, 'success');
+    },
+  });
+}
+window.solExcluir = solExcluir;
+
+// ponytail: restaura como "pendente" (o status anterior não é guardado).
+async function solRestaurar(id) {
+  const s = _sol.lista.find((x) => x.id === id);
+  if (s && await _solSalvarStatus(s, 'pendente', null)) toast(`Registro ${s.protocolo} restaurado.`, 'success');
+}
+window.solRestaurar = solRestaurar;
+
+function solLimparExcluidos() {
+  const n = _sol.lista.filter((s) => s.status === 'excluida').length;
+  confirmarDestrutivo({
+    title: 'Apagar excluídos de vez?',
+    sub: `${n} registro(s) na lista de excluídos`,
+    body: 'Os registros excluídos que você pode ver serão apagados do banco. <strong>Não tem como desfazer.</strong>',
+    confirmLabel: 'Apagar de vez',
+    requireConsent: true,
+    consentLabel: 'Entendo que os registros serão apagados permanentemente.',
+    onConfirm: async () => {
+      const { data, error } = await window.supabaseClient.rpc('solicitacoes_limpar_excluidas');
+      if (error) { toast('Falha ao apagar: ' + error.message, 'error'); return; }
+      _sol.lista = _sol.lista.filter((s) => s.status !== 'excluida');
+      solRender();
+      toast(`${data ?? n} registro(s) apagado(s) de vez.`, 'success');
+    },
+  });
+}
+window.solLimparExcluidos = solLimparExcluidos;
+
+// ── Concluir com DAI ─────────────────────────────────────────────────
+// Abre o modal de DAI (dai.js) já preenchido com o registro. Quando a DAI é
+// gerada, gerarDocumentoAjuste chama window._daiAoGerar → o registro vira
+// "Concluída" com o número da DAI na observação.
+function solConcluirComDai() {
+  const s = _sol.lista.find((x) => x.id === _sol.abertaId);
+  if (!s || typeof abrirModalDai !== 'function') return;
+  const obs = (document.getElementById('sol-modal-obs')?.value || '').trim();
+  closeModal('sol-modal');
+  abrirModalDai();
+
+  const set = (el, v) => { if (el && v !== undefined && v !== null) el.value = v; };
+  const central = document.getElementById('dai-form-central');
+  if (central && s.central && ![...central.options].some((o) => o.value === s.central)) central.add(new Option(s.central, s.central));
+  set(central, s.central);
+  if (typeof _daiAtualizarCnpjPreview === 'function') _daiAtualizarCnpjPreview();
+  set(document.getElementById('dai-form-data-ocorrido'), s.data_ocorrido);
+
+  // Informantes (nome + cargo) — a 1ª linha já existe.
+  (s.informantes || []).forEach((inf, idx) => {
+    if (idx > 0) _daiAddInformanteRow();
+    const row = document.querySelector('#dai-informantes-rows .reg-individual-row:last-child');
+    set(row?.querySelector('[data-field="nome"]'), inf.nome);
+    set(row?.querySelector('[data-field="cargo"]'), inf.cargo);
+  });
+
+  // Itens: material + quantidade. Teste de canto não tem material/peso a
+  // ajustar definidos — o analista calcula (os dados vão na descrição).
+  const itens = (s.itens || []).filter((i) => i.tipo !== 'teste_canto');
+  itens.forEach((it, idx) => {
+    if (idx > 0) _daiAddItemRow();
+    const card = document.querySelector('#dai-itens-rows .dai-item-card:last-child');
+    const mat = card?.querySelector('[data-field="material"]');
+    if (mat && [...mat.options].some((o) => o.value === it.grupoMaterial)) mat.value = it.grupoMaterial;
+    set(card?.querySelector('[data-field="peso"]'), it.peso);
+  });
+
+  const linhas = [`${s.categoria_situacao}${s.motivo ? ` (${s.motivo})` : ''} — Registro Operacional ${s.protocolo}.`];
+  if (s.filial_destino) linhas.push(`Filial de destino: ${s.filial_destino}.`);
+  (s.itens || []).forEach((i) => {
+    if (i.tipo === 'teste_canto') linhas.push(`Teste de canto ${i.categoriaMaterial}: referência ${_solNum(i.referencia)} ${i.unidade}, média lida ${_solNum(i.media)} ${i.unidade} (${_solNum(i.variacaoPct)}%).`);
+    else if (i.unidade === 'L') linhas.push(`${i.grupoMaterial}: ${_solNum(i.peso)} L informados pelo operador.`);
+  });
+  if (s.descricao) linhas.push(s.descricao);
+  if ((s.anexos || []).length) linhas.push(`Comprovantes anexados no registro ${s.protocolo}.`);
+  set(document.getElementById('dai-form-descricao'), linhas.join('\n'));
+
+  window._daiAoGerar = async (dai) => {
+    if (await _solSalvarStatus(s, 'concluida', `Concluído com a ${dai.numero}${obs ? ` — ${obs}` : ''}`)) {
+      toast(`Registro ${s.protocolo} concluído com a ${dai.numero}.`, 'success');
+    }
+  };
+}
+window.solConcluirComDai = solConcluirComDai;
 
 // ── Entregas de agregados → formulário público (só ADM) ──────────────
 // Publica quem entregou qual material (grupo SAP) em qual central, a

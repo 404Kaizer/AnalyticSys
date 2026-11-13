@@ -345,6 +345,9 @@ function _daiPrimeiraOcorrenciaId(dai) {
 
 // ── Modal: abrir / popular ─────────────────────────────────
 function abrirModalDai() {
+  // Quem abre o modal pré-preenchido (ex.: "Concluir com DAI" em
+  // solicitacoes.js) define o callback DEPOIS desta chamada.
+  window._daiAoGerar = null;
   _daiAnexosPendentes = [];
   const central = document.getElementById('dai-form-central');
   const dataOc  = document.getElementById('dai-form-data-ocorrido');
@@ -866,6 +869,11 @@ async function gerarDocumentoAjuste() {
 
     closeModal('dai-modal');
     populateOcFiltros();
+    if (typeof window._daiAoGerar === 'function') {
+      const aoGerar = window._daiAoGerar;
+      window._daiAoGerar = null;
+      aoGerar(daiRecord);
+    }
 
     const pendentes = itens.filter(it => it.sapDocumento === DAI_SAP_PENDENTE).length;
     toast(

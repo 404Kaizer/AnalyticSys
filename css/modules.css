@@ -4886,6 +4886,9 @@ img { max-width: 100%; }
   white-space: nowrap;
   overflow: hidden;
   padding: 12px 8px 4px 12px;
+  /* A lista é flex em coluna com rolagem: sem isto, quando os itens passam
+     da altura, o rótulo encolhe e o texto fica cortado (.tab-item já tem). */
+  flex-shrink: 0;
 }
 .tab-group-label:first-child { padding-top: 2px; }
 .sidebar:not(:hover) .tab-group-label { opacity: 0; }
@@ -13670,9 +13673,9 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .sol-det-item { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 12px; margin-bottom: 10px; }
 .sol-det-desc { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 10px 12px; font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; }
 .sol-det-vazio { font-size: 12px; color: var(--text3); }
-.sol-det-assin { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.sol-det-assin { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 10px; }
 .sol-det-assin-card { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 10px 12px; }
-.sol-det-assin-img { background: #fff; border-radius: 6px; min-height: 70px; display: flex; align-items: center; justify-content: center; color: #8a8478; font-size: 11px; overflow: hidden; }
+.sol-det-assin-img { background: #fff; border-radius: 6px; min-height: 130px; display: flex; align-items: center; justify-content: center; color: #8a8478; font-size: 11px; overflow: hidden; }
 .sol-det-assin-img img { display: block; width: 100%; height: auto; }
 #sol-det-anexos { display: flex; flex-direction: column; gap: 6px; }
 #sol-det-anexos a { color: var(--accent); text-decoration: none; }
@@ -13706,4 +13709,12 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .sol-det-grupo-tit { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); margin-bottom: 6px; }
 .sol-det-grupo-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
 .sol-det-tabela { width: 100%; }
+
+/* Lista de registros — barra de filtros e botão de excluir na linha */
+.sol-filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.sol-filtros .form-input { width: auto; padding-top: 6px; padding-bottom: 6px; font-size: 12px; }
+.sol-filtro { max-width: 200px; }
+.sol-filtro-data { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3); }
+.sol-btn-excluir { color: var(--text3); }
+.sol-btn-excluir:hover { color: var(--red); border-color: var(--red-border); background: var(--red-bg); }
 .sol-det-tabela th, .sol-det-tabela td { padding: 8px 12px; }
