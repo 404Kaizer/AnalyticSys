@@ -233,7 +233,7 @@ async function solAbrir(id) {
     <div class="sol-det-sec">Itens</div>
     ${_solItensHtml(s)}
     <div class="sol-det-sec">Descrição do ocorrido</div>
-    <div class="sol-det-desc">${_solEsc(s.descricao)}</div>
+    <div class="sol-det-desc">${_solEsc(s.descricao) || "—"}</div>
     <div class="sol-det-sec">Informantes e assinaturas</div>
     <div class="sol-det-assin">${informantes.map((inf, idx) => `
       <div class="sol-det-assin-card">

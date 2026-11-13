@@ -32,7 +32,8 @@ const CATEGORIAS_MATERIAL_CANTO = ['Aglomerante', 'Agregado Graúdo', 'Agregado 
 const CANTOS_UNICO_CATEGORIAS = ['Aditivo', 'Adição'];
 const CATEGORIAS_AGREGADO = ['Agregado Graúdo', 'Agregado Miúdo'];
 const CARGOS = ['Operador', 'Regional', 'Líder Técnico'];
-const MAX_VALORES = 20; // pesagens / furos por cubagem
+const MAX_VALORES = 20; // pesagens por cubagem
+const MAX_FUROS = 9;    // furos na caçamba (cubagem por volume)
 
 // CRÍTICO: mesma origem do app principal — sem estas opções o supabase-js
 // reaproveitaria uma sessão logada em outra aba e o upload deixaria de ser
@@ -41,7 +42,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, 
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-let _catalogo = { centrais: [], materiaisPorCategoria: {}, fornecedores: [], fatores: [] };
+let _catalogo = { centrais: [], materiaisPorCategoria: {}, fornecedores: [], fatoresPorCategoria: {} };
 let _anexos = []; // { id, file, nome, tamanho, tipo, path, status: 'pendente'|'enviando'|'ok'|'erro' }
 let _anexoSeq = 0;
 let turnstileWidgetId = null;
@@ -177,7 +178,7 @@ function validarSecaoOQueAconteceu() {
     }
   }
 
-  if (!_valorAtual('sol-descricao')) return _erro('Descreva o ocorrido.');
+  if (categoriaSituacao !== CATEGORIA_CUBAGEM && !_valorAtual('sol-descricao')) return _erro('Descreva o ocorrido.');
   return true;
 }
 
@@ -260,6 +261,8 @@ function onCategoriaSituacaoChange() {
     wrap.style.display = 'none';
     sel.value = '';
   }
+  // Cubagem não pede descrição — os dados da carreta já dizem tudo.
+  document.getElementById('sol-fg-descricao').style.display = val === CATEGORIA_CUBAGEM ? 'none' : '';
   const addLabel = document.getElementById('sol-add-item-label');
   if (addLabel) {
     addLabel.textContent = val === CATEGORIA_CANTO ? 'Adicionar outro teste de canto'
@@ -354,12 +357,20 @@ function _calcCanto(it) {
 }
 
 // ── Cubagem ───────────────────────────────────────────────────────────
-// Fator M3→KG do ADM, mesma regra de _lookupFatorConversao (ui.js) e da
-// Edge Function. ponytail: regra copiada nos 3 lugares — mudar junto.
+// Fator M3→KG das Configurações do analista da categoria e do ADM (o
+// catálogo já manda nessa ordem). Fator do fornecedor > padrão do
+// material; mesma regra de _lookupFatorConversao (ui.js) e da Edge
+// Function. ponytail: regra copiada nos 3 lugares — mudar junto.
+function _categoriaDoMaterial(material) {
+  const grupos = _catalogo.materiaisPorCategoria || {};
+  return Object.keys(grupos).find((c) => (grupos[c] || []).includes(material)) || '';
+}
+
 function _lookupFatorM3(material, fornecedor) {
   const m = _normText(material);
   const f = _normText(fornecedor);
-  const cand = (_catalogo.fatores || []).filter((r) => r.grupo && m.includes(_normText(r.grupo)));
+  const fatores = (_catalogo.fatoresPorCategoria || {})[_categoriaDoMaterial(material)] || [];
+  const cand = fatores.filter((r) => r.grupo && m.includes(_normText(r.grupo)));
   if (!cand.length) return null;
   const esp = f ? cand.filter((r) => r.fornecedor && f.includes(_normText(r.fornecedor))) : [];
   const pool = esp.length ? esp : cand.filter((r) => !r.fornecedor);
@@ -531,7 +542,7 @@ window._rmPesagem = _rmPesagem;
 function _onQtdFurosChange(id, value) {
   const it = _item(id);
   if (!it) return;
-  const n = Math.min(MAX_VALORES, Math.max(1, parseInt(value, 10) || 1));
+  const n = Math.min(MAX_FUROS, Math.max(1, parseInt(value, 10) || 1));
   it.alturas = Array.from({ length: n }).map((_, idx) => it.alturas[idx] || '');
   _renderItensMateriais();
 }
@@ -569,7 +580,7 @@ function _htmlItemCubagem(it) {
          <div class="sol-fg">
            <label class="sol-label">Quantidade de furos <span class="sol-required">*</span></label>
            <select class="sol-select" onchange="_onQtdFurosChange('${it.id}', this.value)">
-             ${Array.from({ length: MAX_VALORES }).map((_, i) => `<option value="${i + 1}" ${it.alturas.length === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}
+             ${Array.from({ length: MAX_FUROS }).map((_, i) => `<option value="${i + 1}" ${it.alturas.length === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}
            </select>
          </div>
        </div>
@@ -988,7 +999,7 @@ async function boot() {
   document.getElementById('sol-form').addEventListener('submit', enviarSolicitacao);
 
   try {
-    _catalogo = { fornecedores: [], fatores: [], ...(await carregarCatalogo()) };
+    _catalogo = { fornecedores: [], fatoresPorCategoria: {}, ...(await carregarCatalogo()) };
     popularCentrais();
     _renderItensMateriais();
     _renderInformantes();

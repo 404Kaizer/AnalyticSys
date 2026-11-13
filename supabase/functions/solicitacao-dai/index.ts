@@ -54,7 +54,8 @@ const LIMITES = {
   contato: 100,
   pesoMax: 1_000_000,
   medidaMax: 100,      // metros (comprimento/largura/altura)
-  valoresMax: 20,      // pesagens ou furos por item
+  valoresMax: 20,      // pesagens por item
+  furosMax: 9,         // furos na caçamba por item
   anexosMax: 10,
   anexoNomeMax: 200,
   itensMax: 10,
@@ -177,14 +178,27 @@ async function obterAdminId(): Promise<string | null> {
   return data.id;
 }
 
-async function carregarFatoresM3(adminId: string): Promise<Fator[]> {
+// Fatores M3→KG por categoria de agregado: os do analista da categoria
+// primeiro, depois os do ADM (Configurações → Fatores de Conversão de
+// cada um). lookupFatorM3 usa sort estável, então num empate de
+// especificidade vence o do analista.
+async function carregarFatoresPorCategoria(adminId: string): Promise<Record<string, Fator[]>> {
+  const { data: mapa } = await admin.from('analistas_categoria')
+    .select('categoria, analista_user_id').in('categoria', CATEGORIAS_AGREGADO);
+  const ids = [...new Set([...(mapa || []).map((m) => m.analista_user_id as string), adminId])];
   const { data, error } = await admin.from('fatores_conversao')
-    .select('grupo, fornecedor, fator, um_origem, um_destino')
-    .eq('user_id', adminId);
-  if (error) { console.error('[solicitacao] Falha ao carregar fatores:', error); return []; }
-  return (data || [])
-    .filter((r) => r.um_origem === 'M3' && (r.um_destino || 'KG') === 'KG' && Number(r.fator) > 0)
-    .map((r) => ({ grupo: String(r.grupo || ''), fornecedor: String(r.fornecedor || ''), fator: Number(r.fator) }));
+    .select('user_id, grupo, fornecedor, fator, um_origem, um_destino')
+    .in('user_id', ids);
+  if (error) console.error('[solicitacao] Falha ao carregar fatores:', error);
+  const validos = (data || []).filter((r) => r.um_origem === 'M3' && (r.um_destino || 'KG') === 'KG' && Number(r.fator) > 0);
+  const out: Record<string, Fator[]> = {};
+  for (const cat of CATEGORIAS_AGREGADO) {
+    const analista = (mapa || []).find((m) => m.categoria === cat)?.analista_user_id as string | undefined;
+    const ordem = [...new Set([analista, adminId].filter(Boolean) as string[])];
+    out[cat] = ordem.flatMap((uid) => validos.filter((r) => r.user_id === uid)
+      .map((r) => ({ grupo: String(r.grupo || ''), fornecedor: String(r.fornecedor || ''), fator: Number(r.fator) })));
+  }
+  return out;
 }
 
 async function carregarFornecedores(): Promise<string[]> {
@@ -198,11 +212,11 @@ async function acaoCatalogo() {
   const adminId = await obterAdminId();
   if (!adminId) return json({ error: 'Catálogo indisponível no momento.' }, 503);
 
-  const [filiaisRes, materiaisRes, fornecedores, fatores] = await Promise.all([
+  const [filiaisRes, materiaisRes, fornecedores, fatoresPorCategoria] = await Promise.all([
     admin.from('filiais').select('origem, alias').eq('user_id', adminId),
     admin.from('materiais').select('alias, categoria').eq('user_id', adminId),
     carregarFornecedores(),
-    carregarFatoresM3(adminId),
+    carregarFatoresPorCategoria(adminId),
   ]);
   if (filiaisRes.error || materiaisRes.error) {
     console.error('[solicitacao] Falha ao carregar catálogo:', filiaisRes.error || materiaisRes.error);
@@ -232,7 +246,7 @@ async function acaoCatalogo() {
   });
   CATEGORIAS_FIXAS.forEach((c) => materiaisPorCategoria[c].sort((a, b) => a.localeCompare(b, 'pt-BR')));
 
-  return json({ centrais, materiaisPorCategoria, fornecedores, fatores });
+  return json({ centrais, materiaisPorCategoria, fornecedores, fatoresPorCategoria });
 }
 
 // ── Assinaturas (data URL PNG → Storage) ──────────────────────────────
@@ -272,7 +286,9 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
 
   const erros: string[] = [];
   if (!isStr(central, LIMITES.central)) erros.push('Central inválida.');
-  if (!isStr(descricao, LIMITES.descricao)) erros.push('Descrição do ocorrido é obrigatória.');
+  // Cubagem não pede descrição (os dados da carreta já dizem tudo).
+  if (descricao.length > LIMITES.descricao) erros.push('Descrição muito longa.');
+  else if (!descricao && categoriaSituacao !== CATEGORIA_CUBAGEM) erros.push('Descrição do ocorrido é obrigatória.');
   if (!CATEGORIAS_SITUACAO_VALIDAS.includes(categoriaSituacao)) erros.push('Categoria de situação inválida.');
   if (categoriaSituacao === CATEGORIA_TRANSFERENCIA) {
     if (!isStr(filialDestino, LIMITES.central)) erros.push('Filial de destino é obrigatória para transferência entre filiais.');
@@ -372,7 +388,7 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
       });
     }
   } else if (categoriaSituacao === CATEGORIA_CUBAGEM) {
-    const [fornecedoresCad, fatores] = await Promise.all([carregarFornecedores(), carregarFatoresM3(adminId)]);
+    const [fornecedoresCad, fatoresPorCategoria] = await Promise.all([carregarFornecedores(), carregarFatoresPorCategoria(adminId)]);
     for (const raw of itensIn) {
       const rec = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
       const grupoMaterial = String(rec.grupoMaterial ?? '').trim();
@@ -408,7 +424,7 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
         const arr = Array.isArray(rec.alturas) ? rec.alturas : [];
         alturas = arr.map((v) => numOk(v, LIMITES.medidaMax)) as number[];
         if (comprimento === null || largura === null) return json({ error: `Comprimento/largura da caçamba inválidos para a NF ${nf}.` }, 400);
-        if (!alturas.length || alturas.length > LIMITES.valoresMax || alturas.some((v) => v === null)) return json({ error: `Alturas dos furos inválidas para a NF ${nf}.` }, 400);
+        if (!alturas.length || alturas.length > LIMITES.furosMax || alturas.some((v) => v === null)) return json({ error: `Alturas dos furos inválidas para a NF ${nf}.` }, 400);
       } else {
         return json({ error: `Método de cubagem inválido para a NF ${nf}.` }, 400);
       }
@@ -416,7 +432,7 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
       // Tudo convertido pra KG. M3 depende do fator de densidade do ADM
       // (por material + fornecedor); sem fator, fica null e o analista
       // converte — nunca se inventa densidade.
-      const fatorRow = lookupFatorM3(fatores, grupoMaterial, fornecedor);
+      const fatorRow = lookupFatorM3(fatoresPorCategoria[categoria] || [], grupoMaterial, fornecedor);
       const fator = fatorRow ? fatorRow.fator : null;
       const nfKg = umNf === 'KG' ? pesoNf : umNf === 'TO' ? pesoNf * 1000 : (fator ? pesoNf * fator : null);
       const volumeM3 = metodo === 'volume' ? comprimento! * largura! * (alturas!.reduce((a, b) => a + b, 0) / alturas!.length) : null;
