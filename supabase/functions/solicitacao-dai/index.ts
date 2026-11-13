@@ -84,7 +84,7 @@ const CATEGORIAS_SITUACAO_VALIDAS = [
 ];
 // Motivo da coleta — mesma lista do <select id="sol-motivo">; "Outro" chega
 // como "Outro: <texto do operador>".
-const MOTIVOS_COLETA = ['Contaminação', 'Qualidade', 'Substituição', 'Sem uso', 'Sem identificação', 'Teste em laboratório', 'Uso na central'];
+const MOTIVOS_COLETA = ['Contaminação', 'Qualidade', 'Prazo de validade', 'Substituição', 'Sem uso', 'Sem identificação', 'Teste em laboratório', 'Uso na central'];
 const MOTIVO_MAX = 200;
 // Na coleta o material pode ser "SEM IDENTIFICAÇÃO": aí o operador informa a
 // categoria, que decide o analista.
@@ -498,7 +498,8 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
         return json({ error: semId ? 'Selecione a categoria do material sem identificação.' : `Material "${grupoMaterial}" não reconhecido. Selecione uma opção da lista.` }, 400);
       }
       if (peso === null) return json({ error: `Peso inválido para "${grupoMaterial}".` }, 400);
-      itens.push({ tipo: 'material', categoria, grupoMaterial: semId ? SEM_IDENTIFICACAO : grupoMaterial, peso });
+      // Aditivo é informado em litros no formulário (campo "Volume (L)").
+      itens.push({ tipo: 'material', categoria, grupoMaterial: semId ? SEM_IDENTIFICACAO : grupoMaterial, peso, unidade: categoria === 'Aditivo' ? 'L' : 'kg' });
     }
   }
 

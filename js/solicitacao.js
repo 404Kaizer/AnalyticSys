@@ -187,7 +187,7 @@ function validarSecaoOQueAconteceu() {
     } else {
       if (!it.material) return _erro('Selecione o material em todas as linhas adicionadas (ou remova as vazias).');
       if (it.material === SEM_IDENTIFICACAO && !it.categoriaSemId) return _erro('Selecione a categoria do material sem identificação.');
-      if (!_positivo(it.peso)) return _erro(`Informe um peso válido para "${it.material}".`);
+      if (!_positivo(it.peso)) return _erro(`Informe ${_emLitros(it) ? 'um volume' : 'um peso'} válido para "${it.material}".`);
     }
   }
 
@@ -486,6 +486,9 @@ function _inputNum(id, campo, valor, placeholder) {
   return `<input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="${placeholder || '0,00'}" value="${escapeHtml(valor)}" oninput="_setCampo('${id}', '${campo}', this.value, true)">`;
 }
 
+// Aditivo é informado em litros (Volume) — o servidor grava a unidade no item.
+const _emLitros = (it) => (it.material === SEM_IDENTIFICACAO ? it.categoriaSemId : _categoriaDoMaterial(it.material)) === 'Aditivo';
+
 function _htmlItemMaterial(it) {
   const coleta = _valorAtual('sol-categoria-situacao') === CATEGORIA_COLETA;
   const semId = coleta && it.material === SEM_IDENTIFICACAO;
@@ -499,13 +502,13 @@ function _htmlItemMaterial(it) {
       </div>
       ${semId ? `<div class="sol-fg">
         <label class="sol-label">Categoria <span class="sol-required">*</span></label>
-        <select class="sol-select" onchange="_setCampo('${it.id}', 'categoriaSemId', this.value)">
+        <select class="sol-select" onchange="_setCampo('${it.id}', 'categoriaSemId', this.value); _renderItensMateriais()">
           <option value="">Selecione</option>
           ${CATEGORIAS_MATERIAL_CANTO.map((c) => `<option value="${c}" ${it.categoriaSemId === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select>
       </div>` : ''}
       <div class="sol-fg sol-fg-peso">
-        <label class="sol-label">Peso (kg) <span class="sol-required">*</span></label>
+        <label class="sol-label">${_emLitros(it) ? 'Volume (L)' : 'Peso (kg)'} <span class="sol-required">*</span></label>
         ${_inputNum(it.id, 'peso', it.peso)}
       </div>
       ${_btnRemover(it, 'Remover material')}

@@ -88,7 +88,7 @@ const SOL_PROC = [
     _cA, _cS]],
   ['pesagem', 'Pesagem manual', 'Pesagem manual (fora da automação)', 'ti-weight', [_cP, _cR, _cO, _cC,
     ['Material', (s, i) => _solEsc(i.grupoMaterial)],
-    ['Peso (kg)', (s, i) => _solNum(i.peso), true],
+    ['Quantidade', (s, i) => `${_solNum(i.peso)} ${_solEsc(i.unidade || 'kg')}`, true],
     _cA, _cS]],
 ];
 const SOL_COLS_MOV = [_cP, _cR, _cO, _cC,
@@ -276,8 +276,8 @@ function _solItensHtml(s) {
   if (!itens.length) return '<p class="sol-det-vazio">Nenhum item.</p>';
 
   if (itens[0].tipo === 'material' || !itens[0].tipo) {
-    return `<table><thead><tr><th>Material</th><th style="text-align:right">Peso (kg)</th></tr></thead><tbody>
-      ${itens.map((i) => `<tr><td>${_solEsc(i.grupoMaterial)}</td><td style="text-align:right">${_solNum(i.peso)}</td></tr>`).join('')}
+    return `<table><thead><tr><th>Material</th><th style="text-align:right">Quantidade</th></tr></thead><tbody>
+      ${itens.map((i) => `<tr><td>${_solEsc(i.grupoMaterial)}</td><td style="text-align:right">${_solNum(i.peso)} ${_solEsc(i.unidade || 'kg')}</td></tr>`).join('')}
     </tbody></table>`;
   }
 
