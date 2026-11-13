@@ -13710,11 +13710,7 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .sol-det-grupo-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
 .sol-det-tabela { width: 100%; }
 
-/* Lista de registros — barra de filtros e botão de excluir na linha */
-.sol-filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); }
-.sol-filtros .form-input { width: auto; padding-top: 6px; padding-bottom: 6px; font-size: 12px; }
-.sol-filtro { max-width: 200px; }
-.sol-filtro-data { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3); }
+/* Lista de registros — botão de excluir na linha */
 .sol-btn-excluir { color: var(--text3); }
 .sol-btn-excluir:hover { color: var(--red); border-color: var(--red-border); background: var(--red-bg); }
 .sol-det-tabela th, .sol-det-tabela td { padding: 8px 12px; }

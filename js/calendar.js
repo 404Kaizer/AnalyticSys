@@ -386,6 +386,7 @@
     if (pfx === 'aus' && p.startDate && p.endDate && typeof renderAusencias === 'function') {
       renderAusencias();
     }
+    if (pfx === 'sol' && p.startDate && p.endDate && typeof solRender === 'function') solRender(); // Registros (solicitacoes.js)
     if (pfx === 'oc' && p.startDate && p.endDate && typeof renderOcorrencias === 'function') {
       renderOcorrencias();
     }

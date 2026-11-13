@@ -43,7 +43,6 @@ const SOL_CATEGORIAS_AGREGADO = ['Agregado Graúdo', 'Agregado Miúdo'];
 
 const _sol = {
   lista: [], tipo: 'procedimento', proc: 'cubagem', filtro: 'abertas', busca: '', carregando: false, erro: '', abertaId: null,
-  f: { regional: '', central: '', categoria: '', material: '', de: '', ate: '' }, // filtros da barra
 };
 
 const _solEsc = (s) => escapeHtml(String(s ?? ''));
@@ -223,46 +222,278 @@ function solCopiarLinkFormulario() {
 }
 window.solCopiarLinkFormulario = solCopiarLinkFormulario;
 
-function solFiltro(k) { _sol.filtro = k; solRender(); }
+function solFiltro(k) { _sol.filtro = k; _solFecharStatus(); solRender(); }
 window.solFiltro = solFiltro;
 
-// Trocar de aba volta para "Abertas" (a cubagem cai em "Registros" sozinha).
-function solTipo(k) { _sol.tipo = k; _sol.filtro = 'abertas'; solRender(); }
+// Trocar de tipo volta para "Abertas" (a cubagem cai em "Registros" sozinha)
+// e limpa a seleção da lista.
+function solTipo(k) { _sol.tipo = k; _sol.filtro = 'abertas'; _sol.sel = []; solRender(); }
 window.solTipo = solTipo;
 
-function solProc(k) { _sol.proc = k; _sol.filtro = 'abertas'; solRender(); }
+function solProc(k) { _sol.proc = k; _sol.filtro = 'abertas'; _sol.sel = []; solRender(); }
 window.solProc = solProc;
 
+// A busca fica no topo da lista, que é redesenhada a cada render — devolve o foco.
 function solBuscar(v) {
   _sol.busca = v;
   solRender();
-  // solRender recria a barra — devolve o foco ao campo de busca.
   const i = document.getElementById('sol-busca');
   if (i) { i.focus(); i.setSelectionRange(v.length, v.length); }
 }
 window.solBuscar = solBuscar;
 
-function solFiltroCampo(campo, v) { _sol.f[campo] = v; solRender(); }
-window.solFiltroCampo = solFiltroCampo;
-function solLimparFiltros() { Object.keys(_sol.f).forEach((k) => { _sol.f[k] = ''; }); solRender(); }
+// ── Lista à esquerda (mesmo padrão das Operações, mural-painel.js) ───
+// Árvore aninhada conforme a visão; clicar num nível filtra a tabela da
+// direita. Cubagem tem o nível Fornecedor antes de Material.
+const SOL_NIVEIS = {
+  regional: { rot: 'Regional', icon: 'ti-users-group', val: (s) => s.regional_central || '—' },
+  central: { rot: 'Central', icon: 'ti-building-warehouse', val: (s) => s.central || '—' },
+  fornecedor: { rot: 'Fornecedor', icon: 'ti-truck', val: (s, i) => i.fornecedor || '—' },
+  material: { rot: 'Material', icon: 'ti-box', val: (s, i) => i.grupoMaterial || i.categoriaMaterial || '—' },
+};
+const SOL_VISOES = {
+  regional: ['regional', 'central', 'fornecedor', 'material'],
+  central: ['central', 'fornecedor', 'material'],
+  material: ['material', 'fornecedor', 'central'],
+  fornecedor: ['fornecedor', 'central', 'material'],
+};
+Object.assign(_sol, {
+  visao: 'regional',
+  sel: [], // caminho escolhido na árvore (valores, na ordem dos níveis da visão)
+  listaRecolhida: (() => { try { return localStorage.getItem('sol.listaRecolhida') === '1'; } catch (_) { return false; } })(),
+});
+const _solEhCubagem = () => _sol.tipo === 'procedimento' && _sol.proc === 'cubagem';
+const _solVisoesDoTipo = () => Object.keys(SOL_VISOES).filter((v) => v !== 'fornecedor' || _solEhCubagem());
+const _solNiveis = () => {
+  if (!_solVisoesDoTipo().includes(_sol.visao)) _sol.visao = 'regional';
+  return SOL_VISOES[_sol.visao].filter((n) => n !== 'fornecedor' || _solEhCubagem());
+};
+
+function solVisao(v) { _sol.visao = v; _sol.sel = []; solRender(); }
+window.solVisao = solVisao;
+// Clicar no nível escolhido recolhe para o pai; em outro, desce até ele.
+function solSel(el) {
+  const d = Number(el.dataset.d), v = el.dataset.v;
+  _sol.sel = (d >= 0 && _sol.sel[d] === v && _sol.sel.length === d + 1) ? _sol.sel.slice(0, d) : d < 0 ? [] : [..._sol.sel.slice(0, d), v];
+  solRender();
+}
+window.solSel = solSel;
+function solListaRecolher() {
+  _sol.listaRecolhida = !_sol.listaRecolhida;
+  try { localStorage.setItem('sol.listaRecolhida', _sol.listaRecolhida ? '1' : '0'); } catch (_) { /* sem storage */ }
+  solRender();
+}
+window.solListaRecolher = solListaRecolher;
+
+// Pares (registro, item) depois de tipo/status/busca/período e dos filtros
+// da barra — base da árvore e da tabela. Registro sem item vira um par com
+// item vazio. Os filtros valem por item (material/fornecedor de cada carreta).
+const _solPares = () => _solFiltradas().flatMap((s) => (s.itens?.length ? s.itens : [{}]).map((i) => [s, i]))
+  .filter(([s, i]) => SOL_MF.every(([k]) => !_solMF.applied[k].size || _solMF.applied[k].has(_solMFVal(k, s, i))));
+const _solNoCaminho = (pares, niveis, caminho) => pares.filter(([s, i]) => caminho.every((v, d) => SOL_NIVEIS[niveis[d]].val(s, i) === v));
+
+function _solArvoreHtml(pares, niveis, d = 0) {
+  const nivel = niveis[d];
+  if (!nivel) return '';
+  const grupos = new Map();
+  pares.forEach((p) => { const k = SOL_NIVEIS[nivel].val(...p); if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(p); });
+  const cub = _solEhCubagem();
+  return [...grupos].sort((a, b) => b[1].length - a[1].length || String(a[0]).localeCompare(String(b[0]), 'pt-BR')).map(([valor, ps]) => {
+    const aberto = _sol.sel[d] === valor;
+    const sel = aberto && _sol.sel.length === d + 1;
+    const apagado = _sol.sel.length > d && !aberto;
+    const regs = new Set(ps.map(([s]) => s.id)).size;
+    const kg = cub ? ps.reduce((t, [, i]) => t + (Number(i.variacaoKg) || 0), 0) : null;
+    const filho = niveis[d + 1];
+    const sub = filho
+      ? `${new Set(ps.map((p) => SOL_NIVEIS[filho].val(...p))).size} ${SOL_NIVEIS[filho].rot.toLowerCase()}(s) · ${regs} registro(s)`
+      : `${regs} registro(s)`;
+    return `<div class="${aberto && filho ? 'mp-bloco aberto' : ''}"><button class="mp-row${sel ? ' sel' : apagado ? ' apagado' : ''}" style="padding-left:${14 + d * 16}px" data-d="${d}" data-v="${_solEsc(valor)}" onclick="solSel(this)">
+      <i class="ti ti-chevron-${filho ? (aberto ? 'down' : 'right') : 'right'} mp-chev"${filho ? '' : ' style="visibility:hidden"'}></i>
+      <i class="ti ${SOL_NIVEIS[nivel].icon}" style="color:var(--text3)"></i>
+      <span class="mp-nome"><b>${_solEsc(valor)}</b><small>${sub}</small></span>
+      ${cub ? `<span class="mp-v" style="color:${Math.abs(kg) >= 1 ? (kg < 0 ? 'var(--red)' : 'var(--amber)') : 'var(--text2)'}" title="Variação somada (aferido − documento)">${kg >= 0 ? '+' : ''}${_solNum(kg, 0)} kg</span>` : ''}
+    </button>${aberto ? _solArvoreHtml(ps, niveis, d + 1) : ''}</div>`;
+  }).join('');
+}
+
+function _solListaHtml(pares, niveis) {
+  if (_sol.listaRecolhida) {
+    return `<button class="mp-lista-abrir" onclick="solListaRecolher()" title="Mostrar a lista" aria-expanded="false">
+      <i class="ti ti-layout-sidebar-left-expand"></i><span>Lista · ${new Set(pares.map(([s]) => s.id)).size} registro(s)</span></button>`;
+  }
+  const abertas = (fn) => _sol.lista.filter((s) => fn(s) && _solAberta(s)).length;
+  const tipos = SOL_TIPOS.map(([k, rot, icon, fn]) =>
+    `<button class="mo-aba${k === _sol.tipo ? ' on' : ''}" onclick="solTipo('${k}')" title="O número é de registros em aberto"><i class="ti ${icon}"></i>${rot.split(' ')[0]} <b>${abertas(fn)}</b></button>`).join('');
+  const procs = _sol.tipo !== 'procedimento' ? '' : `<div class="mo-abas" role="tablist">${SOL_PROC.map(([k, rot, sit, icon]) =>
+    `<button class="mo-aba${k === _sol.proc ? ' on' : ''}" onclick="solProc('${k}')"><i class="ti ${icon}"></i>${rot}${sit === SOL_CUBAGEM ? '' : ` <b>${abertas((s) => s.categoria_situacao === sit)}</b>`}</button>`).join('')}</div>`;
+  const total = new Set(pares.map(([s]) => s.id)).size;
+  // Como nas Operações: abas no topo; embaixo, busca + recolher.
+  return `<div class="mp-lista-head">
+      <div class="mo-abas" role="tablist">${tipos}</div>
+      ${procs}
+      <div class="mp-lista-linha">
+        <label class="mp-busca"><i class="ti ti-search"></i><input id="sol-busca" type="text" placeholder="Buscar: protocolo, NF, informante…" value="${_solEsc(_sol.busca)}" oninput="solBuscar(this.value)" aria-label="Buscar registros"></label>
+        <button class="mp-lista-recolher" onclick="solListaRecolher()" title="Recolher a lista para a lateral" aria-label="Recolher a lista" aria-expanded="true"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
+      </div>
+    </div>
+    <div class="mp-lista-corpo">
+      <button class="mp-row${_sol.sel.length ? ' apagado' : ' sel'}" data-d="-1" data-v="" onclick="solSel(this)">
+        <i class="ti ti-list mp-chev"></i><span class="mp-nome"><b>Todos</b><small>${total} registro(s) · por ${SOL_NIVEIS[niveis[0]].rot.toLowerCase()}</small></span></button>
+      ${_solArvoreHtml(pares, niveis) || '<div class="empty-state" style="padding:24px"><p>Nada com esses filtros.</p></div>'}
+    </div>`;
+}
+
+// ── Barra de filtros (largura toda, como nas Operações) ──────────────
+// Visões · Regional · Central · Categoria · Fornecedor (cubagem) · Material ·
+// Status · Período. Mesmo componente da Visão Micro / Operações / Ocorrências.
+// Montada UMA vez (_solMontarEstrutura) — só lista, visões e tabela são
+// redesenhadas, senão o dropdown/calendário aberto fecharia a cada render.
+const SOL_MF = [
+  ['regional', 'Regional', 'ti-users-group'],
+  ['central', 'Central', 'ti-building-warehouse'],
+  ['categoria', 'Categoria', 'ti-category'],
+  ['fornecedor', 'Fornecedor', 'ti-truck'],
+  ['material', 'Material', 'ti-box'],
+];
+const _solMFVal = (k, s, i) => k === 'categoria' ? (s.categoria || '—') : SOL_NIVEIS[k].val(s, i);
+const _solMF = {
+  applied: Object.fromEntries(SOL_MF.map(([k]) => [k, new Set()])),
+  pending: Object.fromEntries(SOL_MF.map(([k]) => [k, new Set()])),
+};
+
+function _solMFOpcoes(k, busca = '') {
+  const el = document.getElementById(`solmfo-${k}`);
+  if (!el) return;
+  // Opções = valores dos registros do tipo atual (antes dos filtros da barra).
+  const base = _solFiltradas().flatMap((s) => (s.itens?.length ? s.itens : [{}]).map((i) => _solMFVal(k, s, i)));
+  const valores = [...new Set([...base, ..._solMF.applied[k]])].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
+  const q = _solNorm(busca);
+  const lista = q ? valores.filter((v) => _solNorm(v).includes(q)) : valores;
+  el.innerHTML = lista.length ? lista.map((v) => `<label class="micro-filter-option">
+      <input type="checkbox" value="${_solEsc(v)}" ${_solMF.pending[k].has(v) ? 'checked' : ''} onchange="_solMFMarcar('${k}', this)">
+      <span class="micro-filter-option-label" title="${_solEsc(v)}">${_solEsc(v)}</span></label>`).join('')
+    : '<div style="padding:12px 10px;color:var(--text3);font-size:12px;text-align:center">Nenhum resultado</div>';
+}
+function _solMFMarcar(k, cb) { cb.checked ? _solMF.pending[k].add(cb.value) : _solMF.pending[k].delete(cb.value); }
+Object.assign(window, { _solMFOpcoes, _solMFMarcar });
+
+function _solMFFechar(k) {
+  document.getElementById(`solmfd-${k}`)?.classList.remove('open');
+  document.getElementById(`solmfc-${k}`)?.classList.remove('open');
+}
+const _solFecharStatus = () => _solMFFechar('status');
+function _solFecharTodos(exceto) {
+  SOL_MF.forEach(([k]) => { if (k !== exceto) { _solMF.pending[k] = new Set(_solMF.applied[k]); _solMFFechar(k); } });
+  if (exceto !== 'status') _solFecharStatus();
+}
+function solMFToggle(k) {
+  _solFecharTodos(k);
+  const aberto = document.getElementById(`solmfd-${k}`).classList.toggle('open');
+  document.getElementById(`solmfc-${k}`).classList.toggle('open', aberto);
+  if (aberto) {
+    _solMF.pending[k] = new Set(_solMF.applied[k]);
+    const busca = document.getElementById(`solmfs-${k}`);
+    busca.value = '';
+    _solMFOpcoes(k);
+    setTimeout(() => busca.focus(), 50);
+  }
+}
+function _solMFRotulo(k) {
+  const [, rot] = SOL_MF.find(([key]) => key === k);
+  const sel = _solMF.applied[k], label = document.getElementById(`solmft-${k}-label`);
+  if (!label) return;
+  const um = [...sel][0] || '';
+  label.innerHTML = !sel.size ? rot
+    : sel.size === 1 ? `${rot}: <strong>${_solEsc(um.length > 18 ? um.slice(0, 18) + '…' : um)}</strong>`
+    : `${rot} <span class="micro-filter-badge">${sel.size}</span>`;
+  document.getElementById(`solmft-${k}`).classList.toggle('active', sel.size > 0);
+}
+function solMFAplicar(k) { _solMF.applied[k] = new Set(_solMF.pending[k]); _solMFFechar(k); _solMFRotulo(k); _sol.sel = []; solRender(); }
+function solMFCancelar(k) { _solMF.pending[k] = new Set(_solMF.applied[k]); _solMFFechar(k); }
+function solMFLimpar(k) { _solMF.applied[k] = new Set(); _solMF.pending[k] = new Set(); _solMFFechar(k); _solMFRotulo(k); solRender(); }
+function solStatusToggle() {
+  _solFecharTodos('status');
+  const aberto = document.getElementById('solmfd-status').classList.toggle('open');
+  document.getElementById('solmfc-status').classList.toggle('open', aberto);
+}
+Object.assign(window, { solMFToggle, solMFAplicar, solMFCancelar, solMFLimpar, solStatusToggle });
+
+// Clique fora fecha o dropdown aberto, descartando o que não foi aplicado.
+document.addEventListener('click', (e) => {
+  SOL_MF.forEach(([k]) => {
+    if (document.getElementById(`solmfd-${k}`)?.classList.contains('open') && !document.getElementById(`solmfg-${k}`)?.contains(e.target)) solMFCancelar(k);
+  });
+  if (!document.getElementById('solmfg-status')?.contains(e.target)) _solFecharStatus();
+});
+
+function solLimparFiltros() {
+  SOL_MF.forEach(([k]) => { _solMF.applied[k] = new Set(); _solMF.pending[k] = new Set(); _solMFRotulo(k); });
+  if (typeof calClearRange === 'function') calClearRange('sol');
+  _sol.sel = [];
+  solRender();
+}
 window.solLimparFiltros = solLimparFiltros;
 
+function _solMontarEstrutura(el) {
+  if (document.getElementById('sol-mf-bar')) return;
+  const grupo = ([k, rot, icon]) => `
+    <div class="micro-filter-group" id="solmfg-${k}">
+      <button class="micro-filter-trigger" id="solmft-${k}" onclick="solMFToggle('${k}')">
+        <i class="ti ${icon}"></i><span id="solmft-${k}-label">${rot}</span><i class="ti ti-chevron-down micro-filter-chev" id="solmfc-${k}"></i>
+      </button>
+      <div class="micro-filter-dropdown" id="solmfd-${k}">
+        <div class="micro-filter-search-wrap"><i class="ti ti-search"></i>
+          <input class="micro-filter-search" id="solmfs-${k}" type="text" placeholder="Buscar ${rot.toLowerCase()}…" oninput="_solMFOpcoes('${k}', this.value)">
+        </div>
+        <div class="micro-filter-options" id="solmfo-${k}"></div>
+        <div class="micro-filter-footer">
+          <button class="btn btn-filter-clear" onclick="solMFLimpar('${k}')"><i class="ti ti-filter-off"></i> Limpar</button>
+          <button class="btn" onclick="solMFCancelar('${k}')"><i class="ti ti-x"></i> Cancelar</button>
+          <button class="btn btn-primary" onclick="solMFAplicar('${k}')"><i class="ti ti-check"></i> Aplicar</button>
+        </div>
+      </div>
+    </div>`;
+  el.innerHTML = `<div class="oc-toolbar">
+      <div class="micro-filter-bar" id="sol-mf-bar" style="flex:1">
+          <div class="micro-group-mode" id="sol-visoes" role="group" aria-label="Visão da lista"></div>
+          <div class="micro-filter-divider"></div>
+          ${SOL_MF.map(grupo).join('')}
+          <div class="micro-filter-group" id="solmfg-status">
+            <button class="micro-filter-trigger" id="solmft-status" onclick="solStatusToggle()">
+              <i class="ti ti-flag"></i><span id="solmft-status-label">Status</span><i class="ti ti-chevron-down micro-filter-chev" id="solmfc-status"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="solmfd-status"><div class="micro-filter-options" id="solmfo-status"></div></div>
+          </div>
+          <div class="cal-picker-wrap" id="sol-cal-wrap">
+            <button class="cal-picker-trigger" id="sol-cal-trigger" onclick="toggleCalPicker('sol')" type="button" style="min-width:0" title="Data do ocorrido">
+              <i class="ti ti-calendar-event"></i><span id="sol-cal-label">Período</span><i class="ti ti-chevron-down cal-chev" id="sol-cal-chev"></i>
+            </button>
+            <input type="hidden" id="sol-dt-ini"><input type="hidden" id="sol-dt-fim">
+            <div class="cal-picker-dropdown" id="sol-cal-dropdown"><div class="cal-picker-inner" id="sol-cal-inner" data-pfx="sol"></div></div>
+          </div>
+          <button class="btn micro-filter-clear" id="sol-mf-clear-btn" onclick="solLimparFiltros()" style="display:none"><i class="ti ti-filter-off"></i> Limpar filtros</button>
+      </div>
+    </div>
+    <div class="mp sol-mp">
+      <section class="mp-lista" id="sol-lista"></section>
+      <section class="mp-painel" id="sol-tabela"></section>
+    </div>`;
+  // calendar.js só liga isto nos calendários que existem no carregamento
+  // da página — sem isto, cada clique num dia fecharia o calendário.
+  document.getElementById('sol-cal-dropdown').addEventListener('click', (e) => e.stopPropagation());
+}
+
 // ── Lista ────────────────────────────────────────────────────────────
-const _solMateriais = (s) => (s.itens || []).map((i) => i.grupoMaterial || i.categoriaMaterial).filter(Boolean);
-// Barra de filtros (regional, central, categoria, material, período do ocorrido).
-const _solPassaFiltros = (s) => {
-  const f = _sol.f;
-  return (!f.regional || s.regional_central === f.regional)
-    && (!f.central || s.central === f.central)
-    && (!f.categoria || s.categoria === f.categoria)
-    && (!f.material || _solMateriais(s).includes(f.material))
-    && (!f.de || String(s.data_ocorrido) >= f.de)
-    && (!f.ate || String(s.data_ocorrido) <= f.ate);
+const _solNoPeriodo = (s) => {
+  const de = document.getElementById('sol-dt-ini')?.value;
+  const ate = document.getElementById('sol-dt-fim')?.value;
+  return (!de || String(s.data_ocorrido) >= de) && (!ate || String(s.data_ocorrido) <= ate);
 };
 const _solDoTipo = () => (_sol.tipo === 'procedimento'
   ? _sol.lista.filter((s) => s.categoria_situacao === _solProcAtual()[2])
-  : _sol.lista.filter(SOL_TIPOS[1][3])).filter(_solPassaFiltros);
-const _solFiltrosStatus = () => (_sol.tipo === 'procedimento' && _sol.proc === 'cubagem' ? SOL_FILTROS_CUBAGEM : SOL_FILTROS);
+  : _sol.lista.filter(SOL_TIPOS[1][3])).filter(_solNoPeriodo);
+const _solFiltrosStatus = () => (_solEhCubagem() ? SOL_FILTROS_CUBAGEM : SOL_FILTROS);
 
 function _solFiltradas() {
   const lista = _solFiltrosStatus();
@@ -278,20 +509,36 @@ function _solFiltradas() {
 function solRender() {
   const el = document.getElementById('sol-page-body');
   if (!el) return;
-  const doTipo = _solDoTipo();
+  _solMontarEstrutura(el);
+  if (!_solEhCubagem() && _solMF.applied.fornecedor.size) { _solMF.applied.fornecedor = new Set(); _solMFRotulo('fornecedor'); }
   const filtros = _solFiltrosStatus();
   if (!filtros.some(([k]) => k === _sol.filtro)) _sol.filtro = filtros[0][0];
-  const pills = filtros.map(([k, rot, fn]) =>
-    `<button class="pim-month-pill${k === _sol.filtro ? ' active' : ''}" type="button" onclick="solFiltro('${k}')">${rot} <b>${doTipo.filter(fn).length}</b></button>`).join('');
-  // Contador da aba = registros em aberto (pendente/em análise) daquele tipo; cubagem não tem.
-  const abas = SOL_TIPOS.map(([k, rot, icon, fn]) =>
-    `<button class="tab-btn${k === _sol.tipo ? ' active' : ''}" type="button" onclick="solTipo('${k}')"><i class="ti ${icon}"></i> ${rot} <b>${_sol.lista.filter((s) => fn(s) && _solAberta(s)).length}</b></button>`).join('');
+  const doTipo = _solDoTipo();
+
+  // Status: dropdown de seleção única (mesmo padrão do "Ordenar" de Ocorrências).
+  document.getElementById('solmfo-status').innerHTML = filtros.map(([k, rot, fn]) =>
+    `<div class="micro-filter-option micro-filter-option--radio${k === _sol.filtro ? ' selected' : ''}" onclick="solFiltro('${k}')">
+      <span class="micro-filter-option-label">${rot} <span style="color:var(--text3)">(${doTipo.filter(fn).length})</span></span><i class="ti ti-check micro-filter-option-check"></i></div>`).join('');
+  const [, rotStatus, fnStatus] = filtros.find(([k]) => k === _sol.filtro);
+  document.getElementById('solmft-status-label').innerHTML = `${rotStatus} <span class="micro-filter-badge">${doTipo.filter(fnStatus).length}</span>`;
+  document.getElementById('solmft-status').classList.toggle('active', _sol.filtro !== filtros[0][0]);
+
+  // Visões (botões só com ícone, como na Micro/Operações).
+  const niveis = _solNiveis();
+  document.getElementById('sol-visoes').innerHTML = _solVisoesDoTipo().map((v) => {
+    const t = `Por ${SOL_NIVEIS[v].rot} — ${SOL_VISOES[v].filter((n) => n !== 'fornecedor' || _solEhCubagem()).map((n) => SOL_NIVEIS[n].rot.toLowerCase()).join(' → ')}`;
+    return `<button class="${v === _sol.visao ? 'active' : ''}" onclick="solVisao('${v}')" title="${t}" aria-label="${t}" aria-pressed="${v === _sol.visao}"><i class="ti ${SOL_NIVEIS[v].icon}"></i></button>`;
+  }).join('');
+
+  // Lista (árvore) e o que está dentro do nível escolhido.
+  const pares = _solPares();
+  const noCaminho = _solNoCaminho(pares, niveis, _sol.sel);
+  if (_sol.sel.length && !noCaminho.length) _sol.sel = []; // o nível sumiu (filtro/exclusão)
+  const lista = document.getElementById('sol-lista');
+  lista.classList.toggle('recolhida', _sol.listaRecolhida);
+  lista.innerHTML = _solListaHtml(pares, niveis);
 
   const proc = _sol.tipo === 'procedimento';
-  const subAbas = proc ? `<div class="tabs" style="margin-bottom:12px">${SOL_PROC.map(([k, rot, sit, icon]) => {
-    const n = sit === SOL_CUBAGEM ? '' : ` <b>${_sol.lista.filter((s) => s.categoria_situacao === sit && _solAberta(s)).length}</b>`;
-    return `<button class="tab-btn${k === _sol.proc ? ' active' : ''}" type="button" onclick="solProc('${k}')"><i class="ti ${icon}"></i> ${rot}${n}</button>`;
-  }).join('')}</div>` : '';
   const excluidos = _sol.filtro === 'excluida';
   // Última coluna: excluir (ou restaurar, na lista de excluídos).
   const cols = [...(proc ? _solProcAtual()[4] : SOL_COLS_MOV), ['', (s) => excluidos
@@ -299,8 +546,9 @@ function solRender() {
     : `<button class="btn btn-sm sol-btn-excluir" title="Excluir" onclick="event.stopPropagation();solExcluir('${s.id}')"><i class="ti ti-trash"></i></button>`, true]];
   const td = (dir) => dir ? ' style="text-align:right"' : '';
 
-  // Procedimentos: uma linha por item (carreta, teste…); movimentações: uma por solicitação.
-  const rows = _solFiltradas().flatMap((s) => (proc && s.itens?.length ? s.itens : [{}]).map((i) => [s, i]));
+  // Procedimentos: uma linha por item (carreta, teste…); movimentações: uma por registro.
+  const vistos = new Set();
+  const rows = (_sol.sel.length ? noCaminho : pares).filter(([s]) => proc || (!vistos.has(s.id) && vistos.add(s.id)));
   const vazio = (icon, txt) => `<tr><td colspan="${cols.length}"><div class="empty-state"><i class="ti ${icon}"></i><p>${txt}</p></div></td></tr>`;
   const corpo = _sol.carregando && !_sol.lista.length ? vazio('ti-loader', 'Carregando…')
     : _sol.erro ? vazio('ti-alert-triangle', 'Falha ao carregar: ' + _solEsc(_sol.erro))
@@ -309,36 +557,21 @@ function solRender() {
         ${cols.map(([, fn, dir]) => `<td${td(dir)}>${fn(s, i)}</td>`).join('')}
       </tr>`).join('');
 
-  // Opções dos filtros = valores que existem nos registros carregados.
-  const opts = (campo, rot, valores) => {
-    const v = [...new Set(valores.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
-    return `<select class="form-input sol-filtro" onchange="solFiltroCampo('${campo}', this.value)">
-      <option value="">${rot}</option>${v.map((x) => `<option value="${_solEsc(x)}"${x === _sol.f[campo] ? ' selected' : ''}>${_solEsc(x)}</option>`).join('')}</select>`;
-  };
-  const algumFiltro = Object.values(_sol.f).some(Boolean);
-  const barra = `<div class="sol-filtros">
-    ${opts('regional', 'Todas as regionais', _sol.lista.map((s) => s.regional_central))}
-    ${opts('central', 'Todas as centrais', _sol.lista.map((s) => s.central))}
-    ${opts('categoria', 'Todas as categorias', _sol.lista.map((s) => s.categoria))}
-    ${opts('material', 'Todos os materiais', _sol.lista.flatMap(_solMateriais))}
-    <label class="sol-filtro-data">Ocorrido de <input class="form-input" type="date" value="${_solEsc(_sol.f.de)}" onchange="solFiltroCampo('de', this.value)"></label>
-    <label class="sol-filtro-data">até <input class="form-input" type="date" value="${_solEsc(_sol.f.ate)}" onchange="solFiltroCampo('ate', this.value)"></label>
-    ${algumFiltro ? '<button class="btn btn-sm" onclick="solLimparFiltros()"><i class="ti ti-filter-off"></i> Limpar filtros</button>' : ''}
-    ${excluidos && rows.length ? '<button class="btn btn-sm sol-btn-excluir" style="margin-left:auto" onclick="solLimparExcluidos()"><i class="ti ti-trash-x"></i> Apagar excluídos de vez</button>' : ''}
-  </div>`;
+  // Fornecedor só existe na cubagem (fora dela, o filtro esvazia).
+  document.getElementById('solmfg-fornecedor').style.display = _solEhCubagem() ? '' : 'none';
+  const algumFiltro = SOL_MF.some(([k]) => _solMF.applied[k].size) || !!document.getElementById('sol-dt-ini')?.value;
+  document.getElementById('sol-mf-clear-btn').style.display = algumFiltro ? '' : 'none';
 
-  el.innerHTML = `<div class="tabs" style="margin-bottom:12px" title="O número é de registros em aberto">${abas}</div>${subAbas}
-  <div class="table-card">
+  const titulo = proc ? _solProcAtual()[1] : 'Movimentações de estoque';
+  const migalhas = [titulo, ..._sol.sel].map(_solEsc).join(' <span style="color:var(--text3)">›</span> ');
+  document.getElementById('sol-tabela').innerHTML = `<div class="table-card">
     <div class="table-header">
-      <span class="table-title"><i class="ti ti-inbox"></i> Registros do formulário público</span>
+      <span class="table-title"><i class="ti ti-inbox"></i> ${migalhas}</span>
       <div class="table-toolbar">
-        ${pills}
-        <input class="form-input" id="sol-busca" style="width:220px" type="text" placeholder="Buscar protocolo, central, NF…" value="${_solEsc(_sol.busca)}" oninput="solBuscar(this.value)">
-        <button class="btn" onclick="solCarregar()" title="Recarregar"><i class="ti ti-refresh"></i></button>
+        ${excluidos && rows.length ? '<button class="btn btn-sm sol-btn-excluir" onclick="solLimparExcluidos()"><i class="ti ti-trash-x"></i> Apagar excluídos de vez</button>' : ''}
       </div>
     </div>
-    ${barra}
-    <div class="table-scroll" style="max-height:calc(100vh - 200px)"><table>
+    <div class="table-scroll" style="max-height:calc(100vh - 220px)"><table>
       <thead><tr>${cols.map(([rot, , dir]) => `<th${td(dir)}>${rot}</th>`).join('')}</tr></thead>
       <tbody>${corpo}</tbody>
     </table></div></div>`;
