@@ -230,19 +230,21 @@ function _solItensHtml(s) {
 
   // cubagem
   return itens.map((i) => {
+    const volume = _solCampo('Volume', i.volumeM3 !== null ? `${_solNum(i.volumeM3, 3)} m³` : '—');
     const metodo = i.metodo === 'pesagem'
       ? _solCampo('Pesagens (kg)', (i.pesagens || []).map((p) => _solNum(p)).join(' + '))
-      : _solCampo('Caçamba', `${_solNum(i.comprimento)} m × ${_solNum(i.largura)} m · alturas ${(i.alturas || []).map((a) => _solNum(a)).join(' / ')} m`)
-        + _solCampo('Volume', i.volumeM3 !== null ? `${_solNum(i.volumeM3, 3)} m³` : '—');
-    const semFator = (i.umNf === 'M3' || i.metodo === 'volume') && !i.fator;
+      : i.metodo === 'cone'
+      ? _solCampo('Cones (raio × altura)', (i.cones || []).map((c) => `${_solNum(c.raio)} × ${_solNum(c.altura)} m`).join(' · ')) + volume
+      : _solCampo('Caçamba', `${_solNum(i.comprimento)} m × ${_solNum(i.largura)} m · alturas ${(i.alturas || []).map((a) => _solNum(a)).join(' / ')} m`) + volume;
+    const semFator = (i.umNf === 'M3' || i.metodo !== 'pesagem') && !i.fator;
     return `<div class="sol-det-item">
       <div class="sol-det-grid">
         ${_solCampo('Material', _solEsc(i.grupoMaterial))}
         ${_solCampo('Fornecedor', _solEsc(i.fornecedor))}
-        ${_solCampo('NF', _solEsc(i.nf))}
+        ${_solCampo(i.docTipo === 'TICKET' ? 'Ticket' : 'NF', _solEsc(i.nf))}
         ${_solCampo('Emissão / Recebimento', `${_solData(i.dataEmissao)} / ${_solData(i.dataRecebimento)}`)}
         ${_solCampo('Peso na NF', `${_solNum(i.pesoNf)} ${_solEsc(i.umNf)}`)}
-        ${_solCampo('Método', i.metodo === 'pesagem' ? 'Pesagem' : 'Volume (furos)')}
+        ${_solCampo('Método', { pesagem: 'Pesagem', cone: 'Cone', volume: 'Volume (furos)' }[i.metodo] || '—')}
         ${metodo}
         ${_solCampo('Fator M³→KG', i.fator ? _solNum(i.fator, 4) : '—')}
         ${_solCampo('NF em kg', _solKg(i.nfKg))}
@@ -250,7 +252,7 @@ function _solItensHtml(s) {
         ${_solCampo('Variação', _solVar(i.variacaoKg, i.variacaoPct))}
       </div>
       ${semFator ? '<div class="sol-nf-alerta"><i class="ti ti-scale"></i> Sem fator de densidade no envio — converta m³ para kg manualmente.</div>' : ''}
-      ${_solVinculoNf(i)}
+      ${i.docTipo === 'TICKET' ? '' : _solVinculoNf(i)}
     </div>`;
   }).join('');
 }
@@ -347,25 +349,34 @@ async function solMudarStatus(status) {
 }
 window.solMudarStatus = solMudarStatus;
 
-// ── Fornecedores de agregados → formulário público (só ADM) ──────────
-// Chamado no boot e ao fim de cada importação de Entradas. Só envia
-// quando a lista mudou desde a última publicação deste navegador.
+// ── Entregas de agregados → formulário público (só ADM) ──────────────
+// Publica quem entregou qual material (grupo SAP) em qual central, a
+// partir das Entradas do ADM — o formulário filtra o fornecedor da
+// cubagem por central + material. Chamado no boot e ao fim de cada
+// importação de Entradas; só envia quando mudou desde a última vez.
 async function solPublicarFornecedores() {
   if (window.currentUser?.role !== 'admin' || !window.supabaseClient) return;
-  const nomes = new Set();
+  // Entradas guardam a central pelo alias da filial; o formulário mostra
+  // origem || alias (ver acaoCatalogo na Edge Function).
+  const nomeCentral = new Map((state.filiais || []).map((f) => [f.alias, f.origem || f.alias]));
+  const linhas = new Map();
   for (const e of (state.entradas || [])) {
     if (!SOL_CATEGORIAS_AGREGADO.includes(e.categoria)) continue;
     const f = String(e.fornecedor || '').trim();
-    if (f && f !== '—') nomes.add(f);
+    const cAlias = String(e.centralDestino || e.centralCompra || '').trim();
+    const m = String(e.material || '').trim();
+    if (!f || f === '—' || !cAlias || cAlias === '—' || !m) continue;
+    const c = nomeCentral.get(cAlias) || cAlias;
+    linhas.set(f + '\u0001' + c + '\u0001' + m, { f, c, m });
   }
-  if (!nomes.size) return; // Entradas vazias/não carregadas: não apaga a lista publicada
-  const lista = [...nomes].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const assinatura = lista.join('\n');
+  if (!linhas.size) return; // Entradas vazias/não carregadas: não apaga o que já foi publicado
+  const lista = [...linhas.values()].sort((a, b) => (a.f + a.c + a.m).localeCompare(b.f + b.c + b.m, 'pt-BR'));
+  const assinatura = JSON.stringify(lista);
   let anterior = null;
-  try { anterior = localStorage.getItem('solFornecedoresPublicados'); } catch { /* sem storage */ }
+  try { anterior = localStorage.getItem('solEntregasPublicadas'); } catch { /* sem storage */ }
   if (anterior === assinatura) return;
-  const { error } = await window.supabaseClient.rpc('solicitacao_fornecedores_substituir', { p_nomes: lista });
-  if (error) { console.warn('[Solicitações] Falha ao publicar fornecedores:', error); return; }
-  try { localStorage.setItem('solFornecedoresPublicados', assinatura); } catch { /* sem storage */ }
+  const { error } = await window.supabaseClient.rpc('solicitacao_entregas_substituir', { p_linhas: lista });
+  if (error) { console.warn('[Solicitações] Falha ao publicar entregas:', error); return; }
+  try { localStorage.setItem('solEntregasPublicadas', assinatura); } catch { /* sem storage */ }
 }
 window.solPublicarFornecedores = solPublicarFornecedores;

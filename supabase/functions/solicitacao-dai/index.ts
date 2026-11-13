@@ -201,21 +201,33 @@ async function carregarFatoresPorCategoria(adminId: string): Promise<Record<stri
   return out;
 }
 
-async function carregarFornecedores(): Promise<string[]> {
-  const { data, error } = await admin.from('solicitacao_fornecedores').select('nome');
-  if (error) { console.error('[solicitacao] Falha ao carregar fornecedores:', error); return []; }
-  return (data || []).map((r) => r.nome as string).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+// Quem entregou qual material em qual central (publicado pelo ADM a partir
+// das Entradas — ver solPublicarFornecedores). Paginado: o PostgREST
+// devolve no máximo 1000 linhas por chamada.
+type Entrega = { f: string; c: string; m: string };
+async function carregarEntregas(): Promise<Entrega[]> {
+  const out: Entrega[] = [];
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await admin.from('solicitacao_entregas')
+      .select('fornecedor, central, material').order('fornecedor').range(de, de + 999);
+    if (error) { console.error('[solicitacao] Falha ao carregar entregas:', error); return out; }
+    (data || []).forEach((r) => out.push({ f: r.fornecedor as string, c: r.central as string, m: r.material as string }));
+    if (!data || data.length < 1000) return out;
+  }
 }
+
+const nomesFornecedores = (entregas: Entrega[]) =>
+  [...new Set(entregas.map((e) => e.f))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
 // ── Ação: catálogo ────────────────────────────────────────────────────
 async function acaoCatalogo() {
   const adminId = await obterAdminId();
   if (!adminId) return json({ error: 'Catálogo indisponível no momento.' }, 503);
 
-  const [filiaisRes, materiaisRes, fornecedores, fatoresPorCategoria] = await Promise.all([
+  const [filiaisRes, materiaisRes, entregas, fatoresPorCategoria] = await Promise.all([
     admin.from('filiais').select('origem, alias').eq('user_id', adminId),
     admin.from('materiais').select('alias, categoria').eq('user_id', adminId),
-    carregarFornecedores(),
+    carregarEntregas(),
     carregarFatoresPorCategoria(adminId),
   ]);
   if (filiaisRes.error || materiaisRes.error) {
@@ -246,7 +258,7 @@ async function acaoCatalogo() {
   });
   CATEGORIAS_FIXAS.forEach((c) => materiaisPorCategoria[c].sort((a, b) => a.localeCompare(b, 'pt-BR')));
 
-  return json({ centrais, materiaisPorCategoria, fornecedores, fatoresPorCategoria });
+  return json({ centrais, materiaisPorCategoria, fornecedores: nomesFornecedores(entregas), entregas, fatoresPorCategoria });
 }
 
 // ── Assinaturas (data URL PNG → Storage) ──────────────────────────────
@@ -388,12 +400,16 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
       });
     }
   } else if (categoriaSituacao === CATEGORIA_CUBAGEM) {
-    const [fornecedoresCad, fatoresPorCategoria] = await Promise.all([carregarFornecedores(), carregarFatoresPorCategoria(adminId)]);
+    // Valida só que o fornecedor existe (qualquer central/material): o
+    // formulário mostra todos quando a combinação ainda não tem entrega.
+    const [entregas, fatoresPorCategoria] = await Promise.all([carregarEntregas(), carregarFatoresPorCategoria(adminId)]);
+    const fornecedoresCad = nomesFornecedores(entregas);
     for (const raw of itensIn) {
       const rec = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
       const grupoMaterial = String(rec.grupoMaterial ?? '').trim();
       const fornecedorIn = String(rec.fornecedor ?? '').trim();
       const nf = String(rec.nf ?? '').trim();
+      const docTipo = rec.docTipo === 'TICKET' ? 'TICKET' : 'NF'; // NF ou ticket de pesagem
       const dataEmissao = String(rec.dataEmissao ?? '').trim();
       const dataRecebimento = String(rec.dataRecebimento ?? '').trim();
       const pesoNf = numOk(rec.pesoNf, LIMITES.pesoMax);
@@ -414,7 +430,16 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
 
       let pesagens: number[] | null = null;
       let comprimento: number | null = null, largura: number | null = null, alturas: number[] | null = null;
-      if (metodo === 'pesagem') {
+      let cones: { raio: number; altura: number }[] | null = null;
+      if (metodo === 'cone') {
+        const arr = Array.isArray(rec.cones) ? rec.cones : [];
+        const parsed = arr.map((c) => {
+          const o = (c && typeof c === 'object' ? c : {}) as Record<string, unknown>;
+          return { raio: numOk(o.raio, LIMITES.medidaMax), altura: numOk(o.altura, LIMITES.medidaMax) };
+        });
+        if (!parsed.length || parsed.length > LIMITES.valoresMax || parsed.some((c) => c.raio === null || c.altura === null)) return json({ error: `Raio/altura dos cones inválidos para a NF ${nf}.` }, 400);
+        cones = parsed as { raio: number; altura: number }[];
+      } else if (metodo === 'pesagem') {
         const arr = Array.isArray(rec.pesagens) ? rec.pesagens : [];
         pesagens = arr.map((v) => numOk(v, LIMITES.pesoMax)) as number[];
         if (!pesagens.length || pesagens.length > LIMITES.valoresMax || pesagens.some((v) => v === null)) return json({ error: `Pesagens inválidas para a NF ${nf}.` }, 400);
@@ -435,13 +460,15 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
       const fatorRow = lookupFatorM3(fatoresPorCategoria[categoria] || [], grupoMaterial, fornecedor);
       const fator = fatorRow ? fatorRow.fator : null;
       const nfKg = umNf === 'KG' ? pesoNf : umNf === 'TO' ? pesoNf * 1000 : (fator ? pesoNf * fator : null);
-      const volumeM3 = metodo === 'volume' ? comprimento! * largura! * (alturas!.reduce((a, b) => a + b, 0) / alturas!.length) : null;
+      const volumeM3 = metodo === 'volume' ? comprimento! * largura! * (alturas!.reduce((a, b) => a + b, 0) / alturas!.length)
+        : metodo === 'cone' ? cones!.reduce((a, c) => a + Math.PI * c.raio ** 2 * c.altura / 3, 0) // π r² h ÷ 3 por cone
+        : null;
       const aferidoKg = metodo === 'pesagem' ? pesagens!.reduce((a, b) => a + b, 0) : (fator ? volumeM3! * fator : null);
       const variacaoKg = nfKg !== null && aferidoKg !== null ? aferidoKg - nfKg : null;
 
       itens.push({
-        tipo: 'cubagem', categoria, grupoMaterial, fornecedor, nf, dataEmissao, dataRecebimento,
-        pesoNf, umNf, metodo, pesagens, comprimento, largura, alturas,
+        tipo: 'cubagem', categoria, grupoMaterial, fornecedor, docTipo, nf, dataEmissao, dataRecebimento,
+        pesoNf, umNf, metodo, pesagens, comprimento, largura, alturas, cones,
         fator, volumeM3, nfKg, aferidoKg, variacaoKg,
         variacaoPct: variacaoKg !== null && nfKg ? (variacaoKg / nfKg) * 100 : null,
       });

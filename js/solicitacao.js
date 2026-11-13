@@ -42,7 +42,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, 
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-let _catalogo = { centrais: [], materiaisPorCategoria: {}, fornecedores: [], fatoresPorCategoria: {} };
+let _catalogo = { centrais: [], materiaisPorCategoria: {}, fornecedores: [], entregas: [], fatoresPorCategoria: {} };
 let _anexos = []; // { id, file, nome, tamanho, tipo, path, status: 'pendente'|'enviando'|'ok'|'erro' }
 let _anexoSeq = 0;
 let turnstileWidgetId = null;
@@ -160,14 +160,17 @@ function validarSecaoOQueAconteceu() {
       if (!it.material) return _erro('Selecione o material em todas as cubagens.');
       const ref = `"${it.material}"`;
       if (!it.fornecedor) return _erro(`Selecione o fornecedor da carreta (${ref}).`);
-      if (!it.nf.trim()) return _erro(`Informe o número da NF (${ref}).`);
-      if (!it.dataEmissao) return _erro(`Informe a data de emissão da NF (${ref}).`);
+      const doc = _docLbl(it);
+      if (!it.nf.trim()) return _erro(`Informe o número ${doc.da} (${ref}).`);
+      if (!it.dataEmissao) return _erro(`Informe a data de emissão ${doc.da} (${ref}).`);
       if (!it.dataRecebimento) return _erro(`Informe a data de recebimento da carga (${ref}).`);
-      if (it.dataEmissao > hoje() || it.dataRecebimento > hoje()) return _erro(`As datas da NF não podem ser no futuro (${ref}).`);
-      if (it.dataRecebimento < it.dataEmissao) return _erro(`O recebimento não pode ser antes da emissão da NF (${ref}).`);
-      if (!_positivo(it.pesoNf)) return _erro(`Informe o peso descrito na NF (${ref}).`);
+      if (it.dataEmissao > hoje() || it.dataRecebimento > hoje()) return _erro(`As datas não podem ser no futuro (${ref}).`);
+      if (it.dataRecebimento < it.dataEmissao) return _erro(`O recebimento não pode ser antes da emissão ${doc.da} (${ref}).`);
+      if (!_positivo(it.pesoNf)) return _erro(`Informe o peso descrito ${doc.no} (${ref}).`);
       if (it.metodo === 'pesagem') {
         if (!it.pesagens.length || !it.pesagens.every(_positivo)) return _erro(`Preencha todas as pesagens (${ref}).`);
+      } else if (it.metodo === 'cone') {
+        if (!it.cones.every((c) => _positivo(c.raio) && _positivo(c.altura))) return _erro(`Preencha raio e altura de todos os cones (${ref}).`);
       } else {
         if (!_positivo(it.comprimento) || !_positivo(it.largura)) return _erro(`Informe comprimento e largura da caçamba (${ref}).`);
         if (!it.alturas.every(_positivo)) return _erro(`Preencha a altura de todos os furos (${ref}).`);
@@ -291,8 +294,9 @@ function _novoItemMaterial() {
     // teste de canto
     categoriaMaterial: '', unidade: 'kg', qtdCantos: 4, referencia: '', cantos: ['', '', '', ''],
     // cubagem
-    fornecedor: '', nf: '', dataEmissao: '', dataRecebimento: '', pesoNf: '', umNf: 'M3',
+    fornecedor: '', docTipo: 'NF', nf: '', dataEmissao: '', dataRecebimento: '', pesoNf: '', umNf: 'M3',
     metodo: 'pesagem', pesagens: [''], comprimento: '', largura: '', alturas: ['', '', ''],
+    cones: [{ raio: '', altura: '' }],
   };
 }
 
@@ -390,12 +394,18 @@ function _calcCubagem(it) {
   let volumeM3 = null, aferidoKg = null;
   if (it.metodo === 'pesagem') {
     if (it.pesagens.length && it.pesagens.every(_positivo)) aferidoKg = it.pesagens.reduce((a, b) => a + _num(b), 0);
+  } else if (it.metodo === 'cone') {
+    // Cone: π × r² × h ÷ 3, somado entre os cones da carreta.
+    if (it.cones.length && it.cones.every((c) => _positivo(c.raio) && _positivo(c.altura))) {
+      volumeM3 = it.cones.reduce((a, c) => a + Math.PI * _num(c.raio) ** 2 * _num(c.altura) / 3, 0);
+      aferidoKg = fator ? volumeM3 * fator : null;
+    }
   } else if (_positivo(it.comprimento) && _positivo(it.largura) && it.alturas.length && it.alturas.every(_positivo)) {
     const alturaMedia = it.alturas.reduce((a, b) => a + _num(b), 0) / it.alturas.length;
     volumeM3 = _num(it.comprimento) * _num(it.largura) * alturaMedia;
     aferidoKg = fator ? volumeM3 * fator : null;
   }
-  const precisaFator = it.umNf === 'M3' || it.metodo === 'volume';
+  const precisaFator = it.umNf === 'M3' || it.metodo !== 'pesagem';
   const variacaoKg = nfKg !== null && aferidoKg !== null ? aferidoKg - nfKg : null;
   return {
     fator, nfKg, volumeM3, aferidoKg, variacaoKg,
@@ -518,10 +528,34 @@ function _htmlItemCanto(it) {
 function _onMetodoCubagemChange(id, value) {
   const it = _item(id);
   if (!it) return;
-  it.metodo = value === 'volume' ? 'volume' : 'pesagem';
+  it.metodo = ['volume', 'cone'].includes(value) ? value : 'pesagem';
   _renderItensMateriais();
 }
 window._onMetodoCubagemChange = _onMetodoCubagemChange;
+
+function _addCone(id) {
+  const it = _item(id);
+  if (!it || it.cones.length >= MAX_VALORES) return;
+  it.cones.push({ raio: '', altura: '' });
+  _renderItensMateriais();
+}
+window._addCone = _addCone;
+
+function _rmCone(id, idx) {
+  const it = _item(id);
+  if (!it || it.cones.length <= 1) return;
+  it.cones.splice(idx, 1);
+  _renderItensMateriais();
+}
+window._rmCone = _rmCone;
+
+function _setCone(id, idx, campo, value) {
+  const it = _item(id);
+  if (!it || !it.cones[idx]) return;
+  it.cones[idx][campo] = value;
+  _atualizarResultado(id);
+}
+window._setCone = _setCone;
 
 function _addPesagem(id) {
   const it = _item(id);
@@ -548,11 +582,51 @@ function _onQtdFurosChange(id, value) {
 }
 window._onQtdFurosChange = _onQtdFurosChange;
 
+// Fornecedores que já entregaram o material na central escolhida (Entradas
+// do ADM). Sem nenhuma entrega registrada na combinação, cai pra lista
+// completa — não trava a primeira entrega de um fornecedor novo ali.
+function _fornecedoresDaCubagem(material) {
+  const central = _normText(_valorAtual('sol-central'));
+  const todos = _catalogo.fornecedores || [];
+  if (!material || !central) return { lista: todos, filtrado: false };
+  const lista = [...new Set((_catalogo.entregas || [])
+    .filter((e) => e.m === material && _normText(e.c) === central).map((e) => e.f))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return lista.length ? { lista, filtrado: true } : { lista: todos, filtrado: false };
+}
+
+function _onMaterialCubagemChange(id, value) {
+  const it = _item(id);
+  if (!it) return;
+  it.material = value;
+  if (it.fornecedor && !_fornecedoresDaCubagem(value).lista.includes(it.fornecedor)) it.fornecedor = '';
+  _renderItensMateriais();
+}
+window._onMaterialCubagemChange = _onMaterialCubagemChange;
+
+// Documento da carreta: NF ou ticket (de pesagem/balança). Só muda os
+// rótulos — os campos são os mesmos (número, emissão, peso, unidade).
+function _docLbl(it) {
+  return it.docTipo === 'TICKET' ? { da: 'do ticket', no: 'no ticket' } : { da: 'da NF', no: 'na NF' };
+}
+
+function _onDocTipoChange(id, value) {
+  const it = _item(id);
+  if (!it) return;
+  it.docTipo = value === 'TICKET' ? 'TICKET' : 'NF';
+  _renderItensMateriais();
+}
+window._onDocTipoChange = _onDocTipoChange;
+
 function _htmlItemCubagem(it) {
-  const fornecedores = _catalogo.fornecedores || [];
+  const doc = _docLbl(it);
+  const { lista: fornecedores, filtrado } = _fornecedoresDaCubagem(it.material);
   const fornOpts = fornecedores.length
     ? '<option value="">Selecione o fornecedor</option>' + fornecedores.map((f) => `<option value="${escapeHtml(f)}" ${f === it.fornecedor ? 'selected' : ''}>${escapeHtml(f)}</option>`).join('')
     : '<option value="">Nenhum fornecedor disponível — avise o analista</option>';
+  const fornHint = !it.material ? '<span class="sol-hint">Selecione o material para ver quem entrega nesta central.</span>'
+    : filtrado ? '<span class="sol-hint">Fornecedores que já entregaram este material nesta central.</span>'
+    : fornecedores.length ? '<span class="sol-hint" style="color:var(--amber)">Nenhuma entrega deste material registrada nesta central — mostrando todos os fornecedores.</span>' : '';
 
   const metodoHtml = it.metodo === 'pesagem'
     ? `<div class="sol-sub-title">Pesagens (kg)</div>
@@ -567,6 +641,22 @@ function _htmlItemCubagem(it) {
            </div>`).join('')}
        </div>
        ${it.pesagens.length < MAX_VALORES ? `<button type="button" class="sol-btn sol-add-row-btn" onclick="_addPesagem('${it.id}')"><i class="ti ti-plus"></i> Adicionar pesagem</button>` : ''}`
+    : it.metodo === 'cone'
+    ? `<div class="sol-sub-title">Cones (metros)</div>
+       ${it.cones.map((c, idx) => `
+         <div class="sol-valor" style="margin-bottom:10px">
+           <div class="sol-fg">
+             <label class="sol-label">Cone ${idx + 1} — raio (m) <span class="sol-required">*</span></label>
+             <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(c.raio)}" oninput="_setCone('${it.id}', ${idx}, 'raio', this.value)">
+           </div>
+           <div class="sol-fg">
+             <label class="sol-label">Altura (m) <span class="sol-required">*</span></label>
+             <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(c.altura)}" oninput="_setCone('${it.id}', ${idx}, 'altura', this.value)">
+           </div>
+           ${it.cones.length > 1 ? `<button type="button" class="sol-item-row-rm" onclick="_rmCone('${it.id}', ${idx})" title="Remover cone"><i class="ti ti-x"></i></button>` : ''}
+         </div>`).join('')}
+       ${it.cones.length < MAX_VALORES ? `<button type="button" class="sol-btn sol-add-row-btn" onclick="_addCone('${it.id}')"><i class="ti ti-plus"></i> Adicionar cone</button>` : ''}
+       <div><span class="sol-hint">Volume de cada cone = π × raio² × altura ÷ 3; o total é a soma dos cones.</span></div>`
     : `<div class="sol-sub-title">Medidas da caçamba (metros)</div>
        <div class="sol-grid-3">
          <div class="sol-fg">
@@ -596,26 +686,33 @@ function _htmlItemCubagem(it) {
   return `
     <div class="sol-item-cubagem" data-item-id="${it.id}">
       ${_btnRemover(it, 'Remover cubagem')}
-      <div class="sol-sub-title">Nota fiscal da carreta</div>
+      <div class="sol-sub-title">Documento da carreta</div>
       <div class="sol-grid">
         <div class="sol-fg">
           <label class="sol-label">Material cubado <span class="sol-required">*</span> <span class="sol-hint">(grupo SAP)</span></label>
-          <select class="sol-select" onchange="_setCampo('${it.id}', 'material', this.value, true)">
+          <select class="sol-select" onchange="_onMaterialCubagemChange('${it.id}', this.value)">
             ${_materialOptionsHtml(it.material, CATEGORIAS_AGREGADO)}
           </select>
         </div>
         <div class="sol-fg">
           <label class="sol-label">Fornecedor <span class="sol-required">*</span></label>
           <select class="sol-select" onchange="_setCampo('${it.id}', 'fornecedor', this.value, true)">${fornOpts}</select>
+          ${fornHint}
         </div>
       </div>
       <div class="sol-grid-3">
         <div class="sol-fg">
-          <label class="sol-label">Nº da NF <span class="sol-required">*</span></label>
-          <input type="text" class="sol-input" maxlength="30" inputmode="numeric" placeholder="000000" value="${escapeHtml(it.nf)}" oninput="_setCampo('${it.id}', 'nf', this.value)">
+          <label class="sol-label">Nº ${doc.da} <span class="sol-required">*</span></label>
+          <div style="display:flex;gap:6px">
+            <select class="sol-select" style="width:auto;flex-shrink:0" onchange="_onDocTipoChange('${it.id}', this.value)" title="Tipo de documento">
+              <option value="NF" ${it.docTipo === 'NF' ? 'selected' : ''}>NF</option>
+              <option value="TICKET" ${it.docTipo === 'TICKET' ? 'selected' : ''}>Ticket</option>
+            </select>
+            <input type="text" class="sol-input" maxlength="30" placeholder="000000" value="${escapeHtml(it.nf)}" oninput="_setCampo('${it.id}', 'nf', this.value)">
+          </div>
         </div>
         <div class="sol-fg">
-          <label class="sol-label">Emissão da NF <span class="sol-required">*</span></label>
+          <label class="sol-label">Emissão ${doc.da} <span class="sol-required">*</span></label>
           <input type="date" class="sol-input" max="${hoje()}" value="${escapeHtml(it.dataEmissao)}" onchange="_setCampo('${it.id}', 'dataEmissao', this.value)">
         </div>
         <div class="sol-fg">
@@ -625,11 +722,11 @@ function _htmlItemCubagem(it) {
       </div>
       <div class="sol-grid">
         <div class="sol-fg">
-          <label class="sol-label">Peso descrito na NF <span class="sol-required">*</span></label>
+          <label class="sol-label">Peso descrito ${doc.no} <span class="sol-required">*</span></label>
           ${_inputNum(it.id, 'pesoNf', it.pesoNf)}
         </div>
         <div class="sol-fg">
-          <label class="sol-label">Unidade na NF <span class="sol-required">*</span></label>
+          <label class="sol-label">Unidade ${doc.no} <span class="sol-required">*</span></label>
           <select class="sol-select" onchange="_setCampo('${it.id}', 'umNf', this.value, true)">
             <option value="M3" ${it.umNf === 'M3' ? 'selected' : ''}>M³ — metro cúbico</option>
             <option value="TO" ${it.umNf === 'TO' ? 'selected' : ''}>TO — tonelada</option>
@@ -642,11 +739,12 @@ function _htmlItemCubagem(it) {
         <select class="sol-select" onchange="_onMetodoCubagemChange('${it.id}', this.value)">
           <option value="pesagem" ${it.metodo === 'pesagem' ? 'selected' : ''}>Por pesagem</option>
           <option value="volume" ${it.metodo === 'volume' ? 'selected' : ''}>Por volume (furos na caçamba)</option>
+          <option value="cone" ${it.metodo === 'cone' ? 'selected' : ''}>Por cone</option>
         </select>
       </div>
       ${metodoHtml}
       <div class="sol-resultado">
-        <div class="sol-fg" style="margin-bottom:0"><label class="sol-label">Peso da NF (kg)</label><div class="sol-var-display" id="sol-cub-nf-${it.id}">—</div></div>
+        <div class="sol-fg" style="margin-bottom:0"><label class="sol-label">Peso ${doc.da} (kg)</label><div class="sol-var-display" id="sol-cub-nf-${it.id}">—</div></div>
         <div class="sol-fg" style="margin-bottom:0"><label class="sol-label">Total aferido</label><div class="sol-var-display" id="sol-cub-af-${it.id}">—</div></div>
         <div class="sol-fg" style="margin-bottom:0"><label class="sol-label">Variação</label><div class="sol-var-display" id="sol-cub-var-${it.id}">—</div></div>
       </div>
@@ -903,11 +1001,13 @@ function _itensPayload(situacao) {
   }
   if (situacao === CATEGORIA_CUBAGEM) {
     return _itensMateriais.map((i) => ({
-      grupoMaterial: i.material, fornecedor: i.fornecedor, nf: i.nf.trim(),
+      grupoMaterial: i.material, fornecedor: i.fornecedor, docTipo: i.docTipo, nf: i.nf.trim(),
       dataEmissao: i.dataEmissao, dataRecebimento: i.dataRecebimento,
       pesoNf: _num(i.pesoNf), umNf: i.umNf, metodo: i.metodo,
       ...(i.metodo === 'pesagem'
         ? { pesagens: i.pesagens.map(_num) }
+        : i.metodo === 'cone'
+        ? { cones: i.cones.map((c) => ({ raio: _num(c.raio), altura: _num(c.altura) })) }
         : { comprimento: _num(i.comprimento), largura: _num(i.largura), alturas: i.alturas.map(_num) }),
     }));
   }
@@ -1017,6 +1117,13 @@ async function boot() {
 
   document.getElementById('sol-central').addEventListener('change', () => {
     if (document.getElementById('sol-fg-filial-destino').style.display !== 'none') _popularFilialDestino();
+    // Fornecedores da cubagem dependem da central.
+    if (_valorAtual('sol-categoria-situacao') === CATEGORIA_CUBAGEM) {
+      _itensMateriais.forEach((it) => {
+        if (it.fornecedor && !_fornecedoresDaCubagem(it.material).lista.includes(it.fornecedor)) it.fornecedor = '';
+      });
+      _renderItensMateriais();
+    }
   });
 
   const dropzone = document.getElementById('sol-dropzone');
@@ -1031,7 +1138,7 @@ async function boot() {
   document.getElementById('sol-form').addEventListener('submit', enviarSolicitacao);
 
   try {
-    _catalogo = { fornecedores: [], fatoresPorCategoria: {}, ...(await carregarCatalogo()) };
+    _catalogo = { fornecedores: [], entregas: [], fatoresPorCategoria: {}, ...(await carregarCatalogo()) };
     popularCentrais();
     _renderItensMateriais();
     _renderInformantes();
