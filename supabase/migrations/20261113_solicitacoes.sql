@@ -36,8 +36,10 @@ grant select on public.solicitacoes to authenticated;
 -- Analista só mexe no andamento — o conteúdo declarado pelo operador é imutável.
 grant update (status, status_obs, status_por, status_em) on public.solicitacoes to authenticated;
 
+drop policy if exists solicitacoes_select on public.solicitacoes;
 create policy solicitacoes_select on public.solicitacoes for select to authenticated
   using (user_id = auth.uid() or public.is_admin());
+drop policy if exists solicitacoes_update on public.solicitacoes;
 create policy solicitacoes_update on public.solicitacoes for update to authenticated
   using (user_id = auth.uid() or public.is_admin())
   with check (user_id = auth.uid() or public.is_admin());
@@ -50,6 +52,7 @@ create table if not exists public.solicitacao_fornecedores (
 );
 alter table public.solicitacao_fornecedores enable row level security;
 revoke all on public.solicitacao_fornecedores from anon;
+drop policy if exists solicitacao_fornecedores_select on public.solicitacao_fornecedores;
 create policy solicitacao_fornecedores_select on public.solicitacao_fornecedores for select to authenticated
   using (public.is_admin());
 
