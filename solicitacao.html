@@ -152,6 +152,37 @@
     width: 34px; height: 34px; border-radius: 10px; background: var(--orange-dim); color: var(--orange); font-size: 16px;
   }
   .sol-card-desc { font-size: 12px; color: var(--text2); line-height: 1.6; margin: 0 0 18px; padding-left: 46px; }
+
+  .sol-checklist { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .sol-checklist li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--text2); line-height: 1.5; }
+  .sol-checklist li i { color: var(--orange); font-size: 17px; flex-shrink: 0; margin-top: 1px; }
+  .sol-checklist strong { color: var(--text); font-weight: 600; }
+
+  .sol-alert-warn { background: var(--amber-bg); border: 1px solid var(--amber-border); color: #fcd28a; }
+  .sol-check { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; cursor: pointer; color: var(--text); }
+  .sol-check input { margin-top: 3px; accent-color: var(--orange); width: 15px; height: 15px; flex-shrink: 0; }
+
+  .sol-assinatura { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+  .sol-assinatura-decl { font-size: 12.5px; color: var(--text2); line-height: 1.7; margin-bottom: 12px; }
+  .sol-assinatura-decl strong { color: var(--text); }
+  .sol-assinatura-pad { position: relative; background: #fff; border-radius: var(--radius); height: 160px; touch-action: none; }
+  .sol-assinatura-pad canvas { display: block; width: 100%; height: 100%; border-radius: var(--radius); cursor: crosshair; }
+  .sol-assinatura-pad .linha { position: absolute; left: 24px; right: 24px; bottom: 34px; border-top: 1px dashed #b9b3a5; pointer-events: none; }
+  .sol-assinatura-pad .vazio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #a39d90; font-size: 12px; pointer-events: none; }
+  .sol-assinatura-rodape { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11.5px; color: var(--text3); }
+  .sol-assinatura-rodape .ok { color: var(--green); }
+
+  .sol-item-cubagem { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; position: relative; }
+  .sol-item-cubagem .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 12px; }
+  .sol-sub-title { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text3); margin: 4px 0 10px; }
+  .sol-valores { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .sol-valor { display: flex; gap: 4px; align-items: flex-end; }
+  .sol-valor .sol-fg { margin-bottom: 0; flex: 1; }
+  .sol-valor .sol-item-row-rm { position: static; width: 30px; height: 38px; flex-shrink: 0; }
+  .sol-resultado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 6px; }
+  @media (max-width: 620px) { .sol-resultado { grid-template-columns: 1fr; } }
+  .sol-resultado .sol-var-display { font-size: 12.5px; }
+  .sol-resultado-nota { font-size: 11px; color: var(--amber); margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -197,10 +228,34 @@
       <div class="seg" data-seg="2"></div>
       <div class="seg" data-seg="3"></div>
       <div class="seg" data-seg="4"></div>
+      <div class="seg" data-seg="5"></div>
     </div>
-    <div class="sol-steps-label" id="sol-steps-label">Etapa 1 de 4 — Onde e quando</div>
+    <div class="sol-steps-label" id="sol-steps-label">Etapa 1 de 5 — Antes de começar</div>
 
     <div class="sol-step" data-step="1">
+      <div class="sol-card">
+        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-camera"></i></span> Antes de começar</div>
+        <div class="sol-card-desc">Tenha em mãos os registros do ocorrido — são eles que comprovam a sua solicitação.</div>
+        <ul class="sol-checklist">
+          <li><i class="ti ti-photo"></i> <span><strong>Fotos do ocorrido</strong> — material, local, balança, caçamba, medições.</span></li>
+          <li><i class="ti ti-file-invoice"></i> <span><strong>Nota fiscal</strong> (DANFE) da carga envolvida, quando houver.</span></li>
+          <li><i class="ti ti-receipt"></i> <span><strong>Canhoto</strong> assinado, ticket de pesagem ou romaneio.</span></li>
+          <li><i class="ti ti-notes"></i> <span><strong>Anotações</strong> feitas na hora (pesos, alturas, horários).</span></li>
+        </ul>
+        <div class="sol-alert sol-alert-info" style="margin:16px 0 0">
+          <i class="ti ti-info-circle"></i>
+          <div>Você poderá anexar esses arquivos na última etapa. Enviar sem nenhum comprovante é possível, mas nesse caso você assume a responsabilidade pela falta de prova do ocorrido.</div>
+        </div>
+      </div>
+      <div class="sol-step-footer">
+        <span></span>
+        <div class="sol-step-footer-right">
+          <button type="button" class="sol-btn sol-btn-primary" onclick="avancarStep()">Começar <i class="ti ti-arrow-right"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sol-step" data-step="2" style="display:none">
       <div class="sol-card">
         <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-building-warehouse"></i></span> Onde e quando</div>
         <div class="sol-card-desc">Em qual central a movimentação aconteceu, e a data real do ocorrido (não precisa ser hoje).</div>
@@ -218,14 +273,14 @@
         </div>
       </div>
       <div class="sol-step-footer">
-        <span></span>
+        <button type="button" class="sol-btn" onclick="voltarStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
         <div class="sol-step-footer-right">
           <button type="button" class="sol-btn sol-btn-primary" onclick="avancarStep()">Próximo <i class="ti ti-arrow-right"></i></button>
         </div>
       </div>
     </div>
 
-    <div class="sol-step" data-step="2" style="display:none">
+    <div class="sol-step" data-step="3" style="display:none">
       <div class="sol-card">
         <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-package"></i></span> O que aconteceu</div>
         <div class="sol-card-desc">Motivo da movimentação, material(is) envolvido(s) e uma descrição de como foi identificado.</div>
@@ -233,7 +288,8 @@
           <label class="sol-label">Categoria de Situação <span class="sol-required">*</span></label>
           <select id="sol-categoria-situacao" class="sol-select" required onchange="onCategoriaSituacaoChange()">
             <option value="">Selecione a situação</option>
-            <option value="Perda de material devido a falha na balança">Perda de material devido a falha na balança</option>
+            <option value="Teste de canto">Teste de canto</option>
+            <option value="Cubagem de agregados">Cubagem de agregados</option>
             <option value="Perda de material devido a contaminação">Perda de material devido a contaminação</option>
             <option value="Perda de material por motivos climáticos ou de terreno">Perda de material por motivos climáticos ou de terreno</option>
             <option value="Coleta de material contaminado">Coleta de material contaminado</option>
@@ -265,7 +321,7 @@
       </div>
     </div>
 
-    <div class="sol-step" data-step="3" style="display:none">
+    <div class="sol-step" data-step="4" style="display:none">
       <div class="sol-card">
         <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-user"></i></span> Quem está informando</div>
         <div class="sol-card-desc">Nome, cargo e contato de cada pessoa que está relatando o ocorrido — cada informante se responsabiliza pelo que declarou.</div>
@@ -282,20 +338,12 @@
       </div>
     </div>
 
-    <div class="sol-step" data-step="4" style="display:none">
+    <div class="sol-step" data-step="5" style="display:none">
       <div class="sol-card">
-        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-signature"></i></span> Termo de Responsabilidade sobre Declaração</div>
-        <div class="sol-card-desc">Documento que formaliza a responsabilidade sobre o que foi declarado, mais o comprovante da movimentação.</div>
-        <div class="sol-alert sol-alert-info">
-          <i class="ti ti-info-circle"></i>
-          <div>Ao assinar o Termo de Responsabilidade, você (o informante) declara que as informações prestadas nesta solicitação são verídicas e assume a responsabilidade por elas perante o setor de Estoque/Insumos e diretoria da Concrelagos. Imprima o termo abaixo, leia, assine, e anexe a foto/scan dele junto com qualquer outro comprovante (foto da pesagem, nota de coleta, anotações, etc.) antes de enviar.</div>
-        </div>
-        <button type="button" class="sol-btn" id="sol-btn-imprimir" onclick="imprimirTermo()">
-          <i class="ti ti-printer"></i> Imprimir Termo de Responsabilidade
-        </button>
-
-        <div class="sol-fg" style="margin-top:16px">
-          <label class="sol-label">Anexos <span class="sol-required">*</span> <span class="sol-hint">(termo assinado + comprovantes — imagem, PDF ou Word, até 15MB cada)</span></label>
+        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-paperclip"></i></span> Comprovantes</div>
+        <div class="sol-card-desc">Fotos, nota fiscal, canhoto, ticket de pesagem, anotações — tudo que comprove o ocorrido.</div>
+        <div class="sol-fg">
+          <label class="sol-label">Anexos <span class="sol-hint">(imagem, PDF ou Word, até 15MB cada)</span></label>
           <div class="sol-dropzone" id="sol-dropzone" onclick="document.getElementById('sol-anexos-input').click()">
             <i class="ti ti-cloud-upload"></i>
             Clique ou arraste os arquivos aqui
@@ -303,6 +351,19 @@
           <input type="file" id="sol-anexos-input" style="display:none" multiple accept="image/*,.pdf,.doc,.docx">
           <div class="sol-anexo-lista" id="sol-anexo-lista"></div>
         </div>
+        <div class="sol-alert sol-alert-warn" id="sol-sem-comprovante" style="margin:4px 0 0">
+          <i class="ti ti-alert-triangle"></i>
+          <div>
+            Nenhuma prova do ocorrido foi anexada.
+            <label class="sol-check"><input type="checkbox" id="sol-sem-comprovante-ok"> Declaro que não tenho comprovante do ocorrido e me responsabilizo pela falta de prova.</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sol-card">
+        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-signature"></i></span> Termo de Responsabilidade</div>
+        <div class="sol-card-desc">Cada informante lê a declaração e assina no quadro com o dedo ou o mouse.</div>
+        <div id="sol-assinaturas-lista"></div>
       </div>
 
       <div class="sol-turnstile" id="turnstile-solicitacao-widget"></div>

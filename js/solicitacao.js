@@ -1,31 +1,23 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════
-// SOLICITAÇÃO PÚBLICA DE DAI — lógica da página isolada
+// SOLICITAÇÃO PÚBLICA — lógica da página isolada (solicitacao.html)
 // ═══════════════════════════════════════════════════════════
 // Sem login. Toda validação "de verdade" acontece no servidor (Edge
-// Function solicitacao-dai) — o que está aqui é só validação de
-// conveniência (UX rápida) e nunca deve ser tratado como a barreira de
-// segurança real.
+// Function solicitacao-dai) — o que está aqui é só conveniência de UX.
 //
-// Anexos sobem DIRETO pro Supabase Storage (bucket privado
-// "solicitacoes-anexos") usando a chave publicável (mesma do resto do
-// sistema — a proteção real é a política de RLS do bucket, que só libera
-// INSERT para quem não tem sessão, nunca leitura). Só o CAMINHO do
-// arquivo é enviado depois para a Edge Function.
+// Desde 13/11/2026 o envio NÃO gera DAI: vira registros em
+// public.solicitacoes (um por categoria de material, atribuído ao
+// analista da categoria), tratados na tela Solicitações do app.
 //
-// Suporta múltiplos materiais (cada um pode virar uma DAI separada, se
-// forem de categorias diferentes — resolvido no servidor) e múltiplos
-// informantes (cada um se responsabiliza pelo que declarou).
+// Anexos sobem DIRETO pro Storage (bucket privado "solicitacoes-anexos",
+// policy só de INSERT pro anon). As assinaturas vão em base64 no envio e
+// é o servidor que as grava no bucket.
 // ═══════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://kgbmswykhqhmcajxlvri.supabase.co';
-// Usando a chave "anon" legada (formato JWT) em vez da chave publicável nova
-// (sb_publishable_...) — o serviço de Storage do Supabase não estava
-// aplicando corretamente o papel "anon" com a chave nova nos uploads
-// anônimos (confirmado por teste: a mesma operação via SQL direto
-// funcionava, mas via API de Storage com a chave nova falhava). Mesmo
-// nível de segurança, formato mais antigo e mais compatível.
+// Chave "anon" legada (JWT) — a publicável nova (sb_publishable_...) não
+// aplicava o papel anon nos uploads do Storage (confirmado por teste).
 const SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnYm1zd3lraHFobWNhanhsdnJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5NDU5NjEsImV4cCI6MjEwMDUyMTk2MX0.njF0oDlHxJ1DKp_ZcLEGaXnFjCvFLRHnt8N_TGhLJSg';
 const FUNCTION_URL = SUPABASE_URL + '/functions/v1/solicitacao-dai';
 const TURNSTILE_SITEKEY = '0x4AAAAAAD-V-RBGDDiirGsF';
@@ -34,39 +26,40 @@ const ANEXO_MAX_MB = 15;
 const ANEXO_MAX_COUNT = 10;
 const ANEXO_TIPOS_ACEITOS = /^image\/|^application\/pdf$|^application\/msword$|wordprocessingml/;
 const CATEGORIA_TRANSFERENCIA = 'Transferência de material entre filiais';
-const CATEGORIA_BALANCA = 'Perda de material devido a falha na balança';
-const CATEGORIAS_MATERIAL_BALANCA = ['Aglomerante', 'Agregado Graúdo', 'Agregado Miúdo', 'Aditivo', 'Adição'];
+const CATEGORIA_CANTO = 'Teste de canto';
+const CATEGORIA_CUBAGEM = 'Cubagem de agregados';
+const CATEGORIAS_MATERIAL_CANTO = ['Aglomerante', 'Agregado Graúdo', 'Agregado Miúdo', 'Aditivo', 'Adição'];
 const CANTOS_UNICO_CATEGORIAS = ['Aditivo', 'Adição'];
+const CATEGORIAS_AGREGADO = ['Agregado Graúdo', 'Agregado Miúdo'];
+const CARGOS = ['Operador', 'Regional', 'Líder Técnico'];
+const MAX_VALORES = 20; // pesagens / furos por cubagem
 
-// CRÍTICO: esta página fica no mesmo domínio do app principal. Sem estas
-// opções, o supabase-js reaproveitaria automaticamente uma sessão de
-// login já salva no navegador (localStorage) — se quem acessasse o link
-// público também estivesse logado no sistema em outra aba, a requisição
-// sairia autenticada como aquele usuário, não como anônima, e o upload
-// falharia (só existe policy de INSERT pra "anon" nesse bucket, de
-// propósito). Estas opções garantem que esta página nunca lê, nunca usa
-// e nunca grava sessão nenhuma — é sempre 100% anônima.
+// CRÍTICO: mesma origem do app principal — sem estas opções o supabase-js
+// reaproveitaria uma sessão logada em outra aba e o upload deixaria de ser
+// anônimo (só existe policy de INSERT pra anon nesse bucket).
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-let _catalogo = { centrais: [], materiaisPorCategoria: {} };
+let _catalogo = { centrais: [], materiaisPorCategoria: {}, fornecedores: [], fatores: [] };
 let _anexos = []; // { id, file, nome, tamanho, tipo, path, status: 'pendente'|'enviando'|'ok'|'erro' }
 let _anexoSeq = 0;
 let turnstileWidgetId = null;
 
-let _itensMateriais = []; // { id, material, peso }
+let _itensMateriais = [];
 let _itemSeq = 0;
-let _informantes = []; // { id, nome, cargo, contato }
+let _informantes = []; // { id, nome, cargo, contato, assinatura (data URL PNG) }
 let _infSeq = 0;
 
 // ── Navegação por etapas (wizard) ──────────────────────────────────────
 const STEP_LABELS = {
-  1: 'Etapa 1 de 4 — Onde e quando',
-  2: 'Etapa 2 de 4 — O que aconteceu',
-  3: 'Etapa 3 de 4 — Quem está informando',
-  4: 'Etapa 4 de 4 — Termo e anexos',
+  1: 'Etapa 1 de 5 — Antes de começar',
+  2: 'Etapa 2 de 5 — Onde e quando',
+  3: 'Etapa 3 de 5 — O que aconteceu',
+  4: 'Etapa 4 de 5 — Quem está informando',
+  5: 'Etapa 5 de 5 — Comprovantes e assinatura',
 };
+const TOTAL_STEPS = 5;
 let _stepAtual = 1;
 
 function irParaStep(n) {
@@ -81,15 +74,17 @@ function irParaStep(n) {
   const label = document.getElementById('sol-steps-label');
   if (label) label.textContent = STEP_LABELS[n] || '';
   _stepAtual = n;
+  // Quadro de assinatura precisa estar visível pra medir o tamanho.
+  if (n === TOTAL_STEPS) _renderAssinaturas();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function avancarStep() {
   limparAlerta();
-  if (_stepAtual === 1 && !validarSecaoOndeEQuando()) return;
-  if (_stepAtual === 2 && !validarSecaoOQueAconteceu()) return;
-  if (_stepAtual === 3 && !validarSecaoInformantes()) return;
-  irParaStep(Math.min(_stepAtual + 1, 4));
+  if (_stepAtual === 2 && !validarSecaoOndeEQuando()) return;
+  if (_stepAtual === 3 && !validarSecaoOQueAconteceu()) return;
+  if (_stepAtual === 4 && !validarSecaoInformantes()) return;
+  irParaStep(Math.min(_stepAtual + 1, TOTAL_STEPS));
 }
 window.avancarStep = avancarStep;
 
@@ -99,60 +94,7 @@ function voltarStep() {
 }
 window.voltarStep = voltarStep;
 
-// ── Validação por seção (reaproveitada tanto pra avançar de etapa
-// quanto pela checagem final antes do envio) ───────────────────────────
-function validarSecaoOndeEQuando() {
-  const central = _valorAtual('sol-central');
-  const dataOcorrido = _valorAtual('sol-data');
-  if (!central) { mostrarAlerta('Selecione a central.', 'error'); return false; }
-  if (!dataOcorrido) { mostrarAlerta('Informe a data do ocorrido.', 'error'); return false; }
-  if (dataOcorrido > hoje()) { mostrarAlerta('A data do ocorrido não pode ser no futuro.', 'error'); return false; }
-  return true;
-}
-
-function validarSecaoOQueAconteceu() {
-  const central = _valorAtual('sol-central');
-  const categoriaSituacao = _valorAtual('sol-categoria-situacao');
-  const filialDestino = _valorAtual('sol-filial-destino');
-  const descricao = _valorAtual('sol-descricao');
-
-  if (!categoriaSituacao) { mostrarAlerta('Selecione a categoria de situação.', 'error'); return false; }
-  if (categoriaSituacao === CATEGORIA_TRANSFERENCIA) {
-    if (!filialDestino) { mostrarAlerta('Selecione a filial de destino.', 'error'); return false; }
-    if (filialDestino === central) { mostrarAlerta('A filial de destino não pode ser igual à central de origem.', 'error'); return false; }
-  }
-
-  if (categoriaSituacao === CATEGORIA_BALANCA) {
-    if (!_itensMateriais.length) { mostrarAlerta('Adicione ao menos um teste de aferição.', 'error'); return false; }
-    for (const it of _itensMateriais) {
-      if (!it.categoriaMaterial) { mostrarAlerta('Selecione a categoria do material em todos os testes adicionados.', 'error'); return false; }
-      const ref = parseFloat(String(it.referencia).replace(',', '.'));
-      if (!it.referencia || isNaN(ref) || ref <= 0) { mostrarAlerta(`Informe um peso/volume de referência válido para "${it.categoriaMaterial}".`, 'error'); return false; }
-      const cantosNum = (it.cantos || []).map((c) => parseFloat(String(c).replace(',', '.')));
-      if (!cantosNum.length || cantosNum.some((c) => isNaN(c) || c < 0)) { mostrarAlerta(`Preencha todos os cantos para "${it.categoriaMaterial}".`, 'error'); return false; }
-    }
-  } else {
-    if (!_itensMateriais.length) { mostrarAlerta('Adicione ao menos um material.', 'error'); return false; }
-    for (const it of _itensMateriais) {
-      if (!it.material) { mostrarAlerta('Selecione o material em todas as linhas adicionadas (ou remova as vazias).', 'error'); return false; }
-      const pesoNum = parseFloat(String(it.peso).replace(',', '.'));
-      if (!it.peso || isNaN(pesoNum) || pesoNum <= 0) { mostrarAlerta(`Informe um peso válido para "${it.material}".`, 'error'); return false; }
-    }
-  }
-
-  if (!descricao) { mostrarAlerta('Descreva o ocorrido.', 'error'); return false; }
-  return true;
-}
-
-function validarSecaoInformantes() {
-  if (!_informantes.length) { mostrarAlerta('Informe ao menos um informante.', 'error'); return false; }
-  for (const inf of _informantes) {
-    if (!inf.nome.trim()) { mostrarAlerta('Informe o nome em todas as linhas de informante adicionadas (ou remova as vazias).', 'error'); return false; }
-    if (!inf.cargo) { mostrarAlerta(`Selecione o cargo de "${inf.nome}".`, 'error'); return false; }
-  }
-  return true;
-}
-
+// ── Utilidades ─────────────────────────────────────────────────────────
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -162,8 +104,19 @@ function formatBytes(bytes) {
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / 1024 / 1024).toFixed(1) + ' MB';
 }
-function hoje() { return new Date().toISOString().split('T')[0]; }
+// Data LOCAL (toISOString é UTC — depois das 21h em Brasília já seria amanhã).
+function hoje() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
 function _valorAtual(id) { return (document.getElementById(id)?.value || '').trim(); }
+function _num(v) { return parseFloat(String(v ?? '').replace(',', '.')); }
+function _positivo(v) { const n = _num(v); return Number.isFinite(n) && n > 0; }
+function _fmt2(n) { return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function _fmtKg(n) { return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' kg'; }
+function _normText(v) { return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase(); }
+function _item(id) { return _itensMateriais.find((i) => i.id === id); }
 
 function mostrarAlerta(msg, tipo) {
   const area = document.getElementById('sol-alert-area');
@@ -173,15 +126,86 @@ function mostrarAlerta(msg, tipo) {
   area.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function limparAlerta() { document.getElementById('sol-alert-area').innerHTML = ''; }
+function _erro(msg) { mostrarAlerta(msg, 'error'); return false; }
+
+// ── Validação por seção ────────────────────────────────────────────────
+function validarSecaoOndeEQuando() {
+  const dataOcorrido = _valorAtual('sol-data');
+  if (!_valorAtual('sol-central')) return _erro('Selecione a central.');
+  if (!dataOcorrido) return _erro('Informe a data do ocorrido.');
+  if (dataOcorrido > hoje()) return _erro('A data do ocorrido não pode ser no futuro.');
+  return true;
+}
+
+function validarSecaoOQueAconteceu() {
+  const central = _valorAtual('sol-central');
+  const categoriaSituacao = _valorAtual('sol-categoria-situacao');
+  const filialDestino = _valorAtual('sol-filial-destino');
+
+  if (!categoriaSituacao) return _erro('Selecione a categoria de situação.');
+  if (categoriaSituacao === CATEGORIA_TRANSFERENCIA) {
+    if (!filialDestino) return _erro('Selecione a filial de destino.');
+    if (filialDestino === central) return _erro('A filial de destino não pode ser igual à central de origem.');
+  }
+  if (!_itensMateriais.length) return _erro('Adicione ao menos um item.');
+
+  for (const it of _itensMateriais) {
+    if (categoriaSituacao === CATEGORIA_CANTO) {
+      if (!it.categoriaMaterial) return _erro('Selecione a categoria do material em todos os testes adicionados.');
+      if (!_positivo(it.referencia)) return _erro(`Informe um peso/volume de referência válido para "${it.categoriaMaterial}".`);
+      const cantos = (it.cantos || []).map(_num);
+      if (!cantos.length || cantos.some((c) => isNaN(c) || c < 0)) return _erro(`Preencha todos os cantos para "${it.categoriaMaterial}".`);
+    } else if (categoriaSituacao === CATEGORIA_CUBAGEM) {
+      if (!it.material) return _erro('Selecione o material em todas as cubagens.');
+      const ref = `"${it.material}"`;
+      if (!it.fornecedor) return _erro(`Selecione o fornecedor da carreta (${ref}).`);
+      if (!it.nf.trim()) return _erro(`Informe o número da NF (${ref}).`);
+      if (!it.dataEmissao) return _erro(`Informe a data de emissão da NF (${ref}).`);
+      if (!it.dataRecebimento) return _erro(`Informe a data de recebimento da carga (${ref}).`);
+      if (it.dataEmissao > hoje() || it.dataRecebimento > hoje()) return _erro(`As datas da NF não podem ser no futuro (${ref}).`);
+      if (it.dataRecebimento < it.dataEmissao) return _erro(`O recebimento não pode ser antes da emissão da NF (${ref}).`);
+      if (!_positivo(it.pesoNf)) return _erro(`Informe o peso descrito na NF (${ref}).`);
+      if (it.metodo === 'pesagem') {
+        if (!it.pesagens.length || !it.pesagens.every(_positivo)) return _erro(`Preencha todas as pesagens (${ref}).`);
+      } else {
+        if (!_positivo(it.comprimento) || !_positivo(it.largura)) return _erro(`Informe comprimento e largura da caçamba (${ref}).`);
+        if (!it.alturas.every(_positivo)) return _erro(`Preencha a altura de todos os furos (${ref}).`);
+      }
+    } else {
+      if (!it.material) return _erro('Selecione o material em todas as linhas adicionadas (ou remova as vazias).');
+      if (!_positivo(it.peso)) return _erro(`Informe um peso válido para "${it.material}".`);
+    }
+  }
+
+  if (!_valorAtual('sol-descricao')) return _erro('Descreva o ocorrido.');
+  return true;
+}
+
+function validarSecaoInformantes() {
+  if (!_informantes.length) return _erro('Informe ao menos um informante.');
+  for (const inf of _informantes) {
+    if (!inf.nome.trim()) return _erro('Informe o nome em todas as linhas de informante adicionadas (ou remova as vazias).');
+    if (!inf.cargo) return _erro(`Selecione o cargo de "${inf.nome}".`);
+  }
+  return true;
+}
+
+function validarSecaoFinal() {
+  if (_anexos.some((a) => a.status === 'enviando')) return _erro('Aguarde o envio dos anexos terminar.');
+  if (_anexos.some((a) => a.status === 'erro')) return _erro('Remova os anexos que falharam antes de continuar.');
+  if (!_anexos.length && !document.getElementById('sol-sem-comprovante-ok').checked) {
+    return _erro('Nenhum comprovante anexado: marque a declaração de que você se responsabiliza pela falta de prova, ou anexe os arquivos.');
+  }
+  const semAssinatura = _informantes.find((i) => !i.assinatura);
+  if (semAssinatura) return _erro(`Falta a assinatura de "${semAssinatura.nome}".`);
+  return true;
+}
 
 // ── Turnstile ────────────────────────────────────────────────────────
 function _turnstileRender() {
   if (turnstileWidgetId !== null) return;
   if (typeof turnstile === 'undefined') { setTimeout(_turnstileRender, 400); return; }
-  turnstileWidgetId = turnstile.render('#turnstile-solicitacao-widget', {
-    sitekey: TURNSTILE_SITEKEY,
-    theme: 'dark',
-  });
+  turnstileWidgetId = turnstile.render('#turnstile-solicitacao-widget', { sitekey: TURNSTILE_SITEKEY, theme: 'dark' });
 }
 function _turnstileGetToken() {
   if (typeof turnstile === 'undefined' || turnstileWidgetId === null) return null;
@@ -192,7 +216,7 @@ function _turnstileReset() {
   turnstile.reset(turnstileWidgetId);
 }
 
-// ── Catálogo (central + materiais por categoria) ───────────────────────
+// ── Catálogo ───────────────────────────────────────────────────────────
 async function carregarCatalogo() {
   const resp = await fetch(FUNCTION_URL, {
     method: 'POST',
@@ -210,10 +234,11 @@ function popularCentrais() {
     + _catalogo.centrais.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 }
 
-function _materialOptionsHtml(selecionado) {
+function _materialOptionsHtml(selecionado, soCategorias) {
   const grupos = _catalogo.materiaisPorCategoria || {};
   let html = '<option value="">Selecione o material</option>';
   Object.keys(grupos).forEach((categoria) => {
+    if (soCategorias && !soCategorias.includes(categoria)) return;
     const itens = grupos[categoria];
     if (!itens || !itens.length) return;
     html += `<optgroup label="${escapeHtml(categoria)}">`
@@ -223,7 +248,7 @@ function _materialOptionsHtml(selecionado) {
   return html;
 }
 
-// ── Categoria de situação → Filial de destino condicional ─────────────
+// ── Categoria de situação ─────────────────────────────────────────────
 function onCategoriaSituacaoChange() {
   const val = _valorAtual('sol-categoria-situacao');
   const wrap = document.getElementById('sol-fg-filial-destino');
@@ -236,7 +261,10 @@ function onCategoriaSituacaoChange() {
     sel.value = '';
   }
   const addLabel = document.getElementById('sol-add-item-label');
-  if (addLabel) addLabel.textContent = val === CATEGORIA_BALANCA ? 'Adicionar outro teste de aferição' : 'Adicionar outro material';
+  if (addLabel) {
+    addLabel.textContent = val === CATEGORIA_CANTO ? 'Adicionar outro teste de canto'
+      : val === CATEGORIA_CUBAGEM ? 'Adicionar outra carreta' : 'Adicionar outro material';
+  }
   _renderItensMateriais();
 }
 window.onCategoriaSituacaoChange = onCategoriaSituacaoChange;
@@ -250,16 +278,18 @@ function _popularFilialDestino() {
     + opcoes.map((c) => `<option value="${escapeHtml(c)}" ${c === valorAtual ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
 }
 
-// ── Itens (materiais) — lista dinâmica ─────────────────────────────────
-// O mesmo array serve pros dois modos: normal (material + peso) e
-// aferição de balança (teste dos cantos) — a categoria de situação
-// escolhida decide qual conjunto de campos é renderizado pra TODOS os
-// itens da lista (ver _renderItensMateriais).
+// ── Itens — lista dinâmica ─────────────────────────────────────────────
+// O mesmo objeto serve aos três modos (material + peso, teste de canto,
+// cubagem); a categoria de situação decide quais campos são renderizados.
 function _novoItemMaterial() {
   return {
     id: 'im' + (_itemSeq++),
     material: '', peso: '',
+    // teste de canto
     categoriaMaterial: '', unidade: 'kg', qtdCantos: 4, referencia: '', cantos: ['', '', '', ''],
+    // cubagem
+    fornecedor: '', nf: '', dataEmissao: '', dataRecebimento: '', pesoNf: '', umNf: 'M3',
+    metodo: 'pesagem', pesagens: [''], comprimento: '', largura: '', alturas: ['', '', ''],
   };
 }
 
@@ -276,42 +306,36 @@ function removerItemMaterial(id) {
 }
 window.removerItemMaterial = removerItemMaterial;
 
-function _onItemMaterialChange(id, value) {
-  const it = _itensMateriais.find((i) => i.id === id);
-  if (it) it.material = value;
+// Atualiza um campo simples. `recalc` = só refaz o resultado (sem
+// re-renderizar a lista, pra não perder o foco de quem está digitando).
+function _setCampo(id, campo, value, recalc) {
+  const it = _item(id);
+  if (!it) return;
+  it[campo] = value;
+  if (recalc) _atualizarResultado(id);
 }
-window._onItemMaterialChange = _onItemMaterialChange;
+window._setCampo = _setCampo;
 
-function _onItemPesoChange(id, value) {
-  const it = _itensMateriais.find((i) => i.id === id);
-  if (it) it.peso = value;
+function _setValor(id, lista, idx, value) {
+  const it = _item(id);
+  if (!it) return;
+  it[lista][idx] = value;
+  _atualizarResultado(id);
 }
-window._onItemPesoChange = _onItemPesoChange;
+window._setValor = _setValor;
 
-// ── Teste dos cantos (aferição de balança) ─────────────────────────────
-function _onCategoriaMaterialBalancaChange(id, value) {
-  const it = _itensMateriais.find((i) => i.id === id);
+// ── Teste de canto ─────────────────────────────────────────────────────
+function _onCategoriaMaterialCantoChange(id, value) {
+  const it = _item(id);
   if (!it) return;
   it.categoriaMaterial = value;
   if (CANTOS_UNICO_CATEGORIAS.includes(value)) { it.qtdCantos = 1; it.cantos = [it.cantos[0] || '']; }
   _renderItensMateriais();
 }
-window._onCategoriaMaterialBalancaChange = _onCategoriaMaterialBalancaChange;
-
-function _onUnidadeBalancaChange(id, value) {
-  const it = _itensMateriais.find((i) => i.id === id);
-  if (it) { it.unidade = value; _atualizarVariacao(id); }
-}
-window._onUnidadeBalancaChange = _onUnidadeBalancaChange;
-
-function _onReferenciaChange(id, value) {
-  const it = _itensMateriais.find((i) => i.id === id);
-  if (it) { it.referencia = value; _atualizarVariacao(id); }
-}
-window._onReferenciaChange = _onReferenciaChange;
+window._onCategoriaMaterialCantoChange = _onCategoriaMaterialCantoChange;
 
 function _onQtdCantosChange(id, value) {
-  const it = _itensMateriais.find((i) => i.id === id);
+  const it = _item(id);
   if (!it) return;
   const n = Math.min(4, Math.max(1, parseInt(value, 10) || 1));
   it.qtdCantos = n;
@@ -320,38 +344,95 @@ function _onQtdCantosChange(id, value) {
 }
 window._onQtdCantosChange = _onQtdCantosChange;
 
-function _onCantoChange(id, idx, value) {
-  const it = _itensMateriais.find((i) => i.id === id);
-  if (!it) return;
-  it.cantos[idx] = value;
-  _atualizarVariacao(id);
-}
-window._onCantoChange = _onCantoChange;
-
-// Retorna { media, variacaoAbs, variacaoPct } ou null se os dados ainda
-// não são suficientes pra calcular (referência/cantos incompletos).
-function _calcVariacaoBalanca(it) {
-  const ref = parseFloat(String(it.referencia).replace(',', '.'));
-  const cantosNum = (it.cantos || []).map((c) => parseFloat(String(c).replace(',', '.')));
-  if (!Number.isFinite(ref) || ref <= 0 || !cantosNum.length || cantosNum.some((c) => !Number.isFinite(c))) return null;
-  const media = cantosNum.reduce((a, b) => a + b, 0) / cantosNum.length;
+function _calcCanto(it) {
+  const ref = _num(it.referencia);
+  const cantos = (it.cantos || []).map(_num);
+  if (!Number.isFinite(ref) || ref <= 0 || !cantos.length || cantos.some((c) => !Number.isFinite(c))) return null;
+  const media = cantos.reduce((a, b) => a + b, 0) / cantos.length;
   const variacaoAbs = media - ref;
-  const variacaoPct = (variacaoAbs / ref) * 100;
-  return { media, variacaoAbs, variacaoPct };
+  return { media, variacaoAbs, variacaoPct: (variacaoAbs / ref) * 100 };
 }
 
-// Atualiza só o texto do resultado (sem re-renderizar a lista inteira) —
-// pra não perder o foco/cursor do campo enquanto o operador ainda está
-// digitando os cantos.
-function _atualizarVariacao(id) {
-  const it = _itensMateriais.find((i) => i.id === id);
-  const el = document.getElementById('sol-var-' + id);
-  if (!it || !el) return;
-  const r = _calcVariacaoBalanca(it);
-  if (!r) { el.textContent = '—'; el.classList.remove('alerta'); return; }
-  const sinal = r.variacaoAbs >= 0 ? '+' : '';
-  el.textContent = `${sinal}${r.variacaoPct.toFixed(2)}% (${sinal}${r.variacaoAbs.toFixed(2)} ${it.unidade})`;
-  el.classList.toggle('alerta', Math.abs(r.variacaoPct) >= 1);
+// ── Cubagem ───────────────────────────────────────────────────────────
+// Fator M3→KG do ADM, mesma regra de _lookupFatorConversao (ui.js) e da
+// Edge Function. ponytail: regra copiada nos 3 lugares — mudar junto.
+function _lookupFatorM3(material, fornecedor) {
+  const m = _normText(material);
+  const f = _normText(fornecedor);
+  const cand = (_catalogo.fatores || []).filter((r) => r.grupo && m.includes(_normText(r.grupo)));
+  if (!cand.length) return null;
+  const esp = f ? cand.filter((r) => r.fornecedor && f.includes(_normText(r.fornecedor))) : [];
+  const pool = esp.length ? esp : cand.filter((r) => !r.fornecedor);
+  if (!pool.length) return null;
+  return [...pool].sort((a, b) => b.grupo.length - a.grupo.length)[0];
+}
+
+// Tudo em KG. Sem fator de densidade, o que depende de M3 fica null (o
+// analista converte) — nunca se inventa densidade.
+function _calcCubagem(it) {
+  const pesoNf = _num(it.pesoNf);
+  const fatorRow = _lookupFatorM3(it.material, it.fornecedor);
+  const fator = fatorRow ? fatorRow.fator : null;
+  let nfKg = null;
+  if (pesoNf > 0) nfKg = it.umNf === 'KG' ? pesoNf : it.umNf === 'TO' ? pesoNf * 1000 : (fator ? pesoNf * fator : null);
+
+  let volumeM3 = null, aferidoKg = null;
+  if (it.metodo === 'pesagem') {
+    if (it.pesagens.length && it.pesagens.every(_positivo)) aferidoKg = it.pesagens.reduce((a, b) => a + _num(b), 0);
+  } else if (_positivo(it.comprimento) && _positivo(it.largura) && it.alturas.length && it.alturas.every(_positivo)) {
+    const alturaMedia = it.alturas.reduce((a, b) => a + _num(b), 0) / it.alturas.length;
+    volumeM3 = _num(it.comprimento) * _num(it.largura) * alturaMedia;
+    aferidoKg = fator ? volumeM3 * fator : null;
+  }
+  const precisaFator = it.umNf === 'M3' || it.metodo === 'volume';
+  const variacaoKg = nfKg !== null && aferidoKg !== null ? aferidoKg - nfKg : null;
+  return {
+    fator, nfKg, volumeM3, aferidoKg, variacaoKg,
+    variacaoPct: variacaoKg !== null && nfKg ? (variacaoKg / nfKg) * 100 : null,
+    semFator: precisaFator && !fator && !!it.material,
+  };
+}
+
+function _setVar(el, txt, alerta) {
+  if (!el) return;
+  el.textContent = txt;
+  el.classList.toggle('alerta', !!alerta);
+}
+
+// Atualiza só os textos de resultado do item (sem re-renderizar).
+function _atualizarResultado(id) {
+  const it = _item(id);
+  if (!it) return;
+  const situacao = _valorAtual('sol-categoria-situacao');
+  if (situacao === CATEGORIA_CANTO) {
+    const r = _calcCanto(it);
+    const sinal = r && r.variacaoAbs >= 0 ? '+' : '';
+    _setVar(document.getElementById('sol-var-' + id),
+      r ? `${sinal}${_fmt2(r.variacaoPct)}% (${sinal}${_fmt2(r.variacaoAbs)} ${it.unidade})` : '—',
+      r && Math.abs(r.variacaoPct) >= 1);
+  } else if (situacao === CATEGORIA_CUBAGEM) {
+    const r = _calcCubagem(it);
+    _setVar(document.getElementById('sol-cub-nf-' + id), r.nfKg !== null ? _fmtKg(r.nfKg) : '—');
+    const volTxt = r.volumeM3 !== null ? ` (${r.volumeM3.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} m³)` : '';
+    _setVar(document.getElementById('sol-cub-af-' + id), r.aferidoKg !== null ? _fmtKg(r.aferidoKg) + volTxt : (volTxt ? volTxt.trim() : '—'));
+    const sinal = r.variacaoKg !== null && r.variacaoKg >= 0 ? '+' : '';
+    _setVar(document.getElementById('sol-cub-var-' + id),
+      r.variacaoKg !== null ? `${sinal}${_fmt2(r.variacaoPct)}% (${sinal}${_fmtKg(r.variacaoKg)})` : '—',
+      r.variacaoPct !== null && Math.abs(r.variacaoPct) >= 1);
+    const nota = document.getElementById('sol-cub-nota-' + id);
+    if (nota) nota.style.display = r.semFator ? '' : 'none';
+  }
+}
+
+// ── HTML dos itens ─────────────────────────────────────────────────────
+function _btnRemover(it, titulo) {
+  return _itensMateriais.length > 1
+    ? `<button type="button" class="sol-item-row-rm" onclick="removerItemMaterial('${it.id}')" title="${titulo}"><i class="ti ti-x"></i></button>`
+    : '';
+}
+
+function _inputNum(id, campo, valor, placeholder) {
+  return `<input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="${placeholder || '0,00'}" value="${escapeHtml(valor)}" oninput="_setCampo('${id}', '${campo}', this.value, true)">`;
 }
 
 function _htmlItemMaterial(it) {
@@ -359,45 +440,43 @@ function _htmlItemMaterial(it) {
     <div class="sol-item-row" data-item-id="${it.id}">
       <div class="sol-fg">
         <label class="sol-label">Material <span class="sol-required">*</span> <span class="sol-hint">(grupo SAP)</span></label>
-        <select class="sol-select" onchange="_onItemMaterialChange('${it.id}', this.value)">
+        <select class="sol-select" onchange="_setCampo('${it.id}', 'material', this.value)">
           ${_materialOptionsHtml(it.material)}
         </select>
       </div>
       <div class="sol-fg sol-fg-peso">
         <label class="sol-label">Peso (kg) <span class="sol-required">*</span></label>
-        <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(it.peso)}" oninput="_onItemPesoChange('${it.id}', this.value)">
+        ${_inputNum(it.id, 'peso', it.peso)}
       </div>
-      ${_itensMateriais.length > 1 ? `<button type="button" class="sol-item-row-rm" onclick="removerItemMaterial('${it.id}')" title="Remover material"><i class="ti ti-x"></i></button>` : ''}
+      ${_btnRemover(it, 'Remover material')}
     </div>`;
 }
 
-// Teste dos 4 cantos: peso/volume de referência conhecido colocado em
-// cada canto da balança, comparado com a leitura que ela mostrou —
-// mostra objetivamente o quanto a balança está descalibrada, em vez de
-// pedir pro operador "chutar" um peso perdido com a balança já falhando.
-function _htmlItemBalanca(it) {
+// Teste de canto: peso/volume de referência conhecido lido em cada canto
+// da balança — mostra objetivamente o quanto ela está descalibrada.
+function _htmlItemCanto(it) {
   const cantoUnico = CANTOS_UNICO_CATEGORIAS.includes(it.categoriaMaterial);
   const qtd = cantoUnico ? 1 : (it.qtdCantos || 4);
   const cantosHtml = Array.from({ length: qtd }).map((_, idx) => `
     <div class="sol-fg" style="margin-bottom:0">
       <label class="sol-label">Canto ${idx + 1} <span class="sol-required">*</span></label>
-      <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(it.cantos[idx] ?? '')}" oninput="_onCantoChange('${it.id}', ${idx}, this.value)">
+      <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(it.cantos[idx] ?? '')}" oninput="_setValor('${it.id}', 'cantos', ${idx}, this.value)">
     </div>`).join('');
 
   return `
     <div class="sol-item-balanca" data-item-id="${it.id}">
-      ${_itensMateriais.length > 1 ? `<button type="button" class="sol-item-row-rm" onclick="removerItemMaterial('${it.id}')" title="Remover teste"><i class="ti ti-x"></i></button>` : ''}
+      ${_btnRemover(it, 'Remover teste')}
       <div class="sol-grid">
         <div class="sol-fg">
           <label class="sol-label">Categoria do Material <span class="sol-required">*</span></label>
-          <select class="sol-select" onchange="_onCategoriaMaterialBalancaChange('${it.id}', this.value)">
+          <select class="sol-select" onchange="_onCategoriaMaterialCantoChange('${it.id}', this.value)">
             <option value="">Selecione</option>
-            ${CATEGORIAS_MATERIAL_BALANCA.map((c) => `<option value="${c}" ${it.categoriaMaterial === c ? 'selected' : ''}>${c}</option>`).join('')}
+            ${CATEGORIAS_MATERIAL_CANTO.map((c) => `<option value="${c}" ${it.categoriaMaterial === c ? 'selected' : ''}>${c}</option>`).join('')}
           </select>
         </div>
         <div class="sol-fg">
           <label class="sol-label">Unidade <span class="sol-required">*</span></label>
-          <select class="sol-select" onchange="_onUnidadeBalancaChange('${it.id}', this.value)">
+          <select class="sol-select" onchange="_setCampo('${it.id}', 'unidade', this.value, true)">
             <option value="kg" ${it.unidade === 'kg' ? 'selected' : ''}>Quilogramas (kg)</option>
             <option value="L" ${it.unidade === 'L' ? 'selected' : ''}>Litros (L)</option>
           </select>
@@ -406,7 +485,7 @@ function _htmlItemBalanca(it) {
       <div class="sol-grid">
         <div class="sol-fg">
           <label class="sol-label">Peso/Volume de Referência <span class="sol-required">*</span> <span class="sol-hint">(valor conhecido usado no teste)</span></label>
-          <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(it.referencia)}" oninput="_onReferenciaChange('${it.id}', this.value)">
+          ${_inputNum(it.id, 'referencia', it.referencia)}
         </div>
         <div class="sol-fg">
           <label class="sol-label">Quantidade de Cantos <span class="sol-required">*</span></label>
@@ -424,15 +503,156 @@ function _htmlItemBalanca(it) {
     </div>`;
 }
 
+// ── Cubagem: estrutura (método, nº de pesagens/furos) re-renderiza ─────
+function _onMetodoCubagemChange(id, value) {
+  const it = _item(id);
+  if (!it) return;
+  it.metodo = value === 'volume' ? 'volume' : 'pesagem';
+  _renderItensMateriais();
+}
+window._onMetodoCubagemChange = _onMetodoCubagemChange;
+
+function _addPesagem(id) {
+  const it = _item(id);
+  if (!it || it.pesagens.length >= MAX_VALORES) return;
+  it.pesagens.push('');
+  _renderItensMateriais();
+}
+window._addPesagem = _addPesagem;
+
+function _rmPesagem(id, idx) {
+  const it = _item(id);
+  if (!it || it.pesagens.length <= 1) return;
+  it.pesagens.splice(idx, 1);
+  _renderItensMateriais();
+}
+window._rmPesagem = _rmPesagem;
+
+function _onQtdFurosChange(id, value) {
+  const it = _item(id);
+  if (!it) return;
+  const n = Math.min(MAX_VALORES, Math.max(1, parseInt(value, 10) || 1));
+  it.alturas = Array.from({ length: n }).map((_, idx) => it.alturas[idx] || '');
+  _renderItensMateriais();
+}
+window._onQtdFurosChange = _onQtdFurosChange;
+
+function _htmlItemCubagem(it) {
+  const fornecedores = _catalogo.fornecedores || [];
+  const fornOpts = fornecedores.length
+    ? '<option value="">Selecione o fornecedor</option>' + fornecedores.map((f) => `<option value="${escapeHtml(f)}" ${f === it.fornecedor ? 'selected' : ''}>${escapeHtml(f)}</option>`).join('')
+    : '<option value="">Nenhum fornecedor disponível — avise o analista</option>';
+
+  const metodoHtml = it.metodo === 'pesagem'
+    ? `<div class="sol-sub-title">Pesagens (kg)</div>
+       <div class="sol-valores">
+         ${it.pesagens.map((v, idx) => `
+           <div class="sol-valor">
+             <div class="sol-fg">
+               <label class="sol-label">Pesagem ${idx + 1} <span class="sol-required">*</span></label>
+               <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(v)}" oninput="_setValor('${it.id}', 'pesagens', ${idx}, this.value)">
+             </div>
+             ${it.pesagens.length > 1 ? `<button type="button" class="sol-item-row-rm" onclick="_rmPesagem('${it.id}', ${idx})" title="Remover pesagem"><i class="ti ti-x"></i></button>` : ''}
+           </div>`).join('')}
+       </div>
+       ${it.pesagens.length < MAX_VALORES ? `<button type="button" class="sol-btn sol-add-row-btn" onclick="_addPesagem('${it.id}')"><i class="ti ti-plus"></i> Adicionar pesagem</button>` : ''}`
+    : `<div class="sol-sub-title">Medidas da caçamba (metros)</div>
+       <div class="sol-grid-3">
+         <div class="sol-fg">
+           <label class="sol-label">Comprimento (m) <span class="sol-required">*</span></label>
+           ${_inputNum(it.id, 'comprimento', it.comprimento)}
+         </div>
+         <div class="sol-fg">
+           <label class="sol-label">Largura (m) <span class="sol-required">*</span></label>
+           ${_inputNum(it.id, 'largura', it.largura)}
+         </div>
+         <div class="sol-fg">
+           <label class="sol-label">Quantidade de furos <span class="sol-required">*</span></label>
+           <select class="sol-select" onchange="_onQtdFurosChange('${it.id}', this.value)">
+             ${Array.from({ length: MAX_VALORES }).map((_, i) => `<option value="${i + 1}" ${it.alturas.length === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}
+           </select>
+         </div>
+       </div>
+       <div class="sol-valores">
+         ${it.alturas.map((v, idx) => `
+           <div class="sol-fg" style="margin-bottom:0">
+             <label class="sol-label">Altura furo ${idx + 1} (m) <span class="sol-required">*</span></label>
+             <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(v)}" oninput="_setValor('${it.id}', 'alturas', ${idx}, this.value)">
+           </div>`).join('')}
+       </div>
+       <span class="sol-hint">Volume = comprimento × largura × média das alturas.</span>`;
+
+  return `
+    <div class="sol-item-cubagem" data-item-id="${it.id}">
+      ${_btnRemover(it, 'Remover cubagem')}
+      <div class="sol-sub-title">Nota fiscal da carreta</div>
+      <div class="sol-grid">
+        <div class="sol-fg">
+          <label class="sol-label">Material cubado <span class="sol-required">*</span> <span class="sol-hint">(grupo SAP)</span></label>
+          <select class="sol-select" onchange="_setCampo('${it.id}', 'material', this.value, true)">
+            ${_materialOptionsHtml(it.material, CATEGORIAS_AGREGADO)}
+          </select>
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Fornecedor <span class="sol-required">*</span></label>
+          <select class="sol-select" onchange="_setCampo('${it.id}', 'fornecedor', this.value, true)">${fornOpts}</select>
+        </div>
+      </div>
+      <div class="sol-grid-3">
+        <div class="sol-fg">
+          <label class="sol-label">Nº da NF <span class="sol-required">*</span></label>
+          <input type="text" class="sol-input" maxlength="30" inputmode="numeric" placeholder="000000" value="${escapeHtml(it.nf)}" oninput="_setCampo('${it.id}', 'nf', this.value)">
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Emissão da NF <span class="sol-required">*</span></label>
+          <input type="date" class="sol-input" max="${hoje()}" value="${escapeHtml(it.dataEmissao)}" onchange="_setCampo('${it.id}', 'dataEmissao', this.value)">
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Recebimento da carga <span class="sol-required">*</span></label>
+          <input type="date" class="sol-input" max="${hoje()}" value="${escapeHtml(it.dataRecebimento)}" onchange="_setCampo('${it.id}', 'dataRecebimento', this.value)">
+        </div>
+      </div>
+      <div class="sol-grid">
+        <div class="sol-fg">
+          <label class="sol-label">Peso descrito na NF <span class="sol-required">*</span></label>
+          ${_inputNum(it.id, 'pesoNf', it.pesoNf)}
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Unidade na NF <span class="sol-required">*</span></label>
+          <select class="sol-select" onchange="_setCampo('${it.id}', 'umNf', this.value, true)">
+            <option value="M3" ${it.umNf === 'M3' ? 'selected' : ''}>M³ — metro cúbico</option>
+            <option value="TO" ${it.umNf === 'TO' ? 'selected' : ''}>TO — tonelada</option>
+            <option value="KG" ${it.umNf === 'KG' ? 'selected' : ''}>KG — quilograma</option>
+          </select>
+        </div>
+      </div>
+      <div class="sol-fg">
+        <label class="sol-label">Método de cubagem <span class="sol-required">*</span></label>
+        <select class="sol-select" onchange="_onMetodoCubagemChange('${it.id}', this.value)">
+          <option value="pesagem" ${it.metodo === 'pesagem' ? 'selected' : ''}>Por pesagem</option>
+          <option value="volume" ${it.metodo === 'volume' ? 'selected' : ''}>Por volume (furos na caçamba)</option>
+        </select>
+      </div>
+      ${metodoHtml}
+      <div class="sol-resultado">
+        <div class="sol-fg" style="margin-bottom:0"><label class="sol-label">Peso da NF (kg)</label><div class="sol-var-display" id="sol-cub-nf-${it.id}">—</div></div>
+        <div class="sol-fg" style="margin-bottom:0"><label class="sol-label">Total aferido</label><div class="sol-var-display" id="sol-cub-af-${it.id}">—</div></div>
+        <div class="sol-fg" style="margin-bottom:0"><label class="sol-label">Variação</label><div class="sol-var-display" id="sol-cub-var-${it.id}">—</div></div>
+      </div>
+      <div class="sol-resultado-nota" id="sol-cub-nota-${it.id}" style="display:none"><i class="ti ti-info-circle"></i> Sem fator de densidade cadastrado para este material/fornecedor — o analista fará a conversão de m³ para kg.</div>
+    </div>`;
+}
+
 function _renderItensMateriais() {
   const el = document.getElementById('sol-itens-lista');
-  const modoBalanca = _valorAtual('sol-categoria-situacao') === CATEGORIA_BALANCA;
-  el.innerHTML = _itensMateriais.map((it) => modoBalanca ? _htmlItemBalanca(it) : _htmlItemMaterial(it)).join('');
-  if (modoBalanca) _itensMateriais.forEach((it) => _atualizarVariacao(it.id));
+  const situacao = _valorAtual('sol-categoria-situacao');
+  const fn = situacao === CATEGORIA_CANTO ? _htmlItemCanto : situacao === CATEGORIA_CUBAGEM ? _htmlItemCubagem : _htmlItemMaterial;
+  el.innerHTML = _itensMateriais.map(fn).join('');
+  _itensMateriais.forEach((it) => _atualizarResultado(it.id));
 }
 
 // ── Informantes — lista dinâmica ───────────────────────────────────────
-function _novoInformante() { return { id: 'inf' + (_infSeq++), nome: '', cargo: '', contato: '' }; }
+function _novoInformante() { return { id: 'inf' + (_infSeq++), nome: '', cargo: '', contato: '', assinatura: '' }; }
 
 function adicionarInformante() {
   _informantes.push(_novoInformante());
@@ -478,8 +698,7 @@ function _renderInformantes() {
           <label class="sol-label">Cargo <span class="sol-required">*</span></label>
           <select class="sol-select" onchange="_onInfChange('${inf.id}','cargo',this.value)">
             <option value="">Selecione</option>
-            <option value="Operador" ${inf.cargo === 'Operador' ? 'selected' : ''}>Operador</option>
-            <option value="Regional" ${inf.cargo === 'Regional' ? 'selected' : ''}>Regional</option>
+            ${CARGOS.map((c) => `<option value="${c}" ${inf.cargo === c ? 'selected' : ''}>${c}</option>`).join('')}
           </select>
         </div>
         <div class="sol-fg">
@@ -490,9 +709,113 @@ function _renderInformantes() {
     </div>`).join('');
 }
 
+// ── Assinatura na tela (termo de responsabilidade) ─────────────────────
+// Um quadro por informante. O traço vira PNG (fundo branco, tinta preta)
+// guardado em inf.assinatura a cada traço terminado — voltar de etapa e
+// retornar redesenha a assinatura já feita.
+function _renderAssinaturas() {
+  const el = document.getElementById('sol-assinaturas-lista');
+  el.innerHTML = _informantes.map((inf) => `
+    <div class="sol-assinatura">
+      <div class="sol-assinatura-decl">
+        Eu, <strong>${escapeHtml(inf.nome)}</strong>${inf.cargo ? ` (${escapeHtml(inf.cargo)})` : ''}, DECLARO que as informações por mim prestadas nesta solicitação são verídicas e assumo a responsabilidade por elas perante o setor de Estoque/Insumos e a diretoria da Concrelagos, ciente das consequências da prestação de informações falsas ou inexatas.
+      </div>
+      <div class="sol-assinatura-pad">
+        <canvas id="sol-pad-${inf.id}"></canvas>
+        <div class="linha"></div>
+        <div class="vazio" id="sol-pad-vazio-${inf.id}">Assine aqui</div>
+      </div>
+      <div class="sol-assinatura-rodape">
+        <span id="sol-pad-status-${inf.id}"></span>
+        <button type="button" class="sol-btn sol-add-row-btn" style="margin:0" onclick="_limparAssinatura('${inf.id}')"><i class="ti ti-eraser"></i> Limpar</button>
+      </div>
+    </div>`).join('');
+  _informantes.forEach(_initPad);
+}
+
+function _padStatus(inf) {
+  const st = document.getElementById('sol-pad-status-' + inf.id);
+  const vazio = document.getElementById('sol-pad-vazio-' + inf.id);
+  if (st) st.innerHTML = inf.assinatura ? '<span class="ok"><i class="ti ti-check"></i> Assinado</span>' : 'Não assinado';
+  if (vazio) vazio.style.display = inf.assinatura ? 'none' : '';
+}
+
+function _padFundo(canvas) {
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+}
+
+function _initPad(inf) {
+  const canvas = document.getElementById('sol-pad-' + inf.id);
+  if (!canvas) return;
+  // Resolução limitada a 2x — assinatura não precisa de mais, e mantém o
+  // PNG pequeno (vai em base64 no envio).
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(canvas.clientWidth * dpr);
+  canvas.height = Math.round(canvas.clientHeight * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#111';
+  _padFundo(canvas);
+  if (inf.assinatura) {
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, canvas.clientWidth, canvas.clientHeight);
+    img.src = inf.assinatura;
+  }
+  _padStatus(inf);
+
+  let desenhando = false;
+  const pos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  };
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    desenhando = true;
+    canvas.setPointerCapture(e.pointerId);
+    const [x, y] = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 0.1, y + 0.1);
+    ctx.stroke();
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!desenhando) return;
+    const [x, y] = pos(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  });
+  const fim = () => {
+    if (!desenhando) return;
+    desenhando = false;
+    inf.assinatura = canvas.toDataURL('image/png');
+    _padStatus(inf);
+  };
+  canvas.addEventListener('pointerup', fim);
+  canvas.addEventListener('pointercancel', fim);
+}
+
+function _limparAssinatura(id) {
+  const inf = _informantes.find((i) => i.id === id);
+  const canvas = document.getElementById('sol-pad-' + id);
+  if (!inf || !canvas) return;
+  inf.assinatura = '';
+  _padFundo(canvas);
+  _padStatus(inf);
+}
+window._limparAssinatura = _limparAssinatura;
+
 // ── Anexos ──────────────────────────────────────────────────────────
 function _renderAnexos() {
   const el = document.getElementById('sol-anexo-lista');
+  document.getElementById('sol-sem-comprovante').style.display = _anexos.length ? 'none' : '';
   if (!_anexos.length) { el.innerHTML = ''; return; }
   el.innerHTML = _anexos.map((a) => {
     const statusHtml = a.status === 'ok'
@@ -553,133 +876,6 @@ function removerAnexo(id) {
 }
 window.removerAnexo = removerAnexo;
 
-// ── Termo de Responsabilidade (impressão) ──────────────────────────────
-// Usa os dados já preenchidos no formulário — a DAI ainda não existe
-// nesse momento (é gerada só no envio), então a referência fica em
-// aberto ("A PREENCHER") até o operador anexar o termo assinado. Um
-// bloco de declaração + assinatura é gerado por informante.
-function imprimirTermo() {
-  const central = _valorAtual('sol-central');
-  const dataOcorrido = _valorAtual('sol-data');
-  const categoriaSituacao = _valorAtual('sol-categoria-situacao');
-  const filialDestino = _valorAtual('sol-filial-destino');
-  const descricao = _valorAtual('sol-descricao');
-
-  const informantesValidos = _informantes.filter((i) => i.nome.trim());
-  if (!central || !dataOcorrido || !informantesValidos.length) {
-    mostrarAlerta('Preencha ao menos Central, Data do ocorrido e o nome de ao menos um informante antes de imprimir o termo.', 'error');
-    return;
-  }
-
-  const dataFmt = (() => {
-    const [y, m, d] = dataOcorrido.split('-');
-    return (y && m && d) ? `${d}/${m}/${y}` : dataOcorrido;
-  })();
-
-  const modoBalanca = categoriaSituacao === CATEGORIA_BALANCA;
-  const itensValidos = modoBalanca
-    ? _itensMateriais.filter((i) => i.categoriaMaterial)
-    : _itensMateriais.filter((i) => i.material);
-  const colunaItem = modoBalanca ? 'Categoria' : 'Material';
-  const colunaValor = modoBalanca ? 'Aferição (teste dos cantos)' : 'Peso (kg)';
-  const itensRows = itensValidos.length
-    ? (modoBalanca
-        ? itensValidos.map((i) => {
-            const r = _calcVariacaoBalanca(i);
-            const cantosTxt = (i.cantos || []).map((c, idx) => `C${idx + 1}: ${escapeHtml(c || '—')}`).join(' · ');
-            const varTxt = r ? `${r.variacaoAbs >= 0 ? '+' : ''}${r.variacaoPct.toFixed(2)}%` : '—';
-            return `<tr><td>${escapeHtml(i.categoriaMaterial)}</td><td>Ref.: ${escapeHtml(i.referencia || '—')} ${escapeHtml(i.unidade)} · ${cantosTxt} · Variação: ${varTxt}</td></tr>`;
-          }).join('')
-        : itensValidos.map((i) => `<tr><td>${escapeHtml(i.material)}</td><td>${escapeHtml(i.peso || '—')}</td></tr>`).join('')
-      )
-    : '<tr><td colspan="2">—</td></tr>';
-
-  const assinaturasHtml = informantesValidos.map((inf) => `
-    <div class="declaracao">
-      Eu, <strong>${escapeHtml(inf.nome)}</strong>${inf.cargo ? ` (${escapeHtml(inf.cargo)})` : ''}, DECLARO que as informações por mim prestadas relativas ao ocorrido acima descrito são verídicas, e assumo a responsabilidade por elas perante o setor de Estoque/Insumos, estando ciente das responsabilidades decorrentes da prestação de informações falsas ou inexatas.
-    </div>
-    <div class="assinatura-box">
-      <div class="assinatura-linha"></div>
-      <div class="assinatura-nome">${escapeHtml(inf.nome)}</div>
-      <div class="assinatura-sub">${inf.cargo ? escapeHtml(inf.cargo) + ' — ' : ''}Assinatura do informante</div>
-      <div class="assinatura-data">Data: <span class="linha-preencher">&nbsp;</span>/<span class="linha-preencher">&nbsp;</span>/<span class="linha-preencher" style="width:90px">&nbsp;</span></div>
-    </div>`).join('<div style="height:22px"></div>');
-
-  const campoFilialDestino = filialDestino
-    ? `<div><div class="field-label">Filial de destino</div><div class="field-value">${escapeHtml(filialDestino)}</div></div>`
-    : '';
-
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8">
-<title>Termo de Responsabilidade</title>
-<style>
-  @page { size: A4 portrait; margin: 14mm 16mm; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background:#ece6d5; color:#1c1608; font-size:12.5px; line-height:1.5; }
-  .action-bar { position: sticky; top:0; background:#1c1608; display:flex; align-items:center; justify-content:space-between; padding:12px 24px; }
-  .action-bar-title { color:#f4f1e8; font-size:13px; }
-  .btn-print { background:#ff6b35; color:#1c1608; border:none; border-radius:7px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer; }
-  .btn-print:hover { background:#e85a28; }
-  .btn-close { background:#3a2f14; color:#eee; border:none; border-radius:7px; padding:8px 14px; font-size:13px; cursor:pointer; margin-left:10px; }
-  .btn-close:hover { background:#4a3d1c; }
-  .doc-wrap { max-width:760px; margin:28px auto 60px; background:#fff; color:#1c1608; padding:34px 40px 44px; box-shadow:0 6px 28px rgba(0,0,0,.18); }
-  .doc-header { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; border-bottom:3px solid #ff6b35; padding-bottom:16px; margin-bottom:18px; }
-  .doc-title h1 { font-size:15.5px; letter-spacing:.04em; text-transform:uppercase; text-align:right; }
-  .doc-title .numero { font-family: monospace; font-weight:800; color:#a04a1f; font-size:13px; margin-top:6px; text-align:right; }
-  .confidential-strip { text-align:center; padding:9px; background:#fdf1ea; border:1px solid #ff6b35; border-radius:6px; font-size:10px; color:#a04a1f; font-weight:700; letter-spacing:.05em; text-transform:uppercase; margin-bottom:20px; }
-  .field-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px 24px; margin-bottom:18px; }
-  .field-label { font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:#8a7a64; margin-bottom:4px; }
-  .field-value { font-size:12.5px; font-weight:700; border-bottom:1px solid #e5ddc8; padding-bottom:5px; overflow-wrap:anywhere; }
-  .declaracao { font-size:13px; line-height:1.85; text-align:justify; margin:8px 0 18px; }
-  .desc-box { border:1px solid #e5ddc8; border-radius:6px; padding:13px 15px; font-size:12px; line-height:1.7; white-space:pre-wrap; margin:6px 0 18px; }
-  .itens-table { width:100%; border-collapse:collapse; margin:6px 0 20px; font-size:11px; }
-  .itens-table th { text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:#8a7a64; padding:6px 8px; border-bottom:2px solid #ff6b35; }
-  .itens-table td { padding:7px 8px; border-bottom:1px solid #e5ddc8; }
-  .assinatura-box { margin-top:26px; text-align:center; }
-  .assinatura-linha { border-top:1px solid #1c1608; width:320px; margin:0 auto 8px; }
-  .assinatura-nome { font-weight:800; font-size:13px; }
-  .assinatura-sub { font-size:10px; color:#8a7a64; margin-top:2px; text-transform:uppercase; }
-  .assinatura-data { margin-top:20px; font-size:12px; }
-  .linha-preencher { display:inline-block; border-bottom:1px solid #1c1608; width:60px; margin:0 3px; }
-  .doc-footer { margin-top:30px; padding-top:12px; border-top:1px solid #e5ddc8; font-size:9px; color:#8a7a64; }
-  @media print { .action-bar { display:none !important; } body { background:#fff !important; } .doc-wrap { box-shadow:none !important; margin:0 auto !important; } }
-</style></head>
-<body>
-<div class="action-bar">
-  <div class="action-bar-title">Termo de Responsabilidade do(s) Informante(s)</div>
-  <div><button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button><button class="btn-close" onclick="window.close()">✕ Fechar</button></div>
-</div>
-<div class="doc-wrap">
-  <div class="doc-header">
-    <img src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Concrelagos Concreto" height="40" onerror="this.style.display='none'">
-    <div class="doc-title"><h1>Termo de<br>Responsabilidade</h1><div class="numero">Ref. A PREENCHER NO ENVIO</div></div>
-  </div>
-  <div class="confidential-strip">⚠ Cada informante deve assinar este termo. Anexe-o (foto/scan) no formulário e só então envie a solicitação</div>
-  <div class="field-grid">
-    <div><div class="field-label">Central</div><div class="field-value">${escapeHtml(central)}</div></div>
-    <div><div class="field-label">Data do ocorrido</div><div class="field-value">${escapeHtml(dataFmt)}</div></div>
-    <div><div class="field-label">Categoria de situação</div><div class="field-value">${escapeHtml(categoriaSituacao || '—')}</div></div>
-    ${campoFilialDestino}
-  </div>
-  <div class="field-label">Item(ns) do ajuste</div>
-  <table class="itens-table">
-    <thead><tr><th>${colunaItem}</th><th>${colunaValor}</th></tr></thead>
-    <tbody>${itensRows}</tbody>
-  </table>
-  <div class="field-label">Descrição do ocorrido</div>
-  <div class="desc-box">${escapeHtml(descricao || '—')}</div>
-  ${assinaturasHtml}
-  <div class="doc-footer">Concrelagos Concreto · AnalyticSys — Documento gerado a partir do formulário público de solicitação</div>
-</div>
-</body></html>`;
-
-  const win = window.open('', '_blank');
-  if (!win) { mostrarAlerta('Não foi possível abrir a janela de impressão — verifique o bloqueador de pop-ups.', 'error'); return; }
-  win.document.write(html);
-  win.document.close();
-}
-window.imprimirTermo = imprimirTermo;
-
 // ── Envio ───────────────────────────────────────────────────────────
 function _setBtnEnviarLoading(loading) {
   const btn = document.getElementById('sol-btn-enviar');
@@ -687,27 +883,37 @@ function _setBtnEnviarLoading(loading) {
   btn.innerHTML = loading ? '<i class="ti ti-loader-2" style="animation:sol-spin 1s linear infinite"></i> Enviando…' : '<i class="ti ti-send"></i> Enviar solicitação';
 }
 
+function _itensPayload(situacao) {
+  if (situacao === CATEGORIA_CANTO) {
+    return _itensMateriais.map((i) => ({
+      categoriaMaterial: i.categoriaMaterial, unidade: i.unidade,
+      referencia: _num(i.referencia), cantos: (i.cantos || []).map(_num),
+    }));
+  }
+  if (situacao === CATEGORIA_CUBAGEM) {
+    return _itensMateriais.map((i) => ({
+      grupoMaterial: i.material, fornecedor: i.fornecedor, nf: i.nf.trim(),
+      dataEmissao: i.dataEmissao, dataRecebimento: i.dataRecebimento,
+      pesoNf: _num(i.pesoNf), umNf: i.umNf, metodo: i.metodo,
+      ...(i.metodo === 'pesagem'
+        ? { pesagens: i.pesagens.map(_num) }
+        : { comprimento: _num(i.comprimento), largura: _num(i.largura), alturas: i.alturas.map(_num) }),
+    }));
+  }
+  return _itensMateriais.map((i) => ({ grupoMaterial: i.material, peso: _num(i.peso) }));
+}
+
 async function enviarSolicitacao(ev) {
   ev.preventDefault();
   limparAlerta();
 
-  if (!validarSecaoOndeEQuando()) return;
-  if (!validarSecaoOQueAconteceu()) return;
-  if (!validarSecaoInformantes()) return;
-
-  const central = _valorAtual('sol-central');
-  const dataOcorrido = _valorAtual('sol-data');
-  const categoriaSituacao = _valorAtual('sol-categoria-situacao');
-  const filialDestino = _valorAtual('sol-filial-destino');
-  const descricao = _valorAtual('sol-descricao');
-
-  if (_anexos.some((a) => a.status === 'enviando')) return mostrarAlerta('Aguarde o envio dos anexos terminar.', 'error');
-  if (_anexos.some((a) => a.status === 'erro')) return mostrarAlerta('Remova ou reenvie os anexos que falharam antes de continuar.', 'error');
-  const anexosOk = _anexos.filter((a) => a.status === 'ok');
-  if (!anexosOk.length) return mostrarAlerta('Anexe ao menos o Termo de Responsabilidade assinado antes de enviar.', 'error');
+  if (!validarSecaoOndeEQuando() || !validarSecaoOQueAconteceu() || !validarSecaoInformantes() || !validarSecaoFinal()) return;
 
   const turnstileToken = _turnstileGetToken();
   if (!turnstileToken) return mostrarAlerta('Confirme que você não é um robô antes de enviar.', 'error');
+
+  const categoriaSituacao = _valorAtual('sol-categoria-situacao');
+  const anexosOk = _anexos.filter((a) => a.status === 'ok');
 
   _setBtnEnviarLoading(true);
   try {
@@ -717,22 +923,15 @@ async function enviarSolicitacao(ev) {
       body: JSON.stringify({
         action: 'submit',
         turnstileToken,
-        central,
-        dataOcorrido,
+        central: _valorAtual('sol-central'),
+        dataOcorrido: _valorAtual('sol-data'),
         categoriaSituacao,
-        filialDestino: categoriaSituacao === CATEGORIA_TRANSFERENCIA ? filialDestino : null,
-        descricao,
-        itens: categoriaSituacao === CATEGORIA_BALANCA
-          ? _itensMateriais.map((i) => ({
-              tipo: 'afericao_balanca',
-              categoriaMaterial: i.categoriaMaterial,
-              unidade: i.unidade,
-              referencia: parseFloat(String(i.referencia).replace(',', '.')),
-              cantos: (i.cantos || []).map((c) => parseFloat(String(c).replace(',', '.'))),
-            }))
-          : _itensMateriais.map((i) => ({ grupoMaterial: i.material, peso: parseFloat(String(i.peso).replace(',', '.')) })),
-        informantes: _informantes.map((i) => ({ nome: i.nome, cargo: i.cargo, contato: i.contato })),
+        filialDestino: categoriaSituacao === CATEGORIA_TRANSFERENCIA ? _valorAtual('sol-filial-destino') : null,
+        descricao: _valorAtual('sol-descricao'),
+        itens: _itensPayload(categoriaSituacao),
+        informantes: _informantes.map((i) => ({ nome: i.nome, cargo: i.cargo, contato: i.contato, assinatura: i.assinatura })),
         anexos: anexosOk.map((a) => ({ path: a.path, nome: a.nome, tipo: a.tipo, tamanho: a.tamanho })),
+        semComprovante: !anexosOk.length && document.getElementById('sol-sem-comprovante-ok').checked,
       }),
     });
     const data = await resp.json();
@@ -742,7 +941,7 @@ async function enviarSolicitacao(ev) {
       _setBtnEnviarLoading(false);
       return;
     }
-    _mostrarSucesso(data.dais || []);
+    _mostrarSucesso(data.protocolo);
   } catch (err) {
     console.error('[Solicitação] Falha no envio:', err);
     _turnstileReset();
@@ -751,20 +950,18 @@ async function enviarSolicitacao(ev) {
   }
 }
 
-function _mostrarSucesso(dais) {
+function _mostrarSucesso(protocolo) {
   document.getElementById('sol-form').style.display = 'none';
   const el = document.getElementById('sol-success');
   el.style.display = 'block';
-  const lista = (dais || []).length
-    ? `<p>Foi${dais.length > 1 ? 'ram' : ''} registrada${dais.length > 1 ? 's' : ''} como: ${dais.map((d) => `<span class="sol-numero">${escapeHtml(d.tag)}</span>`).join(', ')}</p>`
-    : '';
   el.innerHTML = `
     <i class="ti ti-circle-check"></i>
     <h2>Solicitação enviada com sucesso</h2>
-    <p>Sua solicitação já está com o(s) analista(s) responsável(is), aguardando o ajuste no SAP.</p>
-    ${lista}
+    <p>Sua solicitação já está com o(s) analista(s) responsável(is).</p>
+    ${protocolo ? `<p>Protocolo: <span class="sol-numero">${escapeHtml(protocolo)}</span></p>` : ''}
     <button type="button" class="sol-btn" style="margin-top:18px" onclick="location.reload()"><i class="ti ti-plus"></i> Enviar outra solicitação</button>
   `;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ── Boot ────────────────────────────────────────────────────────────
@@ -791,10 +988,11 @@ async function boot() {
   document.getElementById('sol-form').addEventListener('submit', enviarSolicitacao);
 
   try {
-    _catalogo = await carregarCatalogo();
+    _catalogo = { fornecedores: [], fatores: [], ...(await carregarCatalogo()) };
     popularCentrais();
     _renderItensMateriais();
     _renderInformantes();
+    _renderAnexos();
     irParaStep(1);
     document.getElementById('sol-loading').style.display = 'none';
     document.getElementById('sol-form').style.display = 'block';

@@ -4815,6 +4815,7 @@ async function init() {
   await restoreAndRender();
   updateImportPrereqUI();
   cobIniciar();   // admin edita; perfil Usuário só consulta
+  solPublicarFornecedores(); // ADM: fornecedores de agregados → formulário público (só se mudou)
   // updateDashboard já foi chamado dentro de restoreAndRender — não chamar novamente
 
   // Start clock

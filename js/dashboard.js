@@ -8172,7 +8172,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     : 'Importação concluída';
 
   // Invalida os índices dos módulos que foram alterados
-  if (modulo === 'Entrada')     invalidateSearchIndex('entradas');
+  if (modulo === 'Entrada')     { invalidateSearchIndex('entradas'); solPublicarFornecedores(); }
   if (modulo === 'Saída')       { invalidateSaidasIndex(); }
   if (modulo === 'Lançamento')  invalidateLancIndex();
   if (modulo === 'SAP')         invalidateSapIndex();
