@@ -1879,7 +1879,7 @@ async function adminSalvarEdicao() {
 }
 
 // ── Seção: Formulário Público ────────────────────────────────
-// Duas partes: (1) o link fixo e público da página solicitacao.html —
+// Duas partes: (1) o link fixo e público da página registro-operacional.html —
 // puramente informativo/copiável, não depende de nenhuma chamada ao
 // Supabase; (2) o mapeamento categoria → analista responsável, usado
 // pela Edge Function solicitacao-dai para decidir a quem atribuir cada
@@ -1910,7 +1910,7 @@ async function adminLoadFormPublico() {
   const linkInput = document.getElementById('admin-formpublico-link');
   if (linkInput) {
     const base = window.location.href.replace(/index\.html?(\?.*)?(#.*)?$/, '').replace(/\/?$/, '/');
-    linkInput.value = base + 'solicitacao.html';
+    linkInput.value = base + 'registro-operacional.html';
   }
 
   const rowsEl = document.getElementById('admin-analistas-categoria-rows');

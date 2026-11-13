@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// solicitacao-dai — Edge Function do formulário público (solicitacao.html)
+// solicitacao-dai — Edge Function do formulário público (registro-operacional.html)
 // ═══════════════════════════════════════════════════════════════════════
 // ponytail: o slug continua "solicitacao-dai" só pra não mexer na URL já
 // publicada — desde 13/11/2026 esta função NÃO gera mais DAI. Cada envio

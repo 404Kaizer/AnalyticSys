@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 // SOLICITAÇÕES — tela do analista para o formulário público
 // ═══════════════════════════════════════════════════════════
-// Cada envio de solicitacao.html vira registros em public.solicitacoes
+// Cada envio de registro-operacional.html vira registros em public.solicitacoes
 // (um por categoria de material, user_id = analista da categoria — ver a
 // Edge Function solicitacao-dai). RLS: o analista vê os seus, o ADM vê
 // todos. O analista só altera o andamento (status/observação) — o
@@ -82,7 +82,7 @@ const _SOL_C = {
 };
 const { protocolo: _cP, recebida: _cR, ocorrido: _cO, central: _cC, analista: _cA, status: _cS } = _SOL_C;
 // Procedimentos operacionais: [chave, rótulo, situação, ícone, colunas].
-// Mesma divisão dos <optgroup> de solicitacao.html; o resto é movimentação.
+// Mesma divisão dos <optgroup> de registro-operacional.html; o resto é movimentação.
 // ponytail: tipo derivado do texto da situação no cliente (sem coluna no
 // banco) — se precisar de filtro no servidor, vira coluna `tipo`.
 const SOL_PROC = [
@@ -217,7 +217,7 @@ pageRenderers.solicitacoes = () => { solCarregar(); };
 // Ferramentas ▸ Link do Registro Operacional: o formulário fica na mesma
 // pasta do app — resolve relativo à URL atual, sem host fixo.
 function solCopiarLinkFormulario() {
-  const link = new URL('solicitacao.html', window.location.href).href;
+  const link = new URL('registro-operacional.html', window.location.href).href;
   navigator.clipboard?.writeText(link)
     .then(() => toast('Link do Registro Operacional copiado.', 'success'))
     .catch(() => toast('Não foi possível copiar — link: ' + link, 'error'));
@@ -280,10 +280,31 @@ function solSel(el) {
   solRender();
 }
 window.solSel = solSel;
+// Mesma animação das Operações (muralPainelLista, CSS .mp-anim/.entrando):
+// a largura transita com o conteúdo atual congelado e escondido; no fim,
+// redesenha e o conteúdo novo entra com fade.
+const SOL_LISTA_ANIM_MS = 260;
 function solListaRecolher() {
+  if (_sol.listaAnim) return;
   _sol.listaRecolhida = !_sol.listaRecolhida;
   try { localStorage.setItem('sol.listaRecolhida', _sol.listaRecolhida ? '1' : '0'); } catch (_) { /* sem storage */ }
-  solRender();
+  const lista = document.getElementById('sol-lista');
+  if (!lista || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return solRender();
+  _sol.listaAnim = true;
+  [...lista.children].forEach((c) => { c.style.width = c.offsetWidth + 'px'; });
+  lista.classList.add('mp-anim');
+  lista.classList.toggle('recolhida', _sol.listaRecolhida);
+  setTimeout(() => {
+    _sol.listaAnim = false;
+    _sol.listaEntrando = true;
+    // O elemento é reaproveitado (nas Operações ele é recriado): corta a
+    // transição para a largura não ficar presa num valor intermediário.
+    lista.style.transition = 'none';
+    lista.classList.remove('mp-anim');
+    void lista.offsetWidth;
+    lista.style.transition = '';
+    solRender();
+  }, SOL_LISTA_ANIM_MS);
 }
 window.solListaRecolher = solListaRecolher;
 
@@ -538,6 +559,9 @@ function solRender() {
   if (_sol.sel.length && !noCaminho.length) _sol.sel = []; // o nível sumiu (filtro/exclusão)
   const lista = document.getElementById('sol-lista');
   lista.classList.toggle('recolhida', _sol.listaRecolhida);
+  // Fade só no render logo após recolher/expandir (o próximo tira a classe).
+  lista.classList.toggle('entrando', !!_sol.listaEntrando);
+  _sol.listaEntrando = false;
   lista.innerHTML = _solListaHtml(pares, niveis);
 
   const proc = _sol.tipo === 'procedimento';

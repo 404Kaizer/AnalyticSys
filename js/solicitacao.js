@@ -1,7 +1,7 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════
-// SOLICITAÇÃO PÚBLICA — lógica da página isolada (solicitacao.html)
+// SOLICITAÇÃO PÚBLICA — lógica da página isolada (registro-operacional.html)
 // ═══════════════════════════════════════════════════════════
 // Sem login. Toda validação "de verdade" acontece no servidor (Edge
 // Function solicitacao-dai) — o que está aqui é só conveniência de UX.
