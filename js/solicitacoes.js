@@ -65,13 +65,15 @@ const _solVar = (kg, pct, unidade) => {
 };
 
 // ── Tipos e colunas ──────────────────────────────────────────────────
-// Colunas: [título, (solicitação, item) => html, alinhar à direita?].
+// Colunas: [título, (solicitação, item) => html, alinhar à direita?, nível].
+// Coluna com nível some quando o valor já está fixo (caminho da lista ou
+// filtro da barra com um valor só) — ver solRender.
 // Nos procedimentos a tabela tem uma linha por item (carreta, teste…).
 const _SOL_C = {
   protocolo: ['Protocolo', (s) => `<span style="font-family:var(--mono);font-size:11.5px">${_solEsc(s.protocolo)}</span>`],
   recebida: ['Recebida', (s) => _solDataHora(s.created_at)],
   ocorrido: ['Ocorrido', (s) => _solData(s.data_ocorrido)],
-  central: ['Central', (s) => _solEsc(s.central)],
+  central: ['Central', (s) => _solEsc(s.central), false, 'central'],
   analista: ['Analista', (s) => _solEsc(_solAnalista(s))],
   status: ['Status', (s) => {
     const st = SOL_STATUS[s.status] || SOL_STATUS.pendente;
@@ -85,8 +87,8 @@ const { protocolo: _cP, recebida: _cR, ocorrido: _cO, central: _cC, analista: _c
 // banco) — se precisar de filtro no servidor, vira coluna `tipo`.
 const SOL_PROC = [
   ['cubagem', 'Cubagem', 'Cubagem de agregados', 'ti-box', [_cP, _cR, _cC,
-    ['Material', (s, i) => _solEsc(i.grupoMaterial)],
-    ['Fornecedor', (s, i) => _solEsc(i.fornecedor)],
+    ['Material', (s, i) => _solEsc(i.grupoMaterial), false, 'material'],
+    ['Fornecedor', (s, i) => _solEsc(i.fornecedor), false, 'fornecedor'],
     ['Documento', (s, i) => i.nf ? `${i.docTipo === 'TICKET' ? 'Ticket' : 'NF'} ${_solEsc(i.nf)}` : '—'],
     ['Recebimento', (s, i) => _solData(i.dataRecebimento)],
     ['Documento (kg)', (s, i) => _solNum(i.nfKg), true],
@@ -100,7 +102,7 @@ const SOL_PROC = [
     ['Variação', (s, i) => _solVar(i.variacaoAbs, i.variacaoPct, i.unidade), true],
     _cA, _cS]],
   ['pesagem', 'Pesagem manual', 'Pesagem manual (fora da automação)', 'ti-weight', [_cP, _cR, _cO, _cC,
-    ['Material', (s, i) => _solEsc(i.grupoMaterial)],
+    ['Material', (s, i) => _solEsc(i.grupoMaterial), false, 'material'],
     ['Quantidade', (s, i) => `${_solNum(i.peso)} ${_solEsc(i.unidade || 'kg')}`, true],
     _cA, _cS]],
 ];
@@ -541,7 +543,9 @@ function solRender() {
   const proc = _sol.tipo === 'procedimento';
   const excluidos = _sol.filtro === 'excluida';
   // Última coluna: excluir (ou restaurar, na lista de excluídos).
-  const cols = [...(proc ? _solProcAtual()[4] : SOL_COLS_MOV), ['', (s) => excluidos
+  // Central/fornecedor/material já fixados pela lista ou pela barra não se repetem na tabela.
+  const fixos = new Set([...niveis.slice(0, _sol.sel.length), ...SOL_MF.filter(([k]) => _solMF.applied[k].size === 1).map(([k]) => k)]);
+  const cols = [...(proc ? _solProcAtual()[4] : SOL_COLS_MOV).filter((c) => !fixos.has(c[3])), ['', (s) => excluidos
     ? `<button class="btn btn-sm" title="Restaurar" onclick="event.stopPropagation();solRestaurar('${s.id}')"><i class="ti ti-arrow-back-up"></i></button>`
     : `<button class="btn btn-sm sol-btn-excluir" title="Excluir" onclick="event.stopPropagation();solExcluir('${s.id}')"><i class="ti ti-trash"></i></button>`, true]];
   const td = (dir) => dir ? ' style="text-align:right"' : '';
