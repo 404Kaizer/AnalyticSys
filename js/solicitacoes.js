@@ -29,8 +29,17 @@ const SOL_FILTROS = [
   ['todas', 'Todas', () => true],
 ];
 const SOL_CATEGORIAS_AGREGADO = ['Agregado Graúdo', 'Agregado Miúdo'];
+// Situações que são procedimento operacional; o resto é movimentação de
+// estoque. Mesma divisão dos <optgroup> de solicitacao.html.
+// ponytail: derivado do texto da situação no cliente (sem coluna no banco) —
+// se a lista crescer ou precisar de filtro no servidor, vira coluna `tipo`.
+const SOL_PROCEDIMENTOS = new Set(['Teste de canto', 'Cubagem de agregados', 'Pesagem manual (fora da automação)']);
+const SOL_TIPOS = [
+  ['procedimento', 'Procedimentos operacionais', 'ti-clipboard-check', (s) => SOL_PROCEDIMENTOS.has(s.categoria_situacao)],
+  ['movimentacao', 'Movimentações de estoque', 'ti-arrows-exchange', (s) => !SOL_PROCEDIMENTOS.has(s.categoria_situacao)],
+];
 
-const _sol = { lista: [], filtro: 'abertas', busca: '', carregando: false, erro: '', abertaId: null };
+const _sol = { lista: [], tipo: 'procedimento', filtro: 'abertas', busca: '', carregando: false, erro: '', abertaId: null };
 
 const _solEsc = (s) => escapeHtml(String(s ?? ''));
 const _solNum = (n, casas = 2) => (n === null || n === undefined || !Number.isFinite(Number(n)))
@@ -125,14 +134,19 @@ pageRenderers.solicitacoes = () => { solCarregar(); };
 function solFiltro(k) { _sol.filtro = k; solRender(); }
 window.solFiltro = solFiltro;
 
+function solTipo(k) { _sol.tipo = k; solRender(); }
+window.solTipo = solTipo;
+
 function solBuscar(v) { _sol.busca = v; solRender(); }
 window.solBuscar = solBuscar;
 
 // ── Lista ────────────────────────────────────────────────────────────
+const _solDoTipo = () => _sol.lista.filter((SOL_TIPOS.find(([k]) => k === _sol.tipo) || SOL_TIPOS[0])[3]);
+
 function _solFiltradas() {
   const [, , fn] = SOL_FILTROS.find(([k]) => k === _sol.filtro) || SOL_FILTROS[0];
   const q = _solNorm(_sol.busca);
-  return _sol.lista.filter((s) => fn(s) && (!q || _solNorm([
+  return _solDoTipo().filter((s) => fn(s) && (!q || _solNorm([
     s.protocolo, s.central, s.categoria_situacao, s.categoria, _solAnalista(s),
     ...(s.informantes || []).map((i) => i.nome),
     ...(s.itens || []).map((i) => [i.grupoMaterial, i.fornecedor, i.nf].join(' ')),
@@ -142,8 +156,13 @@ function _solFiltradas() {
 function solRender() {
   const el = document.getElementById('sol-page-body');
   if (!el) return;
+  const doTipo = _solDoTipo();
   const pills = SOL_FILTROS.map(([k, rot, fn]) =>
-    `<button class="pim-month-pill${k === _sol.filtro ? ' active' : ''}" type="button" onclick="solFiltro('${k}')">${rot} <b>${_sol.lista.filter(fn).length}</b></button>`).join('');
+    `<button class="pim-month-pill${k === _sol.filtro ? ' active' : ''}" type="button" onclick="solFiltro('${k}')">${rot} <b>${doTipo.filter(fn).length}</b></button>`).join('');
+  // Contador da aba = solicitações em aberto (pendente/em análise) daquele tipo.
+  const abertas = SOL_FILTROS[0][2];
+  const abas = SOL_TIPOS.map(([k, rot, icon, fn]) =>
+    `<button class="tab-btn${k === _sol.tipo ? ' active' : ''}" type="button" onclick="solTipo('${k}')"><i class="ti ${icon}"></i> ${rot} <b>${_sol.lista.filter((s) => fn(s) && abertas(s)).length}</b></button>`).join('');
 
   const rows = _solFiltradas();
   const vazio = (icon, txt) => `<tr><td colspan="8"><div class="empty-state"><i class="ti ${icon}"></i><p>${txt}</p></div></td></tr>`;
@@ -164,7 +183,8 @@ function solRender() {
       </tr>`;
     }).join('');
 
-  el.innerHTML = `<div class="table-card">
+  el.innerHTML = `<div class="tabs" title="O número é de solicitações em aberto">${abas}</div>
+  <div class="table-card">
     <div class="table-header">
       <span class="table-title"><i class="ti ti-inbox"></i> Solicitações do formulário público</span>
       <div class="table-toolbar">

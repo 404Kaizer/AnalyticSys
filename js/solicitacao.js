@@ -264,6 +264,7 @@ function onCategoriaSituacaoChange() {
     wrap.style.display = 'none';
     sel.value = '';
   }
+  document.getElementById('sol-campos-situacao').style.display = val ? '' : 'none';
   // Cubagem não pede descrição — os dados da carreta já dizem tudo.
   document.getElementById('sol-fg-descricao').style.display = val === CATEGORIA_CUBAGEM ? 'none' : '';
   const addLabel = document.getElementById('sol-add-item-label');

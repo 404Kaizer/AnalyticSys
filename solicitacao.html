@@ -290,14 +290,19 @@
           <label class="sol-label">Categoria de Situação <span class="sol-required">*</span></label>
           <select id="sol-categoria-situacao" class="sol-select" required onchange="onCategoriaSituacaoChange()">
             <option value="">Selecione a situação</option>
-            <option value="Teste de canto">Teste de canto</option>
-            <option value="Cubagem de agregados">Cubagem de agregados</option>
-            <option value="Perda de material devido a contaminação">Perda de material devido a contaminação</option>
-            <option value="Perda de material por motivos climáticos ou de terreno">Perda de material por motivos climáticos ou de terreno</option>
-            <option value="Coleta de material contaminado">Coleta de material contaminado</option>
-            <option value="Coleta de material para substituição">Coleta de material para substituição</option>
-            <option value="Pesagem manual (fora da automação)">Pesagem manual (fora da automação)</option>
-            <option value="Transferência de material entre filiais">Transferência de material entre filiais</option>
+            <!-- Mesma divisão de SOL_PROCEDIMENTOS em js/solicitacoes.js -->
+            <optgroup label="Procedimento operacional">
+              <option value="Teste de canto">Teste de canto</option>
+              <option value="Cubagem de agregados">Cubagem de agregados</option>
+              <option value="Pesagem manual (fora da automação)">Pesagem manual (fora da automação)</option>
+            </optgroup>
+            <optgroup label="Movimentação de estoque">
+              <option value="Perda de material devido a contaminação">Perda de material devido a contaminação</option>
+              <option value="Perda de material por motivos climáticos ou de terreno">Perda de material por motivos climáticos ou de terreno</option>
+              <option value="Coleta de material contaminado">Coleta de material contaminado</option>
+              <option value="Coleta de material para substituição">Coleta de material para substituição</option>
+              <option value="Transferência de material entre filiais">Transferência de material entre filiais</option>
+            </optgroup>
           </select>
         </div>
         <div class="sol-fg" id="sol-fg-filial-destino" style="display:none">
@@ -306,13 +311,16 @@
             <option value="">Selecione a filial de destino</option>
           </select>
         </div>
-        <div id="sol-itens-lista"></div>
-        <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarItemMaterial()">
-          <i class="ti ti-plus"></i> <span id="sol-add-item-label">Adicionar outro material</span>
-        </button>
-        <div class="sol-fg" id="sol-fg-descricao" style="margin-top:16px">
-          <label class="sol-label">Descreva o ocorrido para a diretoria <span class="sol-required">*</span></label>
-          <textarea id="sol-descricao" class="sol-textarea" placeholder="O que aconteceu, como foi identificado…"></textarea>
+        <!-- Só aparece depois de escolher a situação (onCategoriaSituacaoChange) -->
+        <div id="sol-campos-situacao" style="display:none">
+          <div id="sol-itens-lista"></div>
+          <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarItemMaterial()">
+            <i class="ti ti-plus"></i> <span id="sol-add-item-label">Adicionar outro material</span>
+          </button>
+          <div class="sol-fg" id="sol-fg-descricao" style="margin-top:16px">
+            <label class="sol-label">Descreva o ocorrido para a diretoria <span class="sol-required">*</span></label>
+            <textarea id="sol-descricao" class="sol-textarea" placeholder="O que aconteceu, como foi identificado…"></textarea>
+          </div>
         </div>
       </div>
       <div class="sol-step-footer">
