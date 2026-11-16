@@ -64,13 +64,14 @@ let _infSeq = 0;
 
 // ── Navegação por etapas (wizard) ──────────────────────────────────────
 const STEP_LABELS = {
-  1: 'Etapa 1 de 5 — Antes de começar',
-  2: 'Etapa 2 de 5 — Onde e quando',
-  3: 'Etapa 3 de 5 — O que aconteceu',
-  4: 'Etapa 4 de 5 — Quem está informando',
-  5: 'Etapa 5 de 5 — Comprovantes e assinatura',
+  1: 'Etapa 1 de 6 — Antes de começar',
+  2: 'Etapa 2 de 6 — Onde e quando',
+  3: 'Etapa 3 de 6 — O que aconteceu',
+  4: 'Etapa 4 de 6 — Quem está informando',
+  5: 'Etapa 5 de 6 — Comprovantes',
+  6: 'Etapa 6 de 6 — Termo de responsabilidade e envio',
 };
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 let _stepAtual = 1;
 
 function irParaStep(n) {
@@ -95,6 +96,7 @@ function avancarStep() {
   if (_stepAtual === 2 && !validarSecaoOndeEQuando()) return;
   if (_stepAtual === 3 && !validarSecaoOQueAconteceu()) return;
   if (_stepAtual === 4 && !validarSecaoInformantes()) return;
+  if (_stepAtual === 5 && !validarSecaoComprovantes()) return;
   irParaStep(Math.min(_stepAtual + 1, TOTAL_STEPS));
 }
 window.avancarStep = avancarStep;
@@ -213,12 +215,17 @@ function validarSecaoInformantes() {
   return true;
 }
 
-function validarSecaoFinal() {
+function validarSecaoComprovantes() {
   if (_anexos.some((a) => a.status === 'enviando')) return _erro('Aguarde o envio dos anexos terminar.');
   if (_anexos.some((a) => a.status === 'erro')) return _erro('Remova os anexos que falharam antes de continuar.');
   if (!_anexos.length && !document.getElementById('sol-sem-comprovante-ok').checked) {
     return _erro('Nenhum comprovante anexado: marque a declaração de que você se responsabiliza pela falta de prova, ou anexe os arquivos.');
   }
+  return true;
+}
+
+function validarSecaoFinal() {
+  if (!validarSecaoComprovantes()) return false;
   const semAssinatura = _informantes.find((i) => !i.assinatura);
   if (semAssinatura) return _erro(`Falta a assinatura de "${semAssinatura.nome}".`);
   return true;

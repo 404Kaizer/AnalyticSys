@@ -245,8 +245,9 @@
       <div class="seg" data-seg="3"></div>
       <div class="seg" data-seg="4"></div>
       <div class="seg" data-seg="5"></div>
+      <div class="seg" data-seg="6"></div>
     </div>
-    <div class="sol-steps-label" id="sol-steps-label">Etapa 1 de 5 — Antes de começar</div>
+    <div class="sol-steps-label" id="sol-steps-label">Etapa 1 de 6 — Antes de começar</div>
 
     <div class="sol-step" data-step="1">
       <div class="sol-card">
@@ -387,7 +388,15 @@
           </div>
         </div>
       </div>
+      <div class="sol-step-footer">
+        <button type="button" class="sol-btn" onclick="voltarStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
+        <div class="sol-step-footer-right">
+          <button type="button" class="sol-btn sol-btn-primary" onclick="avancarStep()">Próximo <i class="ti ti-arrow-right"></i></button>
+        </div>
+      </div>
+    </div>
 
+    <div class="sol-step" data-step="6" style="display:none">
       <div class="sol-card">
         <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-signature"></i></span> Termo de Responsabilidade</div>
         <div class="sol-card-desc">Cada informante lê a declaração e assina no quadro com o dedo ou o mouse.</div>
