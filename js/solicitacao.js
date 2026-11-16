@@ -228,7 +228,9 @@ function validarSecaoFinal() {
 function _turnstileRender() {
   if (turnstileWidgetId !== null) return;
   if (typeof turnstile === 'undefined') { setTimeout(_turnstileRender, 400); return; }
-  turnstileWidgetId = turnstile.render('#turnstile-solicitacao-widget', { sitekey: TURNSTILE_SITEKEY, theme: 'light' });
+  // interaction-only: o quadro só aparece quando o Cloudflare precisa de um clique —
+  // o "Sucesso!" visível fazia o operador achar que já tinha enviado o registro.
+  turnstileWidgetId = turnstile.render('#turnstile-solicitacao-widget', { sitekey: TURNSTILE_SITEKEY, theme: 'light', appearance: 'interaction-only' });
 }
 function _turnstileGetToken() {
   if (typeof turnstile === 'undefined' || turnstileWidgetId === null) return null;
@@ -1121,7 +1123,7 @@ async function enviarSolicitacao(ev) {
   if (!validarSecaoOndeEQuando() || !validarSecaoOQueAconteceu() || !validarSecaoInformantes() || !validarSecaoFinal()) return;
 
   const turnstileToken = _turnstileGetToken();
-  if (!turnstileToken) return mostrarAlerta('Confirme que você não é um robô antes de enviar.', 'error');
+  if (!turnstileToken) return mostrarAlerta('Verificação de segurança em andamento. Aguarde alguns segundos e toque em Enviar registro de novo — se aparecer uma caixa de verificação, marque-a.', 'error');
 
   const categoriaSituacao = _valorAtual('sol-categoria-situacao');
   const anexosOk = _anexos.filter((a) => a.status === 'ok');
