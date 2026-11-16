@@ -85,12 +85,16 @@ const { protocolo: _cP, recebida: _cR, ocorrido: _cO, central: _cC, analista: _c
 // Mesma divisão dos <optgroup> de registro-operacional.html; o resto é movimentação.
 // ponytail: tipo derivado do texto da situação no cliente (sem coluna no
 // banco) — se precisar de filtro no servidor, vira coluna `tipo`.
+// Método de aferição da cubagem (mesmas opções do formulário).
+const SOL_METODO = { pesagem: 'Por pesagem', volume: 'Por volume (furos)', cone: 'Por cone' };
+const _solMetodo = (i) => _solEsc(SOL_METODO[i.metodo] || i.metodo || '—');
 const SOL_PROC = [
   ['cubagem', 'Cubagem', 'Cubagem de agregados', 'ti-box', [_cP, _cR, _cC,
     ['Material', (s, i) => _solEsc(i.grupoMaterial), false, 'material'],
     ['Fornecedor', (s, i) => _solEsc(i.fornecedor), false, 'fornecedor'],
     ['Documento', (s, i) => i.nf ? `${i.docTipo === 'TICKET' ? 'Ticket' : 'NF'} ${_solEsc(i.nf)}` : '—'],
     ['Recebimento', (s, i) => _solData(i.dataRecebimento)],
+    ['Método', (s, i) => _solMetodo(i)],
     ['Documento (kg)', (s, i) => _solNum(i.nfKg), true],
     ['Aferido (kg)', (s, i) => _solNum(i.aferidoKg), true],
     ['Variação', (s, i) => _solVar(i.variacaoKg, i.variacaoPct), true],
@@ -701,7 +705,7 @@ function _solItensHtml(s) {
       <div class="sol-det-item-tit">${_solEsc(i.grupoMaterial)} <span>· ${_solEsc(i.fornecedor)}</span></div>
       ${_solKpis([
         [`${doc} em kg`, _solKg(i.nfKg), `${_solNum(i.pesoNf)} ${_solEsc(i.umNf)} declarado`],
-        ['Total aferido', _solKg(i.aferidoKg), { pesagem: 'por pesagem', cone: 'por cone', volume: 'por volume (furos)' }[i.metodo] || ''],
+        ['Total aferido', _solKg(i.aferidoKg), _solMetodo(i).toLowerCase()],
         _solKpiVar(i.variacaoKg, i.variacaoPct),
       ])}
       <div class="sol-det-grupos">
@@ -710,7 +714,7 @@ function _solItensHtml(s) {
           ${_solCampo('Emissão', _solData(i.dataEmissao))}
           ${_solCampo('Recebimento', _solData(i.dataRecebimento))}
           ${_solCampo('Fator M³→KG', i.fator ? _solNum(i.fator, 4) : '—')}`)}
-        ${_solGrupo('Medição', medidas)}
+        ${_solGrupo('Medição', _solCampo('Método', _solMetodo(i)) + medidas)}
       </div>
       ${semFator ? '<div class="sol-nf-alerta"><i class="ti ti-scale"></i> Sem fator de densidade no envio — converta m³ para kg manualmente.</div>' : ''}
       ${i.docTipo === 'TICKET' ? '' : _solVinculoNf(i)}
