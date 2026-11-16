@@ -237,7 +237,9 @@
 
   <div id="sol-alert-area"></div>
 
-  <form id="sol-form" style="display:none">
+  <!-- novalidate: a validação é toda no JS (por etapa). A nativa travava o envio em silêncio
+       quando um campo de etapa oculta ficava inválido (ex.: 3 casas num step="0.01"). -->
+  <form id="sol-form" style="display:none" novalidate>
 
     <div class="sol-steps-indicator">
       <div class="seg" data-seg="1"></div>
