@@ -42,7 +42,7 @@ const SOL_FILTROS_CUBAGEM = [
 const SOL_CATEGORIAS_AGREGADO = ['Agregado Graúdo', 'Agregado Miúdo'];
 
 const _sol = {
-  lista: [], tipo: 'procedimento', proc: 'cubagem', filtro: 'abertas', busca: '', carregando: false, erro: '', abertaId: null,
+  lista: [], tipo: 'procedimento', proc: 'cubagem', mov: 'perda', filtro: 'abertas', busca: '', carregando: false, erro: '', abertaId: null,
 };
 
 const _solEsc = (s) => escapeHtml(String(s ?? ''));
@@ -112,6 +112,14 @@ const SOL_COLS_MOV = [_cP, _cR, _cO, _cC,
   ['Material', (s, i) => _solEsc(i.grupoMaterial || '—'), false, 'material'],
   ['Quantidade', (s, i) => i.peso === undefined ? '—' : `${_solNum(i.peso)} ${_solEsc(i.unidade || 'kg')}`, true],
   _cA, _cS];
+// Sub-abas de Movimentações: [chave, rótulo, situação, ícone] — mesmas
+// opções do optgroup "Movimentação de estoque" do formulário.
+const SOL_MOV = [
+  ['perda', 'Perda', 'Perda de material', 'ti-trash'],
+  ['coleta', 'Coleta', 'Coleta de material', 'ti-truck-loading'],
+  ['transferencia', 'Transferência', 'Transferência de material entre filiais', 'ti-arrows-left-right'],
+];
+const _solMovAtual = () => SOL_MOV.find(([k]) => k === _sol.mov) || SOL_MOV[0];
 const SOL_PROCEDIMENTOS = new Set(SOL_PROC.map((p) => p[2]));
 const SOL_TIPOS = [
   ['procedimento', 'Procedimentos operacionais', 'ti-clipboard-check', (s) => SOL_PROCEDIMENTOS.has(s.categoria_situacao)],
@@ -237,6 +245,9 @@ window.solTipo = solTipo;
 function solProc(k) { _sol.proc = k; _sol.filtro = 'abertas'; _sol.sel = []; solRender(); }
 window.solProc = solProc;
 
+function solMov(k) { _sol.mov = k; _sol.filtro = 'abertas'; _sol.sel = []; solRender(); }
+window.solMov = solMov;
+
 // A busca fica no topo da lista, que é redesenhada a cada render — devolve o foco.
 function solBuscar(v) {
   _sol.busca = v;
@@ -352,18 +363,21 @@ function _solListaHtml(pares, niveis) {
   const abertas = (fn) => _sol.lista.filter((s) => fn(s) && _solAberta(s)).length;
   const tipos = SOL_TIPOS.map(([k, rot, icon, fn]) =>
     `<button class="mo-aba${k === _sol.tipo ? ' on' : ''}" onclick="solTipo('${k}')" title="O número é de registros em aberto"><i class="ti ${icon}"></i>${rot.split(' ')[0]} <b>${abertas(fn)}</b></button>`).join('');
-  const procs = _sol.tipo !== 'procedimento' ? '' : `<div class="mo-abas" role="tablist">${SOL_PROC.map(([k, rot, sit, icon]) =>
+  // Sub-abas: faixa colada no topo dos itens (fora do cabeçalho), dividindo a largura.
+  const procs = _sol.tipo !== 'procedimento' ? '' : `<div class="mp-subabas" role="tablist">${SOL_PROC.map(([k, rot, sit, icon]) =>
     `<button class="mo-aba${k === _sol.proc ? ' on' : ''}" onclick="solProc('${k}')"><i class="ti ${icon}"></i>${rot}${sit === SOL_CUBAGEM ? '' : ` <b>${abertas((s) => s.categoria_situacao === sit)}</b>`}</button>`).join('')}</div>`;
+  const movs = _sol.tipo !== 'movimentacao' ? '' : `<div class="mp-subabas" role="tablist">${SOL_MOV.map(([k, rot, sit, icon]) =>
+    `<button class="mo-aba${k === _sol.mov ? ' on' : ''}" onclick="solMov('${k}')"><i class="ti ${icon}"></i>${rot} <b>${abertas((s) => s.categoria_situacao === sit)}</b></button>`).join('')}</div>`;
   const total = new Set(pares.map(([s]) => s.id)).size;
   // Como nas Operações: abas no topo; embaixo, busca + recolher.
   return `<div class="mp-lista-head">
       <div class="mo-abas" role="tablist">${tipos}</div>
-      ${procs}
       <div class="mp-lista-linha">
         <label class="mp-busca"><i class="ti ti-search"></i><input id="sol-busca" type="text" placeholder="Buscar: protocolo, NF, informante…" value="${_solEsc(_sol.busca)}" oninput="solBuscar(this.value)" aria-label="Buscar registros"></label>
         <button class="mp-lista-recolher" onclick="solListaRecolher()" title="Recolher a lista para a lateral" aria-label="Recolher a lista" aria-expanded="true"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
       </div>
     </div>
+    ${procs}${movs}
     <div class="mp-lista-corpo">
       <button class="mp-row${_sol.sel.length ? ' apagado' : ' sel'}" data-d="-1" data-v="" onclick="solSel(this)">
         <i class="ti ti-list mp-chev"></i><span class="mp-nome"><b>Todos</b><small>${total} registro(s) · por ${SOL_NIVEIS[niveis[0]].rot.toLowerCase()}</small></span></button>
@@ -519,7 +533,7 @@ const _solNoPeriodo = (s) => {
 };
 const _solDoTipo = () => (_sol.tipo === 'procedimento'
   ? _sol.lista.filter((s) => s.categoria_situacao === _solProcAtual()[2])
-  : _sol.lista.filter(SOL_TIPOS[1][3])).filter(_solNoPeriodo);
+  : _sol.lista.filter((s) => s.categoria_situacao === _solMovAtual()[2])).filter(_solNoPeriodo);
 const _solFiltrosStatus = () => (_solEhCubagem() ? SOL_FILTROS_CUBAGEM : SOL_FILTROS);
 
 function _solFiltradas() {
@@ -593,7 +607,7 @@ function solRender() {
   const algumFiltro = SOL_MF.some(([k]) => _solMF.applied[k].size) || !!document.getElementById('sol-dt-ini')?.value;
   document.getElementById('sol-mf-clear-btn').style.display = algumFiltro ? '' : 'none';
 
-  const titulo = proc ? _solProcAtual()[1] : 'Movimentações de estoque';
+  const titulo = proc ? _solProcAtual()[1] : _solMovAtual()[2];
   const migalhas = [titulo, ..._sol.sel].map(_solEsc).join(' <span style="color:var(--text3)">›</span> ');
   document.getElementById('sol-tabela').innerHTML = `<div class="table-card">
     <div class="table-header">

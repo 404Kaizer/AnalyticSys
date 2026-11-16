@@ -13556,6 +13556,12 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-lista-head { flex-shrink: 0; }
 .mp-lista-head .mo-abas { flex-wrap: wrap; gap: 2px; }
 .mp-lista-head .mo-aba { white-space: nowrap; padding: 5px 7px; gap: 5px; font-size: 13px; }
+/* Sub-abas (Registros): faixa na largura da lista, colada nos itens; a ativa ganha sublinhado. */
+.mp-subabas { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--bg); }
+.mp-subabas .mo-aba { flex: 1 1 0; min-width: 0; justify-content: center; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  padding: 9px 6px 7px; gap: 5px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-subabas .mo-aba + .mo-aba { border-left: 1px solid var(--border); }
+.mp-subabas .mo-aba.on { background: var(--bg2); border-bottom-color: var(--accent); }
 .mp-busca { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 10px; background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; color: var(--text2); }
 .mp-busca input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; font-size: 14px; }
 .mp-lista-corpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
