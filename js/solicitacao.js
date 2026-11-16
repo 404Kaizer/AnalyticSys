@@ -899,7 +899,20 @@ function _renderInformantes() {
 // Um quadro por informante. O traço vira PNG (fundo branco, tinta preta)
 // guardado em inf.assinatura a cada traço terminado — voltar de etapa e
 // retornar redesenha a assinatura já feita.
+// Botão de envio sempre visível, mas só ativo (e pulsando) com todas as
+// assinaturas feitas.
+function _syncBtnEnviar() {
+  const btn = document.getElementById('sol-btn-enviar');
+  if (!btn) return;
+  const ok = _informantes.length > 0 && _informantes.every((i) => i.assinatura);
+  btn.disabled = !ok;
+  btn.classList.toggle('pronto', ok);
+  const dica = document.getElementById('sol-enviar-dica');
+  if (dica) dica.style.display = ok ? 'none' : '';
+}
+
 function _renderAssinaturas() {
+  setTimeout(_syncBtnEnviar); // depois de montar os quadros
   const el = document.getElementById('sol-assinaturas-lista');
   el.innerHTML = _informantes.map((inf) => `
     <div class="sol-assinatura">
@@ -983,6 +996,12 @@ function _initPad(inf) {
     desenhando = false;
     inf.assinatura = canvas.toDataURL('image/png');
     _padStatus(inf);
+    // Acabou de liberar o envio: o botão entra na tela.
+    const antes = document.getElementById('sol-btn-enviar')?.disabled;
+    _syncBtnEnviar();
+    if (antes && !document.getElementById('sol-btn-enviar').disabled) {
+      document.getElementById('sol-enviar-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   };
   canvas.addEventListener('pointerup', fim);
   canvas.addEventListener('pointercancel', fim);
@@ -995,6 +1014,7 @@ function _limparAssinatura(id) {
   inf.assinatura = '';
   _padFundo(canvas);
   _padStatus(inf);
+  _syncBtnEnviar();
 }
 window._limparAssinatura = _limparAssinatura;
 
@@ -1143,7 +1163,16 @@ async function enviarSolicitacao(ev) {
   }
 }
 
+// Saiu da página com assinatura feita e sem enviar: o navegador pergunta antes.
+let _solEnviado = false;
+window.addEventListener('beforeunload', (e) => {
+  if (_solEnviado || !_informantes.some((i) => i.assinatura)) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
 function _mostrarSucesso(protocolo) {
+  _solEnviado = true;
   document.getElementById('sol-form').style.display = 'none';
   const el = document.getElementById('sol-success');
   el.style.display = 'block';

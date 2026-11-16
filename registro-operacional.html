@@ -186,6 +186,19 @@
   @media (max-width: 620px) { .sol-resultado { grid-template-columns: 1fr; } }
   .sol-resultado .sol-var-display { font-size: 13.5px; }
   .sol-resultado-nota { font-size: 12px; color: var(--amber); margin-top: 8px; }
+
+  /* Último passo: botão de envio bem visível (assinar não envia). */
+  .sol-enviar-box { background: var(--orange-dim); border: 1.5px solid rgba(242,101,45,0.35); border-radius: var(--radius-lg); padding: 16px; margin: 6px 0 16px; display: flex; flex-direction: column; gap: 12px; }
+  .sol-enviar-aviso { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: #b5410f; }
+  .sol-enviar-aviso i { font-size: 20px; flex-shrink: 0; }
+  .sol-btn-enviar { width: 100%; padding: 16px 20px; font-size: 17px; letter-spacing: .04em; text-transform: uppercase; box-shadow: 0 6px 18px rgba(242,101,45,0.35); }
+  .sol-btn-enviar i { font-size: 20px; }
+  .sol-btn-enviar:disabled { box-shadow: none; }
+  .sol-enviar-dica { text-align: center; font-size: 13px; color: var(--text2); margin-top: -4px; }
+  /* Pulsa quando todos já assinaram — chama o olho para o envio. */
+  .sol-btn-enviar.pronto { animation: sol-pulso 1.6s ease-in-out infinite; }
+  @keyframes sol-pulso { 0%, 100% { box-shadow: 0 6px 18px rgba(242,101,45,0.35), 0 0 0 0 rgba(242,101,45,0.45); } 50% { box-shadow: 0 6px 18px rgba(242,101,45,0.35), 0 0 0 10px rgba(242,101,45,0); } }
+  @media (prefers-reduced-motion: reduce) { .sol-btn-enviar.pronto { animation: none; } }
 </style>
 </head>
 <body>
@@ -383,14 +396,19 @@
 
       <div class="sol-turnstile" id="turnstile-solicitacao-widget"></div>
 
+      <!-- Último passo em destaque: assinar não envia — sem o clique, o registro não chega ao analista. -->
+      <div class="sol-enviar-box" id="sol-enviar-box">
+        <div class="sol-enviar-aviso"><i class="ti ti-alert-circle"></i>
+          <span><strong>Último passo:</strong> depois de assinar, toque em <strong>ENVIAR REGISTRO</strong>. Sem isso, o registro <strong>não chega</strong> ao analista.</span>
+        </div>
+        <button type="submit" class="sol-btn sol-btn-primary sol-btn-enviar" id="sol-btn-enviar" disabled>
+          <i class="ti ti-send"></i> Enviar registro
+        </button>
+        <div class="sol-enviar-dica" id="sol-enviar-dica"><i class="ti ti-signature"></i> Assine o termo acima para liberar o envio.</div>
+      </div>
       <div class="sol-step-footer">
         <button type="button" class="sol-btn" onclick="voltarStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
-        <div class="sol-step-footer-right">
-          <span style="font-size:12px;color:var(--text3)">Campos com <span class="sol-required">*</span> são obrigatórios.</span>
-          <button type="submit" class="sol-btn sol-btn-primary" id="sol-btn-enviar">
-            <i class="ti ti-send"></i> Enviar registro
-          </button>
-        </div>
+        <span style="font-size:12px;color:var(--text3)">Campos com <span class="sol-required">*</span> são obrigatórios.</span>
       </div>
     </div>
   </form>

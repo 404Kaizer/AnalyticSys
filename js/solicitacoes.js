@@ -109,6 +109,8 @@ const SOL_PROC = [
 const SOL_COLS_MOV = [_cP, _cR, _cO, _cC,
   ['Situação', (s) => _solEsc(s.categoria_situacao) + (s.motivo ? ` <span style="color:var(--text3)">· ${_solEsc(s.motivo)}</span>` : '')],
   ['Categoria', (s) => _solEsc(s.categoria)],
+  ['Material', (s, i) => _solEsc(i.grupoMaterial || '—'), false, 'material'],
+  ['Quantidade', (s, i) => i.peso === undefined ? '—' : `${_solNum(i.peso)} ${_solEsc(i.unidade || 'kg')}`, true],
   _cA, _cS];
 const SOL_PROCEDIMENTOS = new Set(SOL_PROC.map((p) => p[2]));
 const SOL_TIPOS = [
@@ -576,9 +578,8 @@ function solRender() {
     : `<button class="btn btn-sm sol-btn-excluir" title="Excluir" onclick="event.stopPropagation();solExcluir('${s.id}')"><i class="ti ti-trash"></i></button>`, true]];
   const td = (dir) => dir ? ' style="text-align:right"' : '';
 
-  // Procedimentos: uma linha por item (carreta, teste…); movimentações: uma por registro.
-  const vistos = new Set();
-  const rows = (_sol.sel.length ? noCaminho : pares).filter(([s]) => proc || (!vistos.has(s.id) && vistos.add(s.id)));
+  // Uma linha por item (carreta, teste, material) — o mesmo protocolo se repete.
+  const rows = _sol.sel.length ? noCaminho : pares;
   const vazio = (icon, txt) => `<tr><td colspan="${cols.length}"><div class="empty-state"><i class="ti ${icon}"></i><p>${txt}</p></div></td></tr>`;
   const corpo = _sol.carregando && !_sol.lista.length ? vazio('ti-loader', 'Carregando…')
     : _sol.erro ? vazio('ti-alert-triangle', 'Falha ao carregar: ' + _solEsc(_sol.erro))
