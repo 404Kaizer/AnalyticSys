@@ -92,7 +92,12 @@ const MOTIVO_MAX = 200;
 // categoria, que decide o analista.
 const SEM_IDENTIFICACAO = 'SEM IDENTIFICAÇÃO';
 
-const UNIDADES_CANTO = ['kg', 'L'];
+// Unidades permitidas por categoria — mesma lista de UNIDADES_POR_CATEGORIA
+// em js/solicitacao.js (vale para a quantidade dos materiais e o teste de canto).
+const UNIDADES_POR_CATEGORIA: Record<string, string[]> = {
+  'Agregado Graúdo': ['TO', 'KG', 'M3'], 'Agregado Miúdo': ['TO', 'KG', 'M3'],
+  'Aglomerante': ['TO', 'KG'], 'Aditivo': ['L', 'KG'], 'Adição': ['L', 'KG'],
+};
 const CANTOS_UNICO_CATEGORIAS = ['Aditivo', 'Adição'];
 const UNIDADES_NF = ['M3', 'TO', 'KG'];
 
@@ -401,7 +406,7 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
       const referencia = numOk(rec.referencia, LIMITES.pesoMax);
       const cantos = (Array.isArray(rec.cantos) ? rec.cantos : []).map((c) => parseFloat(String(c)));
       if (!CATEGORIAS_FIXAS.includes(categoriaMaterial)) return json({ error: 'Categoria de material inválida em um dos testes.' }, 400);
-      if (!UNIDADES_CANTO.includes(unidade)) return json({ error: 'Unidade inválida em um dos testes.' }, 400);
+      if (!(UNIDADES_POR_CATEGORIA[categoriaMaterial] || []).includes(unidade)) return json({ error: `Unidade inválida para o teste de "${categoriaMaterial}".` }, 400);
       if (referencia === null) return json({ error: `Peso/volume de referência inválido para "${categoriaMaterial}".` }, 400);
       if (cantos.length < 1 || cantos.length > 4) return json({ error: `Quantidade de cantos inválida para "${categoriaMaterial}".` }, 400);
       if (CANTOS_UNICO_CATEGORIAS.includes(categoriaMaterial) && cantos.length !== 1) return json({ error: `"${categoriaMaterial}" deve usar sempre 1 canto.` }, 400);
@@ -500,9 +505,10 @@ async function acaoSubmit(payload: Record<string, unknown>, ip: string) {
       if (!categoria) {
         return json({ error: semId ? 'Selecione a categoria do material sem identificação.' : `Material "${grupoMaterial}" não reconhecido. Selecione uma opção da lista.` }, 400);
       }
-      if (peso === null) return json({ error: `Peso inválido para "${grupoMaterial}".` }, 400);
-      // Aditivo é informado em litros no formulário (campo "Volume (L)").
-      itens.push({ tipo: 'material', categoria, grupoMaterial: semId ? SEM_IDENTIFICACAO : grupoMaterial, peso, unidade: categoria === 'Aditivo' ? 'L' : 'kg' });
+      if (peso === null) return json({ error: `Quantidade inválida para "${grupoMaterial}".` }, 400);
+      const unidade = String(rec.unidade ?? '').trim();
+      if (!(UNIDADES_POR_CATEGORIA[categoria] || []).includes(unidade)) return json({ error: `Unidade inválida para "${grupoMaterial}".` }, 400);
+      itens.push({ tipo: 'material', categoria, grupoMaterial: semId ? SEM_IDENTIFICACAO : grupoMaterial, peso, unidade });
     }
   }
 

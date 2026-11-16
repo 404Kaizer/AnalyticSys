@@ -326,7 +326,9 @@ function _solArvoreHtml(pares, niveis, d = 0) {
     const sel = aberto && _sol.sel.length === d + 1;
     const apagado = _sol.sel.length > d && !aberto;
     const regs = new Set(ps.map(([s]) => s.id)).size;
-    const kg = cub ? ps.reduce((t, [, i]) => t + (Number(i.variacaoKg) || 0), 0) : null;
+    // Variação média por carreta (só as que têm conversão para kg).
+    const vk = cub ? ps.map(([, i]) => i.variacaoKg).filter((v) => v !== null && v !== undefined && Number.isFinite(Number(v))).map(Number) : [];
+    const kg = vk.length ? vk.reduce((t, v) => t + v, 0) / vk.length : null;
     const filho = niveis[d + 1];
     const sub = filho
       ? `${new Set(ps.map((p) => SOL_NIVEIS[filho].val(...p))).size} ${SOL_NIVEIS[filho].rot.toLowerCase()}(s) · ${regs} registro(s)`
@@ -335,7 +337,7 @@ function _solArvoreHtml(pares, niveis, d = 0) {
       <i class="ti ti-chevron-${filho ? (aberto ? 'down' : 'right') : 'right'} mp-chev"${filho ? '' : ' style="visibility:hidden"'}></i>
       <i class="ti ${SOL_NIVEIS[nivel].icon}" style="color:var(--text3)"></i>
       <span class="mp-nome"><b>${_solEsc(valor)}</b><small>${sub}</small></span>
-      ${cub ? `<span class="mp-v" style="color:${Math.abs(kg) >= 1 ? (kg < 0 ? 'var(--red)' : 'var(--amber)') : 'var(--text2)'}" title="Variação somada (aferido − documento)">${kg >= 0 ? '+' : ''}${_solNum(kg, 0)} kg</span>` : ''}
+      ${cub && kg !== null ? `<span class="mp-v" style="color:${Math.abs(kg) >= 1 ? (kg < 0 ? 'var(--red)' : 'var(--amber)') : 'var(--text2)'}" title="Variação média por carreta (aferido − documento), ${vk.length} carreta(s)">${kg >= 0 ? '+' : ''}${_solNum(kg, 0)} kg</span>` : ''}
     </button>${aberto ? _solArvoreHtml(ps, niveis, d + 1) : ''}</div>`;
   }).join('');
 }
@@ -900,14 +902,15 @@ function solConcluirComDai() {
     const card = document.querySelector('#dai-itens-rows .dai-item-card:last-child');
     const mat = card?.querySelector('[data-field="material"]');
     if (mat && [...mat.options].some((o) => o.value === it.grupoMaterial)) mat.value = it.grupoMaterial;
-    set(card?.querySelector('[data-field="peso"]'), it.peso);
+    // A DAI pede peso em kg: só preenche quando o operador informou em KG.
+    if (String(it.unidade || 'kg').toUpperCase() === 'KG') set(card?.querySelector('[data-field="peso"]'), it.peso);
   });
 
   const linhas = [`${s.categoria_situacao}${s.motivo ? ` (${s.motivo})` : ''} — Registro Operacional ${s.protocolo}.`];
   if (s.filial_destino) linhas.push(`Filial de destino: ${s.filial_destino}.`);
   (s.itens || []).forEach((i) => {
     if (i.tipo === 'teste_canto') linhas.push(`Teste de canto ${i.categoriaMaterial}: referência ${_solNum(i.referencia)} ${i.unidade}, média lida ${_solNum(i.media)} ${i.unidade} (${_solNum(i.variacaoPct)}%).`);
-    else if (i.unidade === 'L') linhas.push(`${i.grupoMaterial}: ${_solNum(i.peso)} L informados pelo operador.`);
+    else if (i.unidade && String(i.unidade).toUpperCase() !== 'KG') linhas.push(`${i.grupoMaterial}: ${_solNum(i.peso)} ${i.unidade} informados pelo operador (converter para kg).`);
   });
   if (s.descricao) linhas.push(s.descricao);
   if ((s.anexos || []).length) linhas.push(`Comprovantes anexados no registro ${s.protocolo}.`);

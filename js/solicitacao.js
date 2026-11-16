@@ -169,6 +169,7 @@ function validarSecaoOQueAconteceu() {
   for (const it of _itensMateriais) {
     if (categoriaSituacao === CATEGORIA_CANTO) {
       if (!it.categoriaMaterial) return _erro('Selecione a categoria do material em todos os testes adicionados.');
+      if (!_unidadesDe(it.categoriaMaterial).includes(it.unidade)) return _erro(`Selecione a unidade do teste de "${it.categoriaMaterial}".`);
       if (!_positivo(it.referencia)) return _erro(`Informe um peso/volume de referência válido para "${it.categoriaMaterial}".`);
       const cantos = (it.cantos || []).map(_num);
       if (!cantos.length || cantos.some((c) => isNaN(c) || c < 0)) return _erro(`Preencha todos os cantos para "${it.categoriaMaterial}".`);
@@ -194,7 +195,8 @@ function validarSecaoOQueAconteceu() {
     } else {
       if (!it.material) return _erro('Selecione o material em todas as linhas adicionadas (ou remova as vazias).');
       if (it.material === SEM_IDENTIFICACAO && !it.categoriaSemId) return _erro('Selecione a categoria do material sem identificação.');
-      if (!_positivo(it.peso)) return _erro(`Informe ${_emLitros(it) ? 'um volume' : 'um peso'} válido para "${it.material}".`);
+      if (!_positivo(it.peso)) return _erro(`Informe uma quantidade válida para "${it.material}".`);
+      if (!_unidadesDe(_catDoItem(it)).includes(it.unidade)) return _erro(`Selecione a unidade de "${it.material}".`);
     }
   }
 
@@ -315,6 +317,8 @@ window.onMotivoChange = onMotivoChange;
 // "SEM IDENTIFICAÇÃO" mostra/esconde o campo de categoria → re-renderiza.
 function _onMaterialChange(id, value) {
   _setCampo(id, 'material', value);
+  const it = _item(id);
+  if (it && !_unidadesDe(_catDoItem(it)).includes(it.unidade)) it.unidade = ''; // unidade fora da nova categoria
   _renderItensMateriais();
 }
 window._onMaterialChange = _onMaterialChange;
@@ -336,7 +340,7 @@ function _novoItemMaterial() {
     id: 'im' + (_itemSeq++),
     material: '', peso: '', categoriaSemId: '',
     // teste de canto
-    categoriaMaterial: '', unidade: 'kg', qtdCantos: 4, referencia: '', cantos: ['', '', '', ''],
+    categoriaMaterial: '', unidade: '', qtdCantos: 4, referencia: '', cantos: ['', '', '', ''],
     // cubagem
     fornecedor: '', docTipo: 'NF', nf: '', dataEmissao: '', dataRecebimento: '', pesoNf: '', umNf: 'M3',
     metodo: 'pesagem', pesagens: [''], comprimento: '', largura: '', alturas: ['', '', ''],
@@ -380,6 +384,7 @@ function _onCategoriaMaterialCantoChange(id, value) {
   const it = _item(id);
   if (!it) return;
   it.categoriaMaterial = value;
+  if (!_unidadesDe(value).includes(it.unidade)) it.unidade = ''; // unidade fora da nova categoria
   if (CANTOS_UNICO_CATEGORIAS.includes(value)) { it.qtdCantos = 1; it.cantos = [it.cantos[0] || '']; }
   _renderItensMateriais();
 }
@@ -500,8 +505,23 @@ function _inputNum(id, campo, valor, placeholder) {
   return `<input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="${placeholder || '0,00'}" value="${escapeHtml(valor)}" oninput="_setCampo('${id}', '${campo}', this.value, true)">`;
 }
 
-// Aditivo é informado em litros (Volume) — o servidor grava a unidade no item.
-const _emLitros = (it) => (it.material === SEM_IDENTIFICACAO ? it.categoriaSemId : _categoriaDoMaterial(it.material)) === 'Aditivo';
+// Unidades permitidas por categoria (mesma lista de UNIDADES_POR_CATEGORIA na
+// Edge Function). Sem padrão: o operador escolhe ao preencher.
+const UNIDADES_POR_CATEGORIA = {
+  'Agregado Graúdo': ['TO', 'KG', 'M3'], 'Agregado Miúdo': ['TO', 'KG', 'M3'],
+  'Aglomerante': ['TO', 'KG'], 'Aditivo': ['L', 'KG'], 'Adição': ['L', 'KG'],
+};
+const UNIDADE_NOME = { TO: 'Tonelada (TO)', KG: 'Quilograma (KG)', M3: 'Metro cúbico (M³)', L: 'Litro (L)' };
+const _catDoItem = (it) => (it.material === SEM_IDENTIFICACAO ? it.categoriaSemId : _categoriaDoMaterial(it.material));
+const _unidadesDe = (cat) => UNIDADES_POR_CATEGORIA[cat] || [];
+// Seletor de unidade; sem categoria escolhida fica desabilitado.
+function _selectUnidade(it, cat) {
+  const lista = _unidadesDe(cat);
+  return `<select class="sol-select" ${lista.length ? '' : 'disabled'} onchange="_setCampo('${it.id}', 'unidade', this.value, true)">
+    <option value="">${lista.length ? 'Selecione' : '—'}</option>
+    ${lista.map((u) => `<option value="${u}" ${it.unidade === u ? 'selected' : ''}>${UNIDADE_NOME[u]}</option>`).join('')}
+  </select>`;
+}
 
 function _htmlItemMaterial(it) {
   const coleta = _valorAtual('sol-categoria-situacao') === CATEGORIA_COLETA;
@@ -516,14 +536,18 @@ function _htmlItemMaterial(it) {
       </div>
       ${semId ? `<div class="sol-fg">
         <label class="sol-label">Categoria <span class="sol-required">*</span></label>
-        <select class="sol-select" onchange="_setCampo('${it.id}', 'categoriaSemId', this.value); _renderItensMateriais()">
+        <select class="sol-select" onchange="_setCampo('${it.id}', 'categoriaSemId', this.value); _onMaterialChange('${it.id}', '${SEM_IDENTIFICACAO}')">
           <option value="">Selecione</option>
           ${CATEGORIAS_MATERIAL_CANTO.map((c) => `<option value="${c}" ${it.categoriaSemId === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select>
       </div>` : ''}
       <div class="sol-fg sol-fg-peso">
-        <label class="sol-label">${_emLitros(it) ? 'Volume (L)' : 'Peso (kg)'} <span class="sol-required">*</span></label>
+        <label class="sol-label">Quantidade <span class="sol-required">*</span></label>
         ${_inputNum(it.id, 'peso', it.peso)}
+      </div>
+      <div class="sol-fg sol-fg-peso">
+        <label class="sol-label">Unidade <span class="sol-required">*</span></label>
+        ${_selectUnidade(it, _catDoItem(it))}
       </div>
       ${_btnRemover(it, 'Remover material')}
     </div>`;
@@ -553,10 +577,7 @@ function _htmlItemCanto(it) {
         </div>
         <div class="sol-fg">
           <label class="sol-label">Unidade <span class="sol-required">*</span></label>
-          <select class="sol-select" onchange="_setCampo('${it.id}', 'unidade', this.value, true)">
-            <option value="kg" ${it.unidade === 'kg' ? 'selected' : ''}>Quilogramas (kg)</option>
-            <option value="L" ${it.unidade === 'L' ? 'selected' : ''}>Litros (L)</option>
-          </select>
+          ${_selectUnidade(it, it.categoriaMaterial)}
         </div>
       </div>
       <div class="sol-grid">
@@ -1068,7 +1089,7 @@ function _itensPayload(situacao) {
     }));
   }
   return _itensMateriais.map((i) => ({
-    grupoMaterial: i.material, peso: _num(i.peso),
+    grupoMaterial: i.material, peso: _num(i.peso), unidade: i.unidade,
     ...(i.material === SEM_IDENTIFICACAO ? { categoria: i.categoriaSemId } : {}),
   }));
 }
