@@ -297,6 +297,18 @@ function muralPeriodo() {
   return { ini: _moDia(window.__analiticoDtIni), fim: _moDia(window.__analiticoDtFim) };
 }
 
+// Saúde das Operações: calcHealthScore, mas material sem variação conta como
+// BOM (entra no total sem penalidade), como na Visão Macro — calcHealthScore
+// sozinho os descarta (Hugo, 17/11/2026).
+function muralSaude(matDiffs, th) {
+  const r = calcHealthScore(matDiffs, null, null, th), c = r.counts;
+  const n = c.bom + c.atencao + c.urgente + c.critico + (c.neutro || 0);
+  if (!c.neutro || n === c.neutro) return r;
+  const pen = c.atencao * HEALTH_PENALTIES.atencao + c.urgente * HEALTH_PENALTIES.urgente + c.critico * HEALTH_PENALTIES.critico;
+  const score = Math.max(0, Math.round((1 - pen / (n * HEALTH_PENALTIES.critico)) * 100));
+  return { score, level: score >= 80 ? 'ok' : score >= 55 ? 'atencao' : score >= 30 ? 'urgente' : 'critico', counts: c };
+}
+
 function _muralFotosDaMicro(donos) {
   const reg = window.__anPares, per = muralPeriodo();
   if (!reg || !reg.size || !per) return null;
@@ -478,7 +490,7 @@ function muralItensDerivados() {
     (p.faixa || []).forEach(([central, mat, v]) => somar(central, mat, v, getCatKeyDoCadastro(mat) || detectCatKey(f.categoria)));
     (p.semLanc || []).forEach(x => somar(x.central, x.material, x.v, x.catKey));
   });
-  const saudeCentral = new Map([...paresCentral].map(([c, ps]) => [c, calcHealthScore(ps, null, null, thresholds).score]));
+  const saudeCentral = new Map([...paresCentral].map(([c, ps]) => [c, muralSaude(ps, thresholds).score]));
   _mo.fotos.forEach(f => {
     const p = f.atual.payload || {};
     const janelaIni = parseDate(p.janela?.ini) || hoje;
@@ -1503,8 +1515,9 @@ function _muralRxHtml(rx, it, catKey) {
   const hist = acoes.length
     ? acoes.slice().reverse().map(a => `<li data-dia="${localISODate(a.quando)}"><i class="ti ${a.oc ? 'ti-file-alert mo-red' : 'ti-message'}"></i><div><small class="mo-hint">${_moEsc(a.titulo)} · ${_moRxDatas(a, true)}</small><div>${_moEsc(a.texto) || '—'}</div></div></li>`).join('')
     : '<li class="mo-hint">Nenhum comentário ou ocorrência no período.</li>';
-  const prio = it ? it.partes.filter(p => p[1]).map(p => `<span>${_moEsc(p[0])}</span><b>+${p[1].toFixed(1)}</b>`).join('')
-    + `<span class="tot">Prioridade</span><b class="tot">${it.prioridade.toFixed(1)}</b>` : '';
+  const num = (n) => n.toFixed(1).replace('.', ','); // mesmo formato do selo da lista
+  const prio = it ? it.partes.filter(p => p[1]).map(p => `<span>${_moEsc(p[0])}</span><b>+${num(p[1])}</b>`).join('')
+    + `<span class="tot">Prioridade</span><b class="tot">${num(it.prioridade)}</b>` : '';
   const sec = (icon, titulo, corpo) => `<section><h4 class="mo-dr-sec"><i class="ti ${icon}"></i>${titulo}</h4>${corpo}</section>`;
   const periodoTxt = `${fmtPtDate(rx.ini)} a ${fmtPtDate(rx.fim)}`;
   return `<div class="mo-dr-head">

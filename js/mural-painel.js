@@ -38,7 +38,7 @@ function _mpPares(itens) {
 // Nível da regional/central: a mesma conta do card da Micro e da Macro
 // (calcHealthScore sobre a variação de cada par; 'ok' = bom).
 function _mpSaude(ps) {
-  const r = calcHealthScore(ps.map(p => ({ mat: p.material, diff: p.v, catKey: p.catKey })), null, null, getHealthThresholds());
+  const r = muralSaude(ps.map(p => ({ mat: p.material, diff: p.v, catKey: p.catKey })), getHealthThresholds());
   return { score: r.score, nivel: r.level === 'ok' ? 'bom' : r.level };
 }
 
@@ -65,7 +65,7 @@ async function _mpSerieSaude(ps, gen) {
   const nDias = series.find(x => x.s)?.s.acc.length || 0;
   const out = [];
   for (let d = 0; d < nDias; d++)
-    out.push(calcHealthScore(series.map(x => ({ mat: '', diff: x.s ? (x.s.acc[d] || 0) : 0, catKey: x.catKey })), null, null, th).score);
+    out.push(muralSaude(series.map(x => ({ mat: '', diff: x.s ? (x.s.acc[d] || 0) : 0, catKey: x.catKey })), th).score);
   return out;
 }
 
@@ -93,7 +93,7 @@ function _mpDonutMats(ps) {
     itens[p.nivel].push(`${p.material} (${p.central})`);
   });
   const levelMeta = Object.fromEntries(Object.entries(meta).map(([l, m]) => [l, { diff: m.diff, custo: m.custo, trend: m.w ? 'worsening' : null }]));
-  // Centro do donut = Saúde da Micro (calcHealthScore), não a fórmula da Macro (Hugo, 11/11/2026).
+  // Centro do donut = Saúde da Micro (calcHealthScore, via muralSaude: sem variação = bom), não a fórmula da Macro (Hugo, 11/11/2026).
   return { counts, levelMeta, itens, score: _mpSaude(ps).score, total: ps.length };
 }
 
@@ -312,7 +312,22 @@ function _mpItemLinha(p, s, recuo, via) {
   const esteItem = s.tipo === 'item' && s.central === p.central && s.material === p.material;
   return `<button class="mp-row mp-item ${recuo}${esteItem ? ' sel' : s.tipo === 'item' ? ' apagado' : ''}" ${_mpLinhaAttrs('item', p, via)}>
     ${_mpIco(p.nivel)}<span class="mp-nome"><b>${_moEsc(porMat ? p.central : p.material)}</b><small style="color:${sitCor}">${porMat ? _moEsc(p.regional) + ' · ' : ''}${_moEsc(sit)}</small></span>
-    <span class="mp-v" style="color:${_mpCor(p.v)}">${_moPesoSinal(p.v)}</span></button>`;
+    <span class="mp-dir"><span class="mp-v" style="color:${_mpCor(p.v)}">${_moPesoSinal(p.v)}</span>${p.it ? _mpPrioHtml(p.it) : ''}</span></button>`;
+}
+
+// Prioridade de ação de cada item da fila (Hugo, 17/11/2026): faixa pela
+// pontuação de "Por que está nesta posição da fila"; o detalhamento vira o
+// balão do selo. ponytail: cortes fixos (≥ 20 Alta, ≥ 12 Média) — calibrar
+// com o uso (ou trocar por tercis da fila) se a distribuição pedir.
+const MP_PRIO_FAIXAS = [[20, 'Alta', '#f43f5e'], [12, 'Média', '#f59e0b'], [-Infinity, 'Baixa', '#94a3b8']];
+const _mpPrioNum = (n) => n.toFixed(1).replace('.', ',');
+function _mpPrioHtml(it) {
+  const [, rot, cor] = MP_PRIO_FAIXAS.find(([min]) => it.prioridade >= min);
+  const grade = it.partes.filter(p => p[1]).map(p => _moRxLinha(_moEsc(p[0]), '+' + _mpPrioNum(p[1]))).join('')
+    + _moRxLinha('<b style="color:var(--text)">Prioridade</b>', _mpPrioNum(it.prioridade), cor);
+  const tip = _moRxTip(cor, `Prioridade ${rot}`, _mpPrioNum(it.prioridade), grade,
+    '<div style="margin-top:10px;font-size:12.5px;color:var(--text2)">Por que está nesta posição da fila</div>');
+  return `<span class="mp-prio" style="--c:${cor}" data-tip="${tip}" data-col="${cor}">${rot} · ${_mpPrioNum(it.prioridade)}</span>`;
 }
 
 // Linha de grupo (regional, central ou material): o número é o total de
@@ -562,12 +577,14 @@ function muralPainelRender(el, itens) {
   // Seleção que sumiu (filtro, busca, item que saiu da fila) volta ao Geral.
   const s = _mp.sel;
   if (s.tipo !== 'geral' && !todos.some(p => s.tipo === 'item' ? (p.central === s.central && p.material === s.material) : _mpNoEscopo(p, s))) _mp.sel = { tipo: 'geral' };
-  // Balão dos pontos do gráfico de inventários (o do Raio-X tem o seu, em #mp-rx).
+  // Balão dos pontos do gráfico de inventários e do selo de prioridade da
+  // lista (o do Raio-X tem o seu, em #mp-rx).
   if (!el.dataset.mpTip && typeof _showTip === 'function') {
     el.dataset.mpTip = '1';
-    el.addEventListener('mouseover', e => { const p = e.target.closest?.('.mp-inv .mo-rx-pt'); if (p) _showTip(e, decodeURIComponent(p.dataset.tip), p.dataset.col); });
-    el.addEventListener('mousemove', e => { if (e.target.closest?.('.mp-inv .mo-rx-pt')) _moveTip(e); });
-    el.addEventListener('mouseout', e => { if (e.target.closest?.('.mp-inv .mo-rx-pt')) _hideTip(); });
+    const ALVO = '.mp-inv .mo-rx-pt, .mp-prio';
+    el.addEventListener('mouseover', e => { const p = e.target.closest?.(ALVO); if (p) _showTip(e, decodeURIComponent(p.dataset.tip), p.dataset.col); });
+    el.addEventListener('mousemove', e => { if (e.target.closest?.(ALVO)) _moveTip(e); });
+    el.addEventListener('mouseout', e => { if (e.target.closest?.(ALVO)) _hideTip(); });
   }
   el.innerHTML = `<div class="mp-root">${_muralFiltrosHtml(itens)}
     <div class="mp">${_mpListaHtml(todos)}
