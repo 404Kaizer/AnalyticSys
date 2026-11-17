@@ -148,14 +148,20 @@ function _varComSemCausa(texto) { return String(texto || '').replace(_VARCOM_CAU
 function openVarComModal(btn) {
   _hideHelpTip();
   const diff = parseFloat(btn.closest('tr')?.dataset.diff) || 0;
-  _varComCtx = { central: btn.dataset.central, material: btn.dataset.material, periodo: btn.dataset.periodo, diff };
+  // dataset.semuso: aberto pela aba Sem uso do Mural (mural-semuso.js) —
+  // causas próprias e sem o botão de ocorrência (não conta como tratativa lá).
+  const semUso = btn.dataset.semuso || '';
+  _varComCtx = { central: btn.dataset.central, material: btn.dataset.material, periodo: btn.dataset.periodo, diff, semUso };
   document.getElementById('varcom-sub').textContent = `${_varComCtx.central} · ${_varComCtx.material}`;
-  document.getElementById('varcom-var').innerHTML =
+  document.getElementById('varcom-var').innerHTML = semUso ? `Sem uso: ${escapeHtml(semUso)}` :
     `Variação${_varComCtx.periodo ? ` em ${escapeHtml(_varComCtx.periodo)}` : ''}: <span class="td-mono ${varClass(diff)}">${varSymbol(diff)} ${fmtKg(Math.abs(diff))}</span>`;
   document.getElementById('varcom-data').value  = _varComHoje();
   document.getElementById('varcom-texto').value = '';
+  document.getElementById('varcom-texto').placeholder = semUso ? 'Por que o material está parado…' : 'Motivo da variação…';
+  document.getElementById('varcom-btn-oc').style.display = semUso ? 'none' : '';
   const sel = document.getElementById('varcom-causa');
-  if (sel) sel.innerHTML = ['<option value="">Escolha a causa</option>', ...VARCOM_CAUSAS.map(c => `<option>${escapeHtml(c)}</option>`)].join('');
+  const causas = semUso && typeof SU_CAUSAS !== 'undefined' ? SU_CAUSAS : VARCOM_CAUSAS;
+  if (sel) sel.innerHTML = ['<option value="">Escolha a causa</option>', ...causas.map(c => `<option>${escapeHtml(c)}</option>`)].join('');
   _varComRenderLista();
   document.getElementById('varcom-modal').classList.add('open');
   document.getElementById('varcom-texto').focus();

@@ -440,6 +440,7 @@ function _mpListaHtml(todos) {
   else if (g === 'central') linhas = ordenar(_mpAgrupar(vis, p => p.central)).map(blocoCen).join('');
   else linhas = ordenar(_mpAgrupar(vis, p => p.regional)).map(blocoReg).join('');
 
+  if (aba === 'semuso' && typeof suListaHtml === 'function') linhas = suListaHtml();
   const contaAba = termos.length ? contar : todos;
   return `<section class="mp-lista${ent}">
     <div class="mp-lista-head">
@@ -449,8 +450,8 @@ function _mpListaHtml(todos) {
       </div>
     </div>
     <div class="mp-subabas" role="tablist">
-        ${[['fila', 'ti-flame', 'Fila', p => !!p.it], ['faixa', 'ti-circle-check', 'Na faixa', p => !!p.fx], ['sem', 'ti-calendar-x', 'Sem lançamento', p => !!p.sl]]
-          .map(([k, ic, rot, f]) => `<button class="mo-aba${aba === k ? ' on' : ''}" role="tab" aria-selected="${aba === k}" onclick="muralPainelAba('${k}')"${k === 'sem' ? ' title="Sem lançamento no último dia do período (AUSENTE na Visão Micro)"' : ''}><i class="ti ${ic}"></i>${rot} <b>${contaAba.filter(f).length}</b></button>`).join('')}
+        ${[['fila', 'ti-flame', 'Fila', p => !!p.it], ['faixa', 'ti-circle-check', 'Na faixa', p => !!p.fx], ['sem', 'ti-calendar-x', 'Sem lançamento', p => !!p.sl], ['semuso', 'ti-hourglass', 'Sem uso', null]]
+          .map(([k, ic, rot, f]) => `<button class="mo-aba${aba === k ? ' on' : ''}" role="tab" aria-selected="${aba === k}" onclick="muralPainelAba('${k}')"${k === 'sem' ? ' title="Sem lançamento no último dia do período (AUSENTE na Visão Micro)"' : k === 'semuso' ? ' title="Material com saldo e sem uso há 60 dias ou mais (o número conta os sem tratativa)"' : ''}><i class="ti ${ic}"></i>${rot} <b>${f ? contaAba.filter(f).length : _mpSemUsoConta()}</b></button>`).join('')}
     </div>
     <div class="mp-lista-corpo">${linhas || `<div class="empty-state" style="padding:24px"><p>${termos.length ? (contar.length ? 'Nada nesta aba — o número de cada aba mostra onde está.' : 'Nada encontrado.') : 'Nada com esses filtros.'}</p></div>`}</div>
   </section>`;
@@ -571,7 +572,11 @@ function _mpPainelHtml(todos, itensFila) {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
+// Aba Sem uso (mural-semuso.js): lista e painel próprios, fora das contas de
+// saúde e variação dos pares.
+const _mpSemUsoConta = () => typeof suItensFiltrados === 'function' ? suItensFiltrados().filter(i => !i.trat).length : 0;
 function muralPainelRender(el, itens) {
+  const semUso = _mp.aba === 'semuso' && typeof suPainelHtml === 'function';
   const todos = _mpPares(itens);
   const fila = _muralAplicarFiltros(itens);
   // Seleção que sumiu (filtro, busca, item que saiu da fila) volta ao Geral.
@@ -588,8 +593,8 @@ function muralPainelRender(el, itens) {
   }
   el.innerHTML = `<div class="mp-root">${_muralFiltrosHtml(itens)}
     <div class="mp">${_mpListaHtml(todos)}
-      <section class="mp-painel">${_mpPainelHtml(todos, fila)}</section></div></div>`;
-  _mpDepois(todos);
+      <section class="mp-painel">${semUso ? suPainelHtml() : _mpPainelHtml(todos, fila)}</section></div></div>`;
+  if (!semUso) _mpDepois(todos);
 }
 
 // Depois do HTML: donuts (o próprio _renderDonut da Macro), Raio-X no painel

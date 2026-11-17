@@ -395,6 +395,8 @@ async function muralRecarregar() {
     const fotos = _muralFotosDaMicro(donos);
     _mo.semAnalise = !fotos;
     _mo.fotos = fotos || []; _mo.carregado = true;
+    // Sem uso independe do período do Analítico (mural-semuso.js).
+    if (typeof suRecarregar === 'function') suRecarregar(_mo.gen);
     if (fotos) _muralEnriquecer(_mo.gen).catch(err => { _mo.enriquecendo = false; console.warn('[Mural] Erro ao calcular as séries:', err); });
   } catch (err) {
     _mo.erro = err.message || String(err);
@@ -428,6 +430,7 @@ function _muralAvisos() {
   const avoc = itens.filter(i => i.avocado);
   if (!_moEhAdm()) add('avocados', avoc.length, 'atencao', `Mural: ${plural(avoc.length, 'item seu foi avocado', 'itens seus foram avocados')} pelo ADM`,
     avoc.map(i => `${i.material} · ${i.central}: ${i.avocado.motivo}`).slice(0, 3).join('; '), 'avocados');
+  if (typeof suAviso === 'function') suAviso((chave, n, level, title, body, filtro) => { if (n) av.push({ id: `mural-${chave}-${n}`, level, title, body, filtro }); });
   notifSyncMural(av);
 }
 
@@ -453,7 +456,9 @@ function _muralDonoDe(categoria) {
 function _muralAcoes(central, material, desde) {
   const coms = (typeof _varComDe === 'function' ? _varComDe(central, material) : [])
     .map(r => ({ ...r, quando: r.created_at ? new Date(r.created_at) : _moIsoParaData(r.data) }))
-    .filter(r => r.quando && _moDia(r.quando) >= desde);
+    .filter(r => r.quando && _moDia(r.quando) >= desde)
+    // Causa "Sem uso: …" é tratativa da aba Sem uso, não da variação.
+    .filter(r => !/^Sem uso/.test((typeof varComCausaDe === 'function' && varComCausaDe(r.texto)) || ''));
   const comentarios = coms.filter(r => !r.oc_id).map(r => r.quando).sort((a, b) => a - b);
   const ultCom = coms.filter(r => !r.oc_id).sort((a, b) => b.quando - a.quando)[0];
   const causa = ultCom && typeof varComCausaDe === 'function' ? varComCausaDe(ultCom.texto) : null;
@@ -808,7 +813,7 @@ function _muralFaixaFiltradas() {
 // Atalhos do placar e do sino → filtro Situação da barra.
 function muralFiltro(f) {
   _mo.f.status = new Set({ semtrat: ['semAcao', 'escalonado'], vencido: ['escalonado'] }[f] || []);
-  if (typeof _mp !== 'undefined') { _mp.aba = 'fila'; _mp.sel = { tipo: 'geral' }; }
+  if (typeof _mp !== 'undefined') { _mp.aba = f === 'semuso' ? 'semuso' : 'fila'; _mp.sel = { tipo: 'geral' }; }
   muralRender();
 }
 
