@@ -4803,9 +4803,12 @@ async function init() {
   setupKeyboardShortcuts();
   initDropZones();
 
-  // Perfil insumos: boot enxuto, sem carregar os dados do resto do sistema.
-  // A barra superior continua completa (relógio do Próx. lançamento incluso).
+  // Perfil insumos: boot normal (desde 18/11/2026 ele é o dono da base
+  // compartilhada de Entradas/Saídas e precisa do estado local) + a
+  // configuração das telas da Cobrança. No navegador dele os demais
+  // módulos ficam vazios, então o boot completo sai barato.
   if (window.currentUser?.role === 'insumos') {
+    await restoreAndRender();
     cobBootInsumos();
     updateClock();
     setInterval(updateClock, 30000);

@@ -6899,8 +6899,11 @@ function _periodoMesDoRegistro(module, rec) {
   let dataBr;
   switch (module) {
     case 'lancamentos': dataBr = rec.dtLanc; break;
-    case 'entradas':    dataBr = rec.dtDescarga || rec.dtEmissao; break;
-    case 'saidas':      dataBr = rec.dtEmissao; break;
+    // Entradas/Saídas ficam FORA da trava de fechamento (decisão de
+    // 18/11/2026): null = "sem mês" → nenhuma guarda bloqueia. O Gerencial
+    // de mês fechado segue intacto porque lê só a fotografia.
+    case 'entradas':
+    case 'saidas':      return null;
     case 'sap':         dataBr = rec.dtLanc || rec.dtDoc; break;
     case 'custosSap': {
       const a = Number(String(rec.ano ?? '').trim()), m = Number(String(rec.mes ?? '').trim());

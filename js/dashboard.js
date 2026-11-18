@@ -7176,9 +7176,15 @@ function removerRegistro(module, index) {
     periodoAvisarFechado('excluir este registro');
     return;
   }
+  const _baseES = module === 'entradas' || module === 'saidas';
+  if (_baseES && actual.importId && !basePodeEditar()) {
+    toast('Entradas e Saídas importadas são mantidas pelo setor de Insumos.', 'error');
+    return;
+  }
   if (!confirm('Deseja realmente excluir este registro?')) return;
 
   state[module] = state[module].filter(r => r !== actual);
+  if (_baseES) basePublicar(module, [actual.importId]);
 
   // Invalida índices do módulo removido
   if (module === 'lancamentos') invalidateLancIndex();
@@ -7302,10 +7308,16 @@ function excluirSelecionados(module) {
       if (!selecionados.length) return;
     }
   }
+  const _baseES = module === 'entradas' || module === 'saidas';
+  if (_baseES && !basePodeEditar() && selecionados.some(r => r.importId)) {
+    toast('Entradas e Saídas importadas são mantidas pelo setor de Insumos.', 'error');
+    return;
+  }
   if (!confirm(`Excluir ${selecionados.length} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
 
   const selSet = bulkSelected[module];
   state[module] = state[module].filter(r => !selSet.has(r));
+  if (_baseES) basePublicar(module, selecionados.map(r => r.importId));
 
   if (module === 'lancamentos') invalidateLancIndex();
   else if (module === 'sap')    invalidateSapIndex();
@@ -8099,6 +8111,18 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     const stateKey = stateKeyMap[modulo];
     if (stateKey) state[stateKey] = _mergedResult;
 
+    // Base compartilhada (base-compartilhada.js): publica o pacote novo e
+    // todo pacote antigo que teve registro batido pelo merge (ele mantém o
+    // importId original e pode trocar os dados). Chamado JÁ aqui pra marcar
+    // os pacotes como pendentes antes de qualquer sync rodar.
+    if ((stateKey === 'entradas' || stateKey === 'saidas') && _importAddedCount > 0 && typeof basePublicar === 'function') {
+      const fp = stateKey === 'entradas' ? _fpEntrada : _fpSaida;
+      const fps = new Set(parsed.map(fp));
+      const ids = new Set([importId]);
+      for (const r of _mergedResult) if (r.importId && fps.has(fp(r))) ids.add(r.importId);
+      basePublicar(stateKey, ids, { nomes: { [importId]: fileName } });
+    }
+
     // Decisão de 27/07: Entradas/Saídas/Lançamentos/SAP NÃO sincronizam
     // importação em lote com a nuvem — só registros manuais. Motivo: volume
     // de importação é ordens de grandeza maior que manual (ex.: 813k
@@ -8670,7 +8694,24 @@ async function handleImport(event, modulo) {
     return;
   }
 
-  if (!hasRequiredReferenceData()) {
+  // Entradas/Saídas = base compartilhada (base-compartilhada.js): só admin +
+  // insumos importam, e o insumos só depois que o ADM publicou a base (antes
+  // disso a importação dele ficaria só no navegador dele).
+  const _baseES = modulo === 'Entrada' || modulo === 'Saída';
+  if (_baseES && !basePodeEditar()) {
+    event.target.value = '';
+    toast('Entradas e Saídas são importadas pelo setor de Insumos — você recebe os dados automaticamente.', 'error');
+    return;
+  }
+  if (_baseES && window.currentUser?.role === 'insumos' && !baseAtiva()) {
+    event.target.value = '';
+    toast('A base compartilhada de Entradas/Saídas ainda não foi publicada pelo administrador.', 'error');
+    return;
+  }
+
+  // Perfil insumos não tem a padronização de centrais/materiais — quem recebe
+  // reaplica a sua sobre o nome original (base-compartilhada.js).
+  if (!hasRequiredReferenceData() && window.currentUser?.role !== 'insumos') {
     showImportPrereqMessage();
     return;
   }
@@ -9242,6 +9283,9 @@ async function restoreAndRender() {
     if (typeof restaurarBackupCondensadoSeNecessario === 'function') {
       await restaurarBackupCondensadoSeNecessario();
     }
+    // Base compartilhada de Entradas/Saídas (base-compartilhada.js) — antes
+    // da padronização, que roda logo abaixo sobre o que chegar.
+    if (typeof baseSync === 'function') await baseSync({ boot: true });
     _lstepSet('cloudbkp', 'done');
     _lbarSet(35);
     await nextFrame();
@@ -9332,6 +9376,7 @@ async function restoreAndRender() {
     // mais. O cadastro de outra pessoa só chega no ADM por "Importar de"
     // (ver capRealtimeStart e o bloco ARMAZENAMENTO em capacidades.js).
     if (typeof capRealtimeStart === 'function') capRealtimeStart();
+    if (typeof baseRealtimeInit === 'function') baseRealtimeInit();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de
     // novo em qualquer reboot da mesma aba.
@@ -9360,7 +9405,8 @@ async function restoreAndRender() {
     _lstepSet('dash', 'running');
     updateLoadingOverlay('Pré-carregando Dashboard Analítico...', 'Inicializando o sistema');
     await yieldToUI();
-    try {
+    // Perfil insumos não vê o Analítico — não pré-calcula à toa.
+    if (window.currentUser?.role !== 'insumos') try {
       // Define o período "Última terça" (1º do mês atual → última terça-feira
       // antes de hoje) no Analítico — mesma função usada pelo chip "Última
       // terça" da interface, que já marca o chip como ativo. É o corte que o

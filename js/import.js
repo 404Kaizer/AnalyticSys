@@ -72,7 +72,7 @@ function _mesclarGrandeComBanco(local, remoto) {
 // evita esse risco.
 function _cbReforcarBackupModulos(modulos) {
   if (typeof _cbUploadModulo !== 'function' || !Array.isArray(modulos) || !modulos.length) return;
-  modulos.forEach(modulo => _cbUploadModulo(modulo, { permitirReducao: true }));
+  modulos.filter(m => CLOUD_BACKUP_MODULOS.includes(m)).forEach(modulo => _cbUploadModulo(modulo, { permitirReducao: true }));
 }
 
 // snapshots: { filiais, materiais, lancamentos, entradas, saidas, custosSap }
@@ -102,6 +102,13 @@ function excluirImportacao(importId) {
   const modulo       = importRecord?.modulo  ?? '';
   const registros    = importRecord?.registros ?? 0;
   const dataHora     = importRecord?.dataHora  ?? '';
+  // Base compartilhada (base-compartilhada.js): importação de Entradas/Saídas
+  // é de todos — só admin + insumos excluem, e a exclusão vale pra todos.
+  const baseMod = { 'Entrada': 'entradas', 'Saída': 'saidas' }[modulo];
+  if (baseMod && !basePodeEditar()) {
+    toast('Importações de Entradas e Saídas são mantidas pelo setor de Insumos.', 'error');
+    return;
+  }
 
   // Importação com registro em mês fechado não pode ser excluída (nem em
   // parte): a exclusão é por importId e ainda é reaplicada no boot
@@ -200,6 +207,7 @@ function excluirImportacao(importId) {
           // encolheram aqui (05/08 — ver comentário de _cbReforcarBackupModulos).
           const modulosAlterados = Object.keys(contagemHibridaAntes).filter(m => state[m].length !== contagemHibridaAntes[m]);
           _cbReforcarBackupModulos(modulosAlterados);
+          if (baseMod) basePublicar(baseMod, [importId]); // sem registros → excluída pra todos
         },
         undo: () => {
           // A exclusão foi revertida — remove a marca para que um fechamento
@@ -243,6 +251,7 @@ function excluirImportacao(importId) {
           });
           const modulosAlteradosUndo = Object.keys(contagemHibridaAntesUndo).filter(m => state[m].length !== contagemHibridaAntesUndo[m]);
           _cbReforcarBackupModulos(modulosAlteradosUndo);
+          if (baseMod) basePublicar(baseMod, [importId]);
         },
       });
     }

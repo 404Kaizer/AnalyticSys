@@ -55,7 +55,11 @@ const CLOUD_BACKUP_VERSION = 1;
 // restaurava um snapshot condensado velho toda vez que o local ficava
 // vazio — inclusive depois de uma exclusão de verdade, desfazendo-a no
 // boot seguinte (o SQL, fonte de verdade agora, nunca tinha essa noção).
-const CLOUD_BACKUP_MODULOS = ['entradas', 'saidas', 'lancamentos', 'sap'];
+// Entradas/Saídas SAÍRAM em 18/11/2026: viraram base compartilhada (pacotes
+// por importação, base-compartilhada.js), que já é a cópia na nuvem. Manter
+// aqui restauraria a cópia pessoal velha por cima e a guarda de encolhimento
+// reclamaria toda vez que o sync trocasse a base local.
+const CLOUD_BACKUP_MODULOS = ['lancamentos', 'sap'];
 
 // Throttle do reforço periódico — não repete o backup do mesmo módulo em
 // menos desse intervalo, mesmo que o timer de checagem rode com mais

@@ -13171,9 +13171,14 @@ tr.sap-fechamento td {
    .cob-insumos (cards da Cobrança, próximas etapas).
 ══════════════════════════════════════════ */
 body.role-insumos .tab-group-label,
-body.role-insumos .tab-item:not([data-page="cobrancas"]):not([data-page="importar"]):not([data-page="configuracoes"]):not([data-page="ocorrencias"]),
-body.role-insumos #page-importar > :not(.cob-insumos),
+body.role-insumos .tab-item:not([data-page="cobrancas"]):not([data-page="importar"]):not([data-page="configuracoes"]):not([data-page="ocorrencias"]):not([data-page="entradas"]):not([data-page="saidas"]),
+body.role-insumos #page-importar > :not(.cob-insumos):not(.es-insumos),
+body.role-insumos #page-importar .import-grid.es-insumos > :not(.es-card),
 body.role-insumos #page-configuracoes > :not(.cob-insumos) { display: none !important; }
+/* Base compartilhada de Entradas/Saídas (base-compartilhada.js): só admin +
+   insumos importam; o botão de publicar a base é só do admin. */
+body:not(.role-admin):not(.role-insumos) #page-importar .es-card,
+body:not(.role-admin) .es-so-admin { display: none !important; }
 /* Perfil Usuário vê Cobranças só pra consulta: some tudo que edita
    (.cob-edita) — a trava de verdade é a RLS (escrita só admin + insumos). */
 body:not(.role-admin):not(.role-insumos) .cob-edita,

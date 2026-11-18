@@ -2765,9 +2765,9 @@
             <span>Primeiro cadastre PADRONIZAÇÃO DE CENTRAIS e PADRONIZAÇÃO DE MATERIAIS em Configurações. Só depois os módulos podem ser importados.</span>
           </div>
         </div>
-        <div class="import-grid">
+        <div class="import-grid es-insumos">
           <!-- Entradas -->
-          <div class="import-card">
+          <div class="import-card es-card">
             <div class="import-card-header">
               <div class="import-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-package-import"></i></div>
               <div>
@@ -2784,7 +2784,7 @@
           </div>
 
           <!-- Saídas -->
-          <div class="import-card">
+          <div class="import-card es-card">
             <div class="import-card-header">
               <div class="import-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-package-export"></i></div>
               <div>
@@ -2917,11 +2917,13 @@
         </div>
 
         <!-- Histórico de importações -->
-        <div class="section-title">Histórico de Importações</div>
-        <div class="table-card">
+        <div class="section-title es-insumos">Histórico de Importações</div>
+        <div class="table-card es-insumos">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-file-upload"></i> Importações registradas</span>
             <div class="table-toolbar">
+              <!-- Base compartilhada de Entradas/Saídas (js/base-compartilhada.js) — só admin -->
+              <button class="btn es-so-admin" onclick="basePublicarMinhaBase()" title="Publica as Entradas/Saídas deste navegador como a base que todos os usuários recebem"><i class="ti ti-cloud-upload"></i> Publicar base Entradas/Saídas</button>
             </div>
           </div>
           <div class="table-scroll">
@@ -6418,6 +6420,7 @@
 <script defer src="js/format.js"></script>
 <script defer src="js/informativos.js"></script>
 <script defer src="js/cloud-backup.js"></script>
+<script defer src="js/base-compartilhada.js"></script>
 <script defer src="js/ui.js"></script>
 <script defer src="js/import.js"></script>
 <script defer src="js/config.js"></script>

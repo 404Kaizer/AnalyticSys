@@ -8,13 +8,13 @@
 // (RLS via cob_acesso()) — nada aqui lê/escreve o state local do resto
 // do sistema. CNPJs sempre gravados só com dígitos.
 //
-// Perfil 'insumos' (Etapa 2): só enxerga Cobranças, Importar Dados e
-// Configurações (ver COB_PAGINAS_INSUMOS + navigate() em ui.js); o boot
-// dele pula restoreAndRender (ver init() em analitico.js) — não carrega
-// entradas/saídas/SAP etc., que nem são dele. O que some na tela é
+// Perfil 'insumos' (Etapa 2): só enxerga Cobranças, Ocorrências, Importar
+// Dados, Configurações e — desde 18/11/2026 — Entradas/Saídas, das quais é
+// o dono (base compartilhada, ver base-compartilhada.js). Ver
+// COB_PAGINAS_INSUMOS + navigate() em ui.js. O que some na tela é
 // controlado por body.role-insumos (auth.js) + CSS (modules.css).
 
-const COB_PAGINAS_INSUMOS = new Set(['cobrancas', 'importar', 'configuracoes', 'ocorrencias']);
+const COB_PAGINAS_INSUMOS = new Set(['cobrancas', 'importar', 'configuracoes', 'ocorrencias', 'entradas', 'saidas']);
 
 function cobIsInsumos() {
   return window.currentUser?.role === 'insumos';
@@ -23,33 +23,15 @@ function cobIsInsumos() {
 // edição levam .cob-edita (somem por CSS) e a RLS barra escrita no banco.
 const cobIsAdmin = () => window.currentUser?.role === 'admin';
 
-// Boot enxuto do perfil insumos — substitui restoreAndRender.
+// Perfil insumos — roda DEPOIS de restoreAndRender (analitico.js), que já
+// fez os syncs, o topbar e os canais Realtime.
 function cobBootInsumos() {
-  // Importar/Configurações do resto do sistema não rodam pra ele (as
-  // seções ficam ocultas por CSS) — só os blocos da Cobrança.
-  pageRenderers.importar = () => cobRenderImports();
+  // Importar: o histórico (Entradas/Saídas) + os blocos da Cobrança.
+  // Configurações do resto do sistema não rodam pra ele (ocultas por CSS).
+  pageRenderers.importar = () => { renderImports(); cobRenderImports(); };
   pageRenderers.configuracoes = () => { _cobCarregarCentrais(); cobRenderCadastros(); };
   cobIniciar();
   navigate('importar');   // tela inicial do perfil insumos
-
-  // Barra superior completa: os mesmos inits do topbar que o boot normal
-  // faz no STEP 5 de restoreAndRender (dashboard.js) + o alerta broadcast
-  // do finally. Os canais de dados do resto do sistema (ocorrências, DAI,
-  // SAP, capacidades...) ficam de fora — não são dele.
-  if (typeof notifSync === 'function') notifSync(null);
-  if (typeof _activityRealtimeInit === 'function') _activityRealtimeInit();
-  if (typeof _presenceGlobalInit === 'function') _presenceGlobalInit();
-  if (typeof _msgsRealtimeInit === 'function') _msgsRealtimeInit();
-  if (typeof adminAlertCheckPendente === 'function') adminAlertCheckPendente();
-  if (typeof adminAlertRealtimeInit === 'function') adminAlertRealtimeInit();
-
-  // Ocorrências (só as dele — RLS + tipo 'insumos', ver ocorrencias.js).
-  if (typeof syncOcorrenciasFromSupabase === 'function') {
-    syncOcorrenciasFromSupabase().then(() => {
-      if (document.getElementById('page-ocorrencias')?.classList.contains('active')) renderOcorrenciasPage();
-    });
-  }
-  if (typeof _ocRealtimeInit === 'function') _ocRealtimeInit();
 }
 
 // ── Estado em memória (espelho das tabelas cob_*) ────────────
