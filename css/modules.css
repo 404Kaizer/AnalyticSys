@@ -13668,6 +13668,65 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-inv { min-width: 0; }
 .mp-inv circle.mo-rx-pt { transition: r .12s; }
 .mp-inv circle.mo-rx-pt:hover { r: 7; }
+/* Barras do inventário a inventário: a coluna inteira abre o balão. */
+.mp-inv rect.mo-rx-pt, .mp-ct-col { fill: transparent; cursor: default; }
+.mp-inv rect.mo-rx-pt:hover, .mp-ct-col:hover { fill: color-mix(in srgb, var(--text) 6%, transparent); }
+
+/* Regional (layout "Regional 3", Hugo 18/11/2026): resumo em 3 colunas,
+   filtro de criticidade, cartões das centrais com faixas de nível. */
+.mp-resumo { flex-direction: row; flex-wrap: wrap; padding: 18px 0; gap: 22px 0; }
+.mp-res-col { padding: 0 22px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; }
+.mp-res-col + .mp-res-col { border-left: 1px solid var(--border); }
+.mp-res-saude { flex: 1 1 340px; max-width: 420px; }
+.mp-res-tend { flex: 1 1 230px; max-width: 290px; }
+.mp-res-tend > div { display: flex; flex-direction: column; }
+.mp-res-top { flex: 999 1 320px; }
+.mp-res-tit { margin: 0 0 2px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text2); }
+.mp-res-var, .mp-cc-cab, .mp-cc-it { font: inherit; color: inherit; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; }
+.mp-res-var { display: flex; flex-direction: column; gap: 6px; padding: 5px 0; }
+.mp-res-var-l { display: flex; align-items: baseline; gap: 12px; font-size: 14px; min-width: 0; }
+.mp-res-var-l > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-res-var-l .mono { margin-left: auto; white-space: nowrap; font-size: 13.5px; }
+.mp-res-barra, .mp-cc-barra { display: block; height: 5px; border-radius: 3px; background: var(--bg3); overflow: hidden; }
+.mp-res-barra i, .mp-cc-barra i { display: block; height: 100%; border-radius: 3px; }
+.mp-res-var:hover b, .mp-cc-cab:hover > b, .mp-cc-it:hover > span:nth-of-type(1) { text-decoration: underline; }
+.mp-res-var:focus-visible, .mp-cc-cab:focus-visible, .mp-cc-it:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.mp-niv { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mp-niv > .mo-hint { margin-right: 4px; }
+.mp-niv-b { font: inherit; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border2); background: transparent; color: var(--text2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.mp-niv-b.on { background: var(--bg3); color: var(--text); border-color: var(--accent); }
+.mp-niv-l { font-family: var(--mono); font-size: 12.5px; font-weight: 700; letter-spacing: .03em; color: var(--c); border-color: color-mix(in srgb, var(--c) 45%, transparent); background: color-mix(in srgb, var(--c) 9%, transparent); }
+.mp-niv-l.on { background: var(--c); border-color: var(--c); color: #fff; }
+.mp-niv-l.on .mp-ico { color: #fff !important; }
+.mp-niv-b:disabled { opacity: .4; cursor: default; }
+.mp-cc-sec { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.mp-cc-sec .mp-tit { margin: 0; }
+.mp-modo { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 9px; border: 1px solid var(--border2); background: var(--bg2); }
+.mp-modo .mo-hint { padding: 0 8px 0 6px; font-size: 13px; }
+.mp-modo button { font: inherit; font-size: 13px; font-weight: 600; padding: 5px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--text2); cursor: pointer; }
+.mp-modo button.on { background: var(--bg3); color: var(--text); }
+.mp-ccs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.mp-cc { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mp-cc-cab { display: flex; align-items: center; gap: 10px; }
+.mp-cc-cab > b { font-size: 18px; font-weight: 700; }
+.mp-cc-saude { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.mp-cc-saude b { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+.mp-cc-saude small { font-size: 11px; letter-spacing: .08em; }
+.mp-cc-barra { height: 6px; }
+.mp-cc-v { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.mp-cc-v b { font-family: var(--mono); font-size: 17px; font-weight: 500; white-space: nowrap; }
+.mp-cc-tend { border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; min-height: 60px; }
+.mp-cc-tend-l { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; }
+.mp-cc-tend-l b { margin-left: auto; font-weight: 600; }
+/* Faixa de nível: de borda a borda do cartão (anula o padding de 16px). */
+.mp-faixa { margin: 0 -16px; padding: 8px 16px 8px 13px; display: flex; align-items: center; gap: 8px; background: color-mix(in srgb, var(--c) 10%, transparent); border-left: 3px solid var(--c); border-top: 1px solid color-mix(in srgb, var(--c) 25%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--c) 25%, transparent); }
+.mp-faixa b { font-size: 12.5px; letter-spacing: .08em; color: var(--c); }
+.mp-faixa .mono { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--c); white-space: nowrap; }
+.mp-cc-itens { display: flex; flex-direction: column; gap: 2px; padding: 8px 0 10px; }
+.mp-cc-it { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; min-width: 0; }
+.mp-cc-it > span:nth-of-type(1) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-cc-it .mono { margin-left: auto; white-space: nowrap; }
+.mp-sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; flex-shrink: 0; }
 .mp-rx { display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
 .mp-rx .mo-dr-body, .mp-rx .mo-rx-acoes { flex: none; overflow: visible; max-height: none; }
 @media (max-width: 1100px) {
