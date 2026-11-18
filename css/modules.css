@@ -13727,6 +13727,33 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-cc-it > span:nth-of-type(1) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mp-cc-it .mono { margin-left: auto; white-space: nowrap; }
 .mp-sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+/* Linha do tempo do escopo (Hugo, 18/11/2026): chips por tipo, o inventário
+   do mês anterior fixo no topo e os eventos por dia, mais recente em cima. */
+.mp-tl-chips { margin-bottom: 10px; }
+.mp-tl-chips .mp-niv-l .ti { font-size: 15px; }
+.mp-tl-fixo { font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; margin-bottom: 4px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--green) 35%, transparent); background: color-mix(in srgb, var(--green) 7%, transparent); }
+.mp-tl-fixo > .ti { font-size: 20px; color: var(--green); margin-top: 1px; }
+.mp-tl-fixo > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.mp-tl-fixo small { font-size: 12.5px; color: var(--text2); }
+.mp-tl-just { font-size: 12.5px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-tl-just b { color: var(--text); font-weight: 600; }
+.mp-tl-fixo > b.mono { font-size: 15px; white-space: nowrap; }
+.mp-tl-fixo:hover { background: color-mix(in srgb, var(--green) 12%, transparent); }
+.mp-tl { display: flex; flex-direction: column; }
+.mp-tl-dia { margin-top: 10px; padding: 6px 0 4px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text2); }
+.mp-tl-ev { font: inherit; color: inherit; text-align: left; position: relative; display: flex; gap: 12px; padding: 8px 6px 8px 4px; border: 0; border-radius: 8px; background: none; cursor: pointer; }
+.mp-tl-ev:hover { background: var(--bg3); }
+.mp-tl-ev:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Fio vertical ligando os eventos do mesmo dia. */
+.mp-tl-ev + .mp-tl-ev::before { content: ''; position: absolute; left: 17px; top: -9px; height: 17px; width: 2px; background: var(--border2); }
+.mp-tl-ev > .ti { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.mp-tl-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mp-tl-l { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: 13.5px; }
+.mp-tl-l small { font-size: 12.5px; color: var(--text2); }
+.mp-tl-desc { font-size: 13px; color: var(--text2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mp-tl-mais { align-self: flex-start; margin-top: 8px; }
+.mp-inv circle.mp-just { cursor: help; }
 .mp-rx { display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
 .mp-rx .mo-dr-body, .mp-rx .mo-rx-acoes { flex: none; overflow: visible; max-height: none; }
 @media (max-width: 1100px) {
