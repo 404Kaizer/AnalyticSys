@@ -749,6 +749,7 @@ function _muralFiltrosHtml(itens) {
   return `<div class="micro-filter-bar mo-filter-bar">
     ${typeof _mpGruposHtml === 'function' ? _mpGruposHtml() : ''}${filtros}
     ${_muralFiltrosAtivos() ? '<button class="btn btn-sm mo-limpar" onclick="muralFiltrosLimparTodos()"><i class="ti ti-filter-off"></i> Limpar filtros</button>' : ''}
+    ${typeof _mpExportarBtnHtml === 'function' ? _mpExportarBtnHtml() : ''}
   </div>`;
 }
 

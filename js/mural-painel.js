@@ -277,7 +277,7 @@ const _mpNivTexto = () => MP_NIVEIS.filter(([l]) => _mp.niv.has(l)).map(([, r]) 
 const _mpCurto = (v) => Math.abs(v) >= 10000 ? (v < 0 ? '−' : v > 0 ? '+' : '') + Math.round(Math.abs(v) / 1000).toLocaleString('pt-BR') + ' t' : _moPesoSinal(v);
 
 function _mpRegionalHtml(ps, cab) {
-  const v = ps.reduce((t, p) => t + p.v, 0), fps = _mpNivFiltro(ps), filtro = _mp.niv.size ? ` · ${_mpNivTexto()}` : '';
+  const v = ps.reduce((t, p) => t + p.v, 0);
   const top = [...ps].sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 5), max = Math.max(1, ...top.map(p => Math.abs(p.v)));
   const resumo = `<div class="mp-card mp-resumo">
     <div class="mp-res-col mp-res-saude"><h4 class="mp-res-tit">Saúde da regional</h4>${_mpDonutCaixa('mp-mats', true)}</div>
@@ -293,14 +293,16 @@ function _mpRegionalHtml(ps, cab) {
     <button class="mp-niv-b${_mp.niv.size ? '' : ' on'}" onclick="muralPainelNivel('')" aria-pressed="${!_mp.niv.size}">Todos</button>
     ${MP_NIVEIS.map(([l, rot]) => { const n = ps.filter(p => p.nivel === l).length, on = _mp.niv.has(l);
       return `<button class="mp-niv-b mp-niv-l${on ? ' on' : ''}" style="--c:${MP_NIVEL_COR[l]}" onclick="muralPainelNivel('${l}')" aria-pressed="${on}"${n || on ? '' : ' disabled'}>${_mpIco(l)}${n} ${rot}</button>`; }).join('')}</div>`;
-  const inv = `<div class="mp-card"><h4 class="mp-tit">Variação de inventário a inventário <span class="mo-hint">soma líquida dos ${fps.length} pares${filtro}</span></h4>
+  const inv = `<div class="mp-card"><h4 class="mp-tit">Variação de inventário a inventário <span class="mo-hint">soma líquida dos ${ps.length} pares</span></h4>
     <div id="mp-inv" class="mp-inv"><span class="mo-hint">Calculando os inventários…</span></div></div>`;
   const cards = [..._mpAgrupar(ps, p => p.central)].map(([c, cps]) => ({ c, cps, fcps: _mpNivFiltro(cps), s: _mpSaude(cps) }))
     .filter(x => x.fcps.length).sort((a, b) => a.s.score - b.s.score);
   const modo = `<div class="mp-modo" role="group" aria-label="Linhas da tendência das centrais"><span class="mo-hint">Tendência</span>${[['unico', 'Único'], ['separado', 'Separado']]
     .map(([k, r]) => `<button class="${_mp.tendModo === k ? 'on' : ''}" onclick="muralPainelTendModo('${k}')" aria-pressed="${_mp.tendModo === k}">${r}</button>`).join('')}</div>`;
-  return `${cab}${resumo}${niv}${inv}
+  // Filtro de criticidade dentro da seção das centrais (vale só para os cartões).
+  return `${cab}${resumo}${inv}
     <div class="mp-cc-sec"><h4 class="mp-tit">Centrais da regional <span class="mo-hint">${_mp.niv.size ? `só as centrais com materiais ${_mpNivTexto()} · ` : ''}pior saúde primeiro</span></h4>${modo}</div>
+    ${niv}
     <div class="mp-ccs">${cards.map(x => _mpCartaoHtml(x.c, x.cps, x.fcps, x.s)).join('') || '<p class="mo-hint">Nenhuma central com materiais nesse nível.</p>'}</div>
     ${_mpPendHtml()}${_mpTlHtml()}`;
 }
@@ -530,6 +532,80 @@ function _mpTlAtualizar(ps, s) {
     _mp._tlSolPedido = true;
     const gen = _mp.gen;
     solCarregar().then(() => { if (gen === _mp.gen && document.getElementById('mp-tl')) { _mp._tl = _mpTlMontar(ps, s); _mpTlRender(); } });
+  }
+}
+
+// ── Exportar HTML (Hugo, 18/11/2026) ──────────────────────────────────────
+// O painel exatamente como está na tela, com os filtros aplicados, num arquivo
+// único: CSS do app, fontes e ícones embutidos e os balões religados por
+// data-tip (helpers do Relatório Gerencial, relatorio.js). Botões ficam
+// inertes (o arquivo não tem o app); a linha do tempo sai inteira.
+const _mpExportarBtnHtml = () => _mp.aba === 'semuso' ? '' : `<button class="btn btn-sm mp-exp-btn" onclick="muralPainelExportar(this)" title="Baixar o painel como está na tela, com os filtros aplicados"><i class="ti ti-file-download"></i> Exportar HTML</button>`;
+
+function _mpExpFiltros() {
+  const P = muralPeriodo(), s = _mp.sel, out = [`Período: ${fmtPtDate(P.ini)} a ${fmtPtDate(P.fim)}`];
+  MURAL_FILTROS.forEach(x => {
+    const v = _mo.f[x.k];
+    if (v && v.size) out.push(`${x.label}: ${[...v].map(val => (x.nome ? x.nome(val) : val)).join(', ')}`);
+  });
+  if (s.tipo === 'regional') {
+    if (_mp.niv.size) out.push(`Criticidade dos materiais: ${_mpNivTexto()}`);
+    out.push(`Tendência das centrais: ${_mp.tendModo === 'separado' ? 'Separado' : 'Único'}`);
+  }
+  if (_mp.tlTipos.size) out.push(`Linha do tempo: ${MP_TL.filter(([k]) => _mp.tlTipos.has(k)).map(([, r]) => r).join(', ')}`);
+  return out;
+}
+
+async function muralPainelExportar(btn) {
+  const painel = document.querySelector('#mural-root .mp-painel');
+  if (!painel || typeof _dgrCssApp !== 'function') { toast('Exportação indisponível nesta tela.', 'error'); return; }
+  const s = _mp.sel, nAntes = _mp.tlN;
+  if (btn) btn.disabled = true;
+  try {
+    if (_mp._tl) { _mp.tlN = Infinity; _mpTlRender(); }
+    const clone = painel.cloneNode(true);
+    clone.querySelectorAll('.mp-tl-mais').forEach(e => e.remove());
+    clone.querySelectorAll('[onclick]').forEach(e => e.removeAttribute('onclick'));
+    const titulo = s.tipo === 'geral' ? 'Geral' : s.tipo === 'item' ? `${s.material} · ${s.central}`
+      : s.tipo === 'regional' ? s.regional : s.tipo === 'central' ? s.central : s.material;
+    const agora = new Date(), tema = document.body.dataset.theme || '', css = await _dgrCssApp();
+    const quem = window.currentUser?.nome_exibicao || '';
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operações · ${_moEsc(titulo)}</title>
+${_dgrFonteIconesEmbutida()}${_dgrFontesEmbutidas()}
+<style>${css}
+body{margin:0;background:var(--bg);color:var(--text)}
+.mp-exp{max-width:1400px;margin:0 auto;padding:24px 28px 40px;display:flex;flex-direction:column;gap:14px}
+.mp-exp-topo{display:flex;flex-direction:column;gap:8px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.mp-exp-topo h1{margin:0;font-size:19px}
+.mp-exp-filtros{display:flex;flex-wrap:wrap;gap:6px}
+.mp-exp-filtros span{font-size:12.5px;padding:3px 9px;border-radius:6px;background:var(--bg3);color:var(--text2)}
+.mp-exp button{pointer-events:none}
+.mp-exp .mp-inv svg,.mp-exp .mp-cc-tend svg{max-width:100%;height:auto}
+</style></head>
+<body${tema ? ` data-theme="${_moEsc(tema)}"` : ''}>
+<div class="mp-exp">
+  <div class="mp-exp-topo"><h1>Operações · ${_moEsc(titulo)}</h1>
+    <span class="mo-hint">Gerado em ${agora.toLocaleString('pt-BR')}${quem ? ` por ${_moEsc(quem)}` : ''} · mesmos números da Visão Micro</span>
+    <div class="mp-exp-filtros">${_mpExpFiltros().map(f => `<span>${_moEsc(f)}</span>`).join('')}</div></div>
+  <section class="mp-painel">${clone.innerHTML}</section>
+</div>
+${_dgrScriptTooltipApp()}
+</body></html>`;
+    const slug = String(titulo).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `operacoes-${slug || 'painel'}-${localISODate(agora)}.html`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (err) {
+    console.error('[Operações] Erro ao exportar:', err);
+    toast('Não foi possível exportar: ' + (err.message || err), 'error');
+  } finally {
+    _mp.tlN = nAntes;
+    if (_mp._tl) _mpTlRender();
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -923,7 +999,8 @@ function _mpDepois(todos) {
     const ac = document.getElementById('mp-acum');
     if (ac) ac.innerHTML = `<span class="mo-hint">Acumulado</span><b class="mp-big" style="color:${_mpCor(tot)}">${_moPesoSinal(tot)}</b><small class="mo-hint">${nInv} inventário${nInv === 1 ? '' : 's'} + o período</small>`;
     const inv = document.getElementById('mp-inv');
-    if (inv) inv.innerHTML = _mpInvHtml(s.tipo === 'regional' ? _mpNivFiltro(ps) : ps, inv.clientWidth);
+    // O filtro de criticidade da regional vale só para os cartões (Hugo, 18/11/2026).
+    if (inv) inv.innerHTML = _mpInvHtml(ps, inv.clientWidth);
     // Regional: a tendência de cada cartão (os inventários já estão no cache).
     document.querySelectorAll('#mural-root .mp-cc-tend[data-c]').forEach(el => {
       const cps = ps.filter(p => p.central === el.dataset.c);
