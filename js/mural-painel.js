@@ -689,7 +689,7 @@ function _mpTlAtualizar(ps, s) {
 // único: CSS do app, fontes e ícones embutidos e os balões religados por
 // data-tip (helpers do Relatório Gerencial, relatorio.js). Botões ficam
 // inertes (o arquivo não tem o app); a linha do tempo sai inteira.
-const _mpExportarBtnHtml = () => _mp.aba === 'semuso' ? '' : `<button class="btn btn-sm mp-exp-btn" onclick="muralPainelExportar(this)" title="Baixar o painel como está na tela, com os filtros aplicados"><i class="ti ti-file-download"></i> Exportar HTML</button>`;
+const _mpExportarBtnHtml = () => _mp.aba === 'semuso' ? '' : `<span class="mp-exp-btn">${typeof reEmailBtnsHtml === 'function' ? reEmailBtnsHtml() : ''}<button class="btn btn-sm" onclick="muralPainelExportar(this)" title="Baixar o painel como está na tela, com os filtros aplicados"><i class="ti ti-file-download"></i> Exportar HTML</button></span>`;
 
 
 // Filtros do painel que continuam funcionando no arquivo (Hugo, 18/11/2026):
@@ -769,10 +769,31 @@ function _mpExpTipScript() {
 }
 
 async function muralPainelExportar(btn) {
-  const painel = document.querySelector('#mural-root .mp-painel');
-  if (!painel || typeof _dgrCssApp !== 'function') { toast('Exportação indisponível nesta tela.', 'error'); return; }
-  const s = _mp.sel, nAntes = _mp.tlN;
   if (btn) btn.disabled = true;
+  try {
+    const r = await _mpGerarHtml();
+    if (!r) { toast('Exportação indisponível nesta tela.', 'error'); return; }
+    _mpBaixar(r.html, r.nome, 'text/html;charset=utf-8');
+  } catch (err) {
+    console.error('[Operações] Erro ao exportar:', err);
+    toast('Não foi possível exportar: ' + (err.message || err), 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+function _mpBaixar(conteudo, nome, tipo) {
+  const url = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
+  const a = document.createElement('a');
+  a.href = url; a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+// O arquivo do painel na tela ({ html, nome, titulo }) — usado pelo Exportar
+// HTML e como anexo do e-mail (relatorio-email.js). null fora do painel.
+async function _mpGerarHtml() {
+  const painel = document.querySelector('#mural-root .mp-painel');
+  if (!painel || typeof _dgrCssApp !== 'function') return null;
+  const s = _mp.sel, nAntes = _mp.tlN;
   try {
     if (_mp._tl) { _mp.tlN = Infinity; _mpTlRender(); }
     const clone = painel.cloneNode(true);
@@ -830,18 +851,10 @@ ${_mpExpTipScript()}`;
       permitirDownload: true, nomeArquivoDownload: nome,
       notaRodape: 'Operações · variações do período do Analítico, com os mesmos números da Visão Micro.'
     });
-    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = nome;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-  } catch (err) {
-    console.error('[Operações] Erro ao exportar:', err);
-    toast('Não foi possível exportar: ' + (err.message || err), 'error');
+    return { html, nome, titulo };
   } finally {
     _mp.tlN = nAntes;
     if (_mp._tl) _mpTlRender();
-    if (btn) btn.disabled = false;
   }
 }
 
@@ -1172,7 +1185,7 @@ function _mpPainelHtml(todos, itensFila) {
 const _mpSemUsoConta = () => typeof suItensFiltrados === 'function' ? suItensFiltrados().filter(i => !i.trat).length : 0;
 function muralPainelRender(el, itens) {
   const semUso = _mp.aba === 'semuso' && typeof suPainelHtml === 'function';
-  const todos = _mpPares(itens);
+  const todos = _mp._todos = _mpPares(itens); // _todos: regionais do envio em massa (relatorio-email.js)
   const fila = _muralAplicarFiltros(itens);
   // Seleção que sumiu (filtro, busca, item que saiu da fila) volta ao Geral.
   const s = _mp.sel;

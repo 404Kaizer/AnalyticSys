@@ -9038,7 +9038,7 @@ const pageRenderers = {
   sap: () => renderSAP(),
   custosSap: () => renderCustosSap(),
   importar: () => renderImports(),
-  configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); renderCapacidades(); if (typeof renderFatoresConversao === 'function') renderFatoresConversao(); },
+  configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); if (typeof reConfigRender === 'function') reConfigRender(); loadHealthConfigInputs(); updateParamGerais(); renderCapacidades(); if (typeof renderFatoresConversao === 'function') renderFatoresConversao(); },
   filiais: () => renderFiliais(),
   materiais: () => renderMateriais(),
   ocorrencias: () => renderOcorrenciasPage(),

@@ -13818,7 +13818,10 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-acao-g li::marker { color: var(--c); }
 .mp-acao-g .mo-hint { margin: 0; font-size: 12.5px; }
 /* Exportar HTML: no fim da barra de filtros. */
-.mo-filter-bar .mp-exp-btn { margin-left: auto; }
+.mo-filter-bar .mp-exp-btn { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; }
+/* Contatos dos e-mails de relatório (Configurações). */
+.re-tipo { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
+.re-tipo.fixo { color: var(--accent); }
 .mp-rx { display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
 .mp-rx .mo-dr-body, .mp-rx .mo-rx-acoes { flex: none; overflow: visible; max-height: none; }
 @media (max-width: 1100px) {
