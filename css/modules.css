@@ -13562,6 +13562,12 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
   padding: 9px 6px 7px; gap: 5px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mp-subabas .mo-aba + .mo-aba { border-left: 1px solid var(--border); }
 .mp-subabas .mo-aba.on { background: var(--bg2); border-bottom-color: var(--accent); }
+/* Quatro sub-abas (Operações: Fila, Na faixa, Sem lançamento, Sem uso) não
+   cabem numa linha da lista — viram 2 × 2. */
+.mp-subabas:has(> .mo-aba:nth-child(4)) { flex-wrap: wrap; }
+.mp-subabas:has(> .mo-aba:nth-child(4)) > .mo-aba { flex: 1 1 50%; }
+.mp-subabas:has(> .mo-aba:nth-child(4)) > .mo-aba:nth-child(3) { border-left: 0; }
+.mp-subabas:has(> .mo-aba:nth-child(4)) > .mo-aba:nth-child(n+3) { border-top: 1px solid var(--border); }
 .mp-busca { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 10px; background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; color: var(--text2); }
 .mp-busca input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; font-size: 14px; }
 .mp-lista-corpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
