@@ -228,7 +228,9 @@ function _mpInvHtml(ps, larg, opts = {}) {
   // sai do zero — desfalque vermelho para baixo, sobra âmbar para cima; o
   // período (ainda aberto) mais claro e com contorno tracejado. O balão abre
   // na coluna inteira (retângulo transparente com a classe mo-rx-pt).
-  const W = Math.max(420, Math.round(larg)), H = 230, L = 96, R = 24, T = 26, B = 40, f = (v) => v.toFixed(1);
+  // Nunca menor que 560 px: abaixo disso os rótulos dos meses se atropelam;
+  // em tela estreita (celular) o gráfico rola na horizontal (.mp-inv).
+  const W = Math.max(560, Math.round(larg)), H = 230, L = 96, R = 24, T = 26, B = 40, f = (v) => v.toFixed(1);
   const vals = sep ? comV.flatMap(p => [...p.porC.values()].map(c => c.v)) : comV.map(x => x.v);
   const mn = Math.min(0, ...vals), mxv = Math.max(0, ...vals), pad = (mxv - mn || 1) * 0.12;
   const y = (v) => T + (mxv + pad - v) / (mxv - mn + 2 * pad) * (H - T - B);
@@ -241,7 +243,7 @@ function _mpInvHtml(ps, larg, opts = {}) {
   svg.push(`<line x1="${L}" x2="${W - R}" y1="${f(y0)}" y2="${f(y0)}" stroke="var(--border3)"/>`);
   pts.forEach((p, i) => {
     svg.push(`<text x="${f(x(i))}" y="${H - 20}" text-anchor="middle" class="mo-rx-ax" style="fill:var(--text2)">${_moEsc(p.rot)}</text>`,
-      `<text x="${f(x(i))}" y="${H - 6}" text-anchor="middle" class="mo-rx-ax">${p.aberto ? 'período' : p.n ? 'inventário' : 'sem inv.'}</text>`);
+      `<text x="${f(x(i))}" y="${H - 6}" text-anchor="middle" class="mo-rx-ax">${p.aberto ? 'período' : p.n ? (slot < 84 ? 'inv.' : 'inventário') : 'sem inv.'}</text>`); // coluna estreita: "inv." não atropela o vizinho
     if (!p.n) return;
     const c = _moRxHex(p.v), top = [...p.pares].sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 3);
     const aberto = p.aberto ? ` fill-opacity=".35" stroke-width="1.5" stroke-dasharray="4 3"` : '';
@@ -367,7 +369,7 @@ function _mpRegionalHtml(ps, cab) {
   const v = ps.reduce((t, p) => t + p.v, 0);
   const top = [...ps].sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 5), max = Math.max(1, ...top.map(p => Math.abs(p.v)));
   const resumo = `<div class="mp-card mp-resumo">
-    <div class="mp-res-col mp-res-saude"><h4 class="mp-res-tit">Saúde da regional</h4>${_mpDonutCaixa('mp-mats', true)}</div>
+    <div class="mp-res-col mp-res-saude"><h4 class="mp-res-tit">Saúde da regional</h4>${_mpDonutCaixa('mp-mats')}</div>
     <div class="mp-res-col mp-res-tend"><h4 class="mp-res-tit">Tendência</h4>
       <div><span class="mo-hint">Variação do período</span><b class="mp-big" style="color:${_mpCor(v)}">${_moPesoSinal(v)}</b></div>
       <div id="mp-acum"><span class="mo-hint">Acumulado</span><b class="mp-big mo-hint">calculando…</b></div>
@@ -689,21 +691,6 @@ function _mpTlAtualizar(ps, s) {
 // inertes (o arquivo não tem o app); a linha do tempo sai inteira.
 const _mpExportarBtnHtml = () => _mp.aba === 'semuso' ? '' : `<button class="btn btn-sm mp-exp-btn" onclick="muralPainelExportar(this)" title="Baixar o painel como está na tela, com os filtros aplicados"><i class="ti ti-file-download"></i> Exportar HTML</button>`;
 
-function _mpExpFiltros() {
-  const P = muralPeriodo(), s = _mp.sel, out = [`Período: ${fmtPtDate(P.ini)} a ${fmtPtDate(P.fim)}`];
-  MURAL_FILTROS.forEach(x => {
-    const v = _mo.f[x.k];
-    if (v && v.size) out.push(`${x.label}: ${[...v].map(val => (x.nome ? x.nome(val) : val)).join(', ')}`);
-  });
-  if (s.tipo === 'regional') {
-    const sel = _mpInvSel(), ms = _mpInvMesesDisp().filter(m => sel.has(m.chave)).map(m => m.rot);
-    out.push(`Inventário: ${ms.join(', ') || 'nenhum mês'}${sel.has('mes') ? ' + período' : ''} · ${_mp.invModo === 'separado' ? 'Separado por central' : 'Único'}`);
-    if (_mp.niv.size) out.push(`Criticidade dos materiais: ${_mpNivTexto()}`);
-    out.push(`Tendência das centrais: ${_mp.tendModo === 'separado' ? 'Separado' : 'Único'}`);
-  }
-  if (_mp.tlTipos.size) out.push(`Linha do tempo: ${MP_TL.filter(([k]) => _mp.tlTipos.has(k)).map(([, r]) => r).join(', ')}`);
-  return out;
-}
 
 // Filtros do painel que continuam funcionando no arquivo (Hugo, 18/11/2026):
 // criticidade, Único/Separado (inventário e tendência), meses e chips da
@@ -742,6 +729,42 @@ function getHealthThresholds() { return DADOS.th; }
 function muralRender() {} function muralPainelSel() {} function muralTlAbrir() {} function anSwitchView() {} function muralPainelAba() {} function _hideTip() {}
 var _mp = { sel: DADOS.s, niv: new Set(DADOS.niv), tendModo: DADOS.tendModo, invModo: DADOS.invModo, invSel: DADOS.invSel ? new Set(DADOS.invSel) : null,
   tlTipos: new Set(DADOS.tlTipos), tlN: 1e9, acum: new Map(DADOS.acum), _esc: { ps: DADOS.ps, s: DADOS.s }, _tl: DADOS.tl };
+// Gráficos redesenhados na largura de quem abre o arquivo (e ao redimensionar).
+var _mpExpT = null;
+window.addEventListener('load', function () { _mpGraficos(); });
+window.addEventListener('resize', function () { clearTimeout(_mpExpT); _mpExpT = setTimeout(_mpGraficos, 150); });
+<\/script>`;
+}
+
+// Balão do arquivo exportado: o mesmo do app (#macro-donut-tip, com as regras
+// do modules.css — inclusive o limite à largura da tela no celular) e com
+// toque: tocar num ponto/barra mostra, tocar fora ou rolar esconde.
+function _mpExpTipScript() {
+  return `<script>
+(function () {
+  var tip = null;
+  function el() {
+    if (tip) return tip;
+    tip = document.createElement('div'); tip.id = 'macro-donut-tip';
+    tip.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;display:none;background:var(--bg2);border:1px solid var(--border3);border-radius:10px;padding:12px 15px;min-width:200px;max-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:var(--font);font-size:12px';
+    document.body.appendChild(tip); return tip;
+  }
+  function pos(t, x, y) {
+    var P = 10, W = innerWidth, H = innerHeight, r = t.getBoundingClientRect(), w = r.width || 260, h = r.height || 160;
+    var lx = x + 14, ly = y + 14;
+    if (lx + w + P > W) lx = x - w - 10;
+    if (ly + h + P > H) ly = y - h - 10;
+    t.style.left = Math.max(P, Math.min(lx, W - w - P)) + 'px'; t.style.top = Math.max(P, Math.min(ly, H - h - P)) + 'px';
+  }
+  function alvo(e) { return e.target.closest && e.target.closest('[data-tip]'); }
+  function mostrar(a, x, y) { var t = el(); t.innerHTML = decodeURIComponent(a.dataset.tip); t.style.borderColor = (a.dataset.col || '#3b82f6') + '55'; t.style.display = 'block'; pos(t, x, y); }
+  function esconder() { if (tip) tip.style.display = 'none'; }
+  document.addEventListener('mouseover', function (e) { var a = alvo(e); if (a) mostrar(a, e.clientX, e.clientY); });
+  document.addEventListener('mousemove', function (e) { if (tip && tip.style.display !== 'none' && alvo(e)) pos(tip, e.clientX, e.clientY); });
+  document.addEventListener('mouseout', function (e) { if (alvo(e)) esconder(); });
+  document.addEventListener('click', function (e) { var a = alvo(e); if (a) mostrar(a, e.clientX, e.clientY); else esconder(); });
+  window.addEventListener('scroll', esconder, { passive: true });
+})();
 <\/script>`;
 }
 
@@ -758,37 +781,58 @@ async function muralPainelExportar(btn) {
     clone.querySelectorAll('[onclick]').forEach(e => { if (!MP_EXP_ATIVOS.test(e.getAttribute('onclick'))) e.removeAttribute('onclick'); });
     const titulo = s.tipo === 'geral' ? 'Geral' : s.tipo === 'item' ? `${s.material} · ${s.central}`
       : s.tipo === 'regional' ? s.regional : s.tipo === 'central' ? s.central : s.material;
+    // Cabeçalho, barra de ações (tema, baixar, imprimir) e rodapé dos
+    // relatórios do sistema (_buildRankingShellHTML, relatorio.js) — Hugo,
+    // 18/11/2026; o painel entra como corpo, com o CSS do app embutido.
     const agora = new Date(), tema = document.body.dataset.theme || '', css = await _dgrCssApp();
     const quem = window.currentUser?.nome_exibicao || '';
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Operações · ${_moEsc(titulo)}</title>
-${_dgrFonteIconesEmbutida()}${_dgrFontesEmbutidas()}
-<style>${css}
-body{margin:0;background:var(--bg);color:var(--text)}
-.mp-exp{max-width:1400px;margin:0 auto;padding:24px 28px 40px;display:flex;flex-direction:column;gap:14px}
-.mp-exp-topo{display:flex;flex-direction:column;gap:8px;padding-bottom:14px;border-bottom:1px solid var(--border)}
-.mp-exp-topo h1{margin:0;font-size:19px}
-.mp-exp-filtros{display:flex;flex-wrap:wrap;gap:6px}
-.mp-exp-filtros span{font-size:12.5px;padding:3px 9px;border-radius:6px;background:var(--bg3);color:var(--text2)}
+    const P = muralPeriodo(), periodo = `${fmtPtDate(P.ini)} a ${fmtPtDate(P.fim)}`;
+    const nivel = { geral: 'Geral', regional: 'Regional', central: 'Central', material: 'Material', item: 'Raio-X' }[s.tipo] || '';
+    const slug = String(titulo).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const nome = `operacoes-${slug || 'painel'}-${localISODate(agora)}.html`;
+    const corpo = `<style>
+.mp-exp{display:flex;flex-direction:column;gap:14px;font-size:14px;color:var(--text)}
 .mp-exp button:not([onclick]){pointer-events:none}
 .mp-exp .mp-cc-cab,.mp-exp .mp-cc-it,.mp-exp .mp-res-var,.mp-exp .mp-tl-ev,.mp-exp .mp-tl-fixo{cursor:default}
-.mp-exp .mp-inv svg,.mp-exp .mp-cc-tend svg{max-width:100%;height:auto}
-</style></head>
-<body${tema ? ` data-theme="${_moEsc(tema)}"` : ''}>
-<div class="mp-exp">
-  <div class="mp-exp-topo"><h1>Operações · ${_moEsc(titulo)}</h1>
-    <span class="mo-hint">Gerado em ${agora.toLocaleString('pt-BR')}${quem ? ` por ${_moEsc(quem)}` : ''} · mesmos números da Visão Micro</span>
-    <div class="mp-exp-filtros">${_mpExpFiltros().map(f => `<span>${_moEsc(f)}</span>`).join('')}</div></div>
-  <section class="mp-painel">${clone.innerHTML}</section>
-</div>
+.mp-exp .mp-cc-tend svg{max-width:100%;height:auto}
+.mp-exp .mp-migalhas,.mp-exp .mp-cab h2{display:none}
+/* Celular em pé (Hugo, 18/11/2026): margens menores, colunas do resumo
+   empilhadas com filete em cima, cartões em uma coluna; o gráfico de
+   inventário rola na horizontal em vez de encolher. */
+@media (max-width:640px){
+  .rk-hero-inner{padding:16px 14px 14px}
+  .rk-page{padding:12px 10px 20px}
+  .rk-hero h1{font-size:22px}
+  .action-bar{padding:10px 12px;gap:10px}
+  .action-bar-title span{display:block;margin-left:0}
+  .report-footer{padding:12px 14px}
+  .mp-exp .mp-card{padding:14px 12px}
+  .mp-exp .mp-resumo{padding:16px 0}
+  .mp-exp .mp-res-col{padding:0 14px;max-width:none}
+  .mp-exp .mp-res-col + .mp-res-col{border-left:0;border-top:1px solid var(--border);padding-top:16px}
+  .mp-exp .mp-ccs{grid-template-columns:1fr}
+  .mp-exp .mp-cc{padding:14px 12px}
+  .mp-exp .mp-faixa{margin:0 -12px;padding:8px 12px 8px 9px}
+  .mp-exp .mp-inv-ctl{margin-left:0}
+  .mp-exp .mp-meses-pop{right:auto;left:0;width:min(300px,calc(100vw - 40px))}
+  .mp-exp .mp-inv::before{content:'Arraste para o lado para ver todos os meses →';display:block;position:sticky;left:0;font-size:11.5px;color:var(--text3);margin-bottom:4px}
+  .mp-exp .mp-tl-l{font-size:13px}
+}
+</style>
+<div class="mp-exp"><section class="mp-painel">${clone.innerHTML}</section></div>
 ${_mpExpScript()}
-${_dgrScriptTooltipApp()}
-</body></html>`;
-    const slug = String(titulo).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+${_mpExpTipScript()}`;
+    const html = _buildRankingShellHTML({ periodoBadge: periodo, periodo, now: agora.toLocaleString('pt-BR') }, {
+      pageTitle: `Operações · ${titulo}`, badge: `Operações · ${nivel}`, title: titulo,
+      subtitle: `${quem ? `Gerado por ${quem} · ` : ''}mesmos números da Visão Micro`,
+      bodyHtml: corpo, cssApp: css, offlineCompleto: true,
+      temaAlternavel: true, temaInicial: /light|sand/.test(tema) ? 'light' : 'dark',
+      permitirDownload: true, nomeArquivoDownload: nome,
+      notaRodape: 'Operações · variações do período do Analítico, com os mesmos números da Visão Micro.'
+    });
     const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
     const a = document.createElement('a');
-    a.href = url; a.download = `operacoes-${slug || 'painel'}-${localISODate(agora)}.html`;
+    a.href = url; a.download = nome;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   } catch (err) {
@@ -1034,10 +1078,12 @@ function _mpCabHtml(titulo, sub, ps) {
     <div class="mp-cab-num"><b style="color:${_mpCor(v)}">${_moPesoSinal(v)}</b><span class="mo-hint mono">${_moRs(rs)}</span></div></div>`;
 }
 
-// semResumo: sem as pílulas de contagem embaixo (a regional já as tem no filtro de criticidade).
-function _mpDonutCaixa(tipo, semResumo = false) {
+// Na regional as pílulas de contagem ficam ocultas no PC (o filtro de
+// criticidade já tem os números) e aparecem no celular, no lugar das
+// chamadas do donut, que ficam ilegíveis em tela pequena (modules.css).
+function _mpDonutCaixa(tipo) {
   return `<div class="macro-donut-area"><svg id="chart-${tipo}-donut" viewBox="0 0 420 300" width="100%" height="300" style="display:block;overflow:visible"></svg></div>
-    ${semResumo ? '' : `<div class="macro-summary-row" id="chart-${tipo}-summary"></div>`}`;
+    <div class="macro-summary-row" id="chart-${tipo}-summary"></div>`;
 }
 
 function _mpSaudeHtml(ps) {

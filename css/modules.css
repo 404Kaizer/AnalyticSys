@@ -13665,7 +13665,7 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-time-n { font-size: 13px; color: var(--text2); text-align: right; }
 /* Raio-X no painel: corre com a página, como Regional e Central (Hugo,
    10/11/2026: sem scroll dentro de scroll); as ações ficam no topo. */
-.mp-inv { min-width: 0; }
+.mp-inv { min-width: 0; overflow-x: auto; } /* tela estreita: o gráfico (mín. 560 px) rola de lado */
 .mp-inv circle.mo-rx-pt { transition: r .12s; }
 .mp-inv circle.mo-rx-pt:hover { r: 7; }
 /* Barras do inventário a inventário: a coluna inteira abre o balão. */
@@ -13682,6 +13682,29 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
    em vez da altura fixa de 300px — enche a altura das outras colunas. */
 .mp-res-saude .macro-donut-area { flex: 1; align-items: center; }
 .mp-res-saude .macro-donut-area svg { height: auto; aspect-ratio: 420 / 300; }
+.mp-res-saude .macro-summary-row { display: none; } /* no PC os números estão no filtro de criticidade */
+
+/* ── Telas pequenas (celular em pé), Hugo 18/11/2026 ─────────────────────
+   Alvos de toque maiores, donut sem as chamadas (ilegíveis encolhidas) e
+   com as pílulas de contagem, textos dos mini gráficos maiores e o balão
+   limitado à largura da tela. Vale no app e no HTML exportado. */
+@media (max-width: 640px) {
+  .mp-niv-b { min-height: 38px; padding: 7px 12px; }
+  .mp-modo button { min-height: 36px; padding: 7px 14px; }
+  .mp-meses > summary { min-height: 38px; }
+  .mp-mes { min-height: 38px; font-size: 13px; }
+  .mp-cc-it { padding: 8px 0; font-size: 13.5px; }
+  .mp-res-var { padding: 8px 0; }
+  .mp-tl-ev { padding: 10px 6px 10px 4px; }
+  .mp-cc-tend svg text { font-size: 12px !important; }
+  .mp-painel .macro-donut-area { overflow: hidden; min-height: 0; }
+  .mp-painel .macro-donut-area svg { transform: scale(1.4); transform-origin: 50% 49%; }
+  .mp-painel .macro-donut-area [class^="mcallout-"] { display: none; }
+  .mp-painel .macro-summary-row, .mp-res-saude .macro-summary-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 4px; }
+  .mp-dois { grid-template-columns: 1fr; }
+  .mp-saude-esq { flex: 1 1 100%; }
+  #macro-donut-tip, #macro-donut-tip:has(.mo-rx-tipw) { max-width: calc(100vw - 20px) !important; min-width: 0 !important; }
+}
 .mp-res-tend { flex: 1 1 230px; max-width: 290px; }
 .mp-res-tend > div { display: flex; flex-direction: column; }
 .mp-res-top { flex: 999 1 320px; }
@@ -13761,7 +13784,7 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 /* Inventário da regional: seletor de meses + Único/Separado (Hugo, 18/11/2026). */
 .mp-inv-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .mp-inv-cab .mp-tit { margin: 0; flex: 1 1 260px; }
-.mp-inv-ctl { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.mp-inv-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
 .mp-inv-ctl .mp-modo { margin-left: 0; }
 .mp-meses { position: relative; }
 .mp-meses > summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
