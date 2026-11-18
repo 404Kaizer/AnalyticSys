@@ -167,11 +167,14 @@ function _mpPendEscopo(ps, centrais, soMat = null) {
 }
 
 // ── Acumulado (inventários antes do período + o período), por par, com cache ──
+// Guarda até MP_INV_MAX meses (o seletor de meses do inventário), mas o
+// Acumulado continua sendo os últimos MURAL_RX_MESES inventários + o período.
+const MP_INV_MAX = 12;
 function _mpAcumPar(p) {
   const k = _mpChave(p.central, p.material);
   if (!_mp.acum.has(k)) {
-    const meses = _muralRxMeses(p.central, p.material, p.catKey, false).map(m => ({ chave: m.chave, rot: m.rot, v: m.v }));
-    const fech = meses.filter(m => m.v != null);
+    const meses = _muralRxMeses(p.central, p.material, p.catKey, false, MP_INV_MAX).map(m => ({ chave: m.chave, rot: m.rot, v: m.v }));
+    const fech = meses.slice(-MURAL_RX_MESES).filter(m => m.v != null);
     _mp.acum.set(k, { v: fech.reduce((t, m) => t + m.v, 0), n: fech.length, meses });
   }
   const a = _mp.acum.get(k);
@@ -191,31 +194,43 @@ function _mpJustificativas(mesKey, ps) {
 // inventário de todos os pares da regional/central (mesma conta do gráfico
 // de barras do Raio-X) + o período do Analítico (tracejado). Sai do cache do
 // acumulado, então não custa cálculo a mais. Desenhado na largura real.
-function _mpInvHtml(ps, larg) {
+// opts.meses: Set das chaves 'AAAA-MM' (+ 'mes' = o período) a mostrar; sem
+// ele, os últimos MURAL_RX_MESES inventários + o período. opts.sep: modo
+// Separado da regional — em cada mês uma barra por central, lado a lado.
+function _mpInvHtml(ps, larg, opts = {}) {
   const P = muralPeriodo();
-  const meses = new Map();
+  const meses = new Map(), soma = (x, central, nome, v) => {
+    x.v += v; x.n++; if (v < 0) x.des += v; else x.sob += v;
+    x.pares.push({ nome, v });
+    const c = x.porC.get(central) || { v: 0, n: 0 }; c.v += v; c.n++; x.porC.set(central, c);
+  };
   ps.forEach(p => {
     const a = _mp.acum.get(_mpChave(p.central, p.material));
     (a?.meses || []).forEach(m => {
-      if (!meses.has(m.chave)) meses.set(m.chave, { chave: m.chave, rot: m.rot, v: 0, n: 0, des: 0, sob: 0, pares: [] });
-      if (m.v == null) return;
-      const x = meses.get(m.chave);
-      x.v += m.v; x.n++; if (m.v < 0) x.des += m.v; else x.sob += m.v;
-      x.pares.push({ nome: `${p.material} · ${p.central}`, v: m.v });
+      if (!meses.has(m.chave)) meses.set(m.chave, { chave: m.chave, rot: m.rot, v: 0, n: 0, des: 0, sob: 0, pares: [], porC: new Map() });
+      if (m.v != null) soma(meses.get(m.chave), p.central, `${p.material} · ${p.central}`, m.v);
     });
   });
-  const ab = { rot: `${fmtPtDate(P.ini).slice(0, 5)}–${fmtPtDate(P.fim).slice(0, 5)}`, v: 0, n: ps.length, des: 0, sob: 0, pares: [], aberto: true };
-  ps.forEach(p => { ab.v += p.v; if (p.v < 0) ab.des += p.v; else ab.sob += p.v; ab.pares.push({ nome: `${p.material} · ${p.central}`, v: p.v }); });
-  const pts = [...[...meses.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, x]) => x), ab];
+  const ab = { chave: 'mes', rot: `${fmtPtDate(P.ini).slice(0, 5)}–${fmtPtDate(P.fim).slice(0, 5)}`, v: 0, n: 0, des: 0, sob: 0, pares: [], porC: new Map(), aberto: true };
+  ps.forEach(p => soma(ab, p.central, `${p.material} · ${p.central}`, p.v));
+  const chaves = [...meses.keys()].sort();
+  const sel = opts.meses || new Set([...chaves.slice(-MURAL_RX_MESES), 'mes']);
+  const pts = [...chaves.filter(k => sel.has(k)).map(k => meses.get(k)), ...(sel.has('mes') ? [ab] : [])];
   const comV = pts.filter(x => x.n);
-  if (comV.length < 2) return '<p class="mo-hint">Sem inventários suficientes neste escopo para montar o gráfico.</p>';
+  if (!comV.length) return '<p class="mo-hint">Nenhum inventário nos meses escolhidos.</p>';
+  // Separado: as centrais na ordem do peso nos meses mostrados; cor fixa por central.
+  const sep = !!opts.sep, pesoC = new Map();
+  if (sep) comV.forEach(p => p.porC.forEach((c, nome) => pesoC.set(nome, (pesoC.get(nome) || 0) + Math.abs(c.v))));
+  const centrais = [...pesoC.keys()].sort((a, b) => pesoC.get(b) - pesoC.get(a));
+  const corC = new Map(centrais.map((c, i) => [c, MP_PALETA[i % MP_PALETA.length]]));
 
   // Barras (Hugo, 18/11/2026): uma coluna por inventário + o período; a barra
   // sai do zero — desfalque vermelho para baixo, sobra âmbar para cima; o
   // período (ainda aberto) mais claro e com contorno tracejado. O balão abre
   // na coluna inteira (retângulo transparente com a classe mo-rx-pt).
   const W = Math.max(420, Math.round(larg)), H = 230, L = 96, R = 24, T = 26, B = 40, f = (v) => v.toFixed(1);
-  const vals = comV.map(x => x.v), mn = Math.min(0, ...vals), mxv = Math.max(0, ...vals), pad = (mxv - mn || 1) * 0.12;
+  const vals = sep ? comV.flatMap(p => [...p.porC.values()].map(c => c.v)) : comV.map(x => x.v);
+  const mn = Math.min(0, ...vals), mxv = Math.max(0, ...vals), pad = (mxv - mn || 1) * 0.12;
   const y = (v) => T + (mxv + pad - v) / (mxv - mn + 2 * pad) * (H - T - B);
   const slot = (W - L - R) / pts.length, bw = Math.min(slot * 0.46, 72), y0 = y(0);
   const x = (i) => L + (i + 0.5) * slot;
@@ -229,15 +244,32 @@ function _mpInvHtml(ps, larg) {
       `<text x="${f(x(i))}" y="${H - 6}" text-anchor="middle" class="mo-rx-ax">${p.aberto ? 'período' : p.n ? 'inventário' : 'sem inv.'}</text>`);
     if (!p.n) return;
     const c = _moRxHex(p.v), top = [...p.pares].sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 3);
-    const grade = _moRxLinha('Variação líquida', _moKg(p.v), c) + _moRxLinha('Desfalques', _moKg(p.des), '#f43f5e')
-      + _moRxLinha('Sobras', _moKg(p.sob), '#f59e0b') + _moRxLinha(p.aberto ? 'Pares' : 'Pares com inventário', `${p.n} de ${ps.length}`);
-    const extra = `<div style="margin-top:10px;font-size:12.5px;color:var(--text2)">Os que mais pesam:</div>` + top.map(t =>
-      `<div style="display:flex;gap:10px;font-size:12.5px;margin-top:3px"><span style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_moEsc(t.nome)}</span><span style="margin-left:auto;font-family:var(--mono);color:${_moRxHex(t.v)}">${_moKg(t.v)}</span></div>`).join('');
+    const aberto = p.aberto ? ` fill-opacity=".35" stroke-width="1.5" stroke-dasharray="4 3"` : '';
+    let grade, extra;
+    if (sep) {
+      // Uma barra por central (na cor dela), lado a lado dentro da coluna.
+      const larg = Math.min(slot * 0.82, 26 * centrais.length), bwC = larg / centrais.length;
+      centrais.forEach((nome, j) => {
+        const cc = p.porC.get(nome);
+        if (!cc) return;
+        const topo = Math.min(y(cc.v), y0), alt = Math.max(Math.abs(y(cc.v) - y0), 1.5), cor = corC.get(nome);
+        svg.push(`<rect x="${f(x(i) - larg / 2 + j * bwC + bwC * 0.08)}" y="${f(topo)}" width="${f(bwC * 0.84)}" height="${f(alt)}" rx="2" fill="${cor}"${aberto ? aberto + ` stroke="${cor}"` : ''} style="pointer-events:none"/>`);
+      });
+      grade = centrais.filter(nome => p.porC.has(nome)).sort((a, b) => Math.abs(p.porC.get(b).v) - Math.abs(p.porC.get(a).v))
+        .map(nome => _moRxLinha(`<span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${corC.get(nome)};margin-right:7px;vertical-align:-1px"></span>${_moEsc(nome)}`, _moKg(p.porC.get(nome).v), _moRxHex(p.porC.get(nome).v))).join('')
+        + _moRxLinha('<b style="color:var(--text)">Total</b>', _moKg(p.v), c);
+      extra = '';
+    } else {
+      grade = _moRxLinha('Variação líquida', _moKg(p.v), c) + _moRxLinha('Desfalques', _moKg(p.des), '#f43f5e')
+        + _moRxLinha('Sobras', _moKg(p.sob), '#f59e0b') + _moRxLinha(p.aberto ? 'Pares' : 'Pares com inventário', `${p.n} de ${ps.length}`);
+      extra = `<div style="margin-top:10px;font-size:12.5px;color:var(--text2)">Os que mais pesam:</div>` + top.map(t =>
+        `<div style="display:flex;gap:10px;font-size:12.5px;margin-top:3px"><span style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_moEsc(t.nome)}</span><span style="margin-left:auto;font-family:var(--mono);color:${_moRxHex(t.v)}">${_moKg(t.v)}</span></div>`).join('');
+      const ly = p.v < 0 ? y(p.v) + 15 : y(p.v) - 7, topo = Math.min(y(p.v), y0), alt = Math.max(Math.abs(y(p.v) - y0), 1.5);
+      svg.push(`<rect x="${f(x(i) - bw / 2)}" y="${f(topo)}" width="${f(bw)}" height="${f(alt)}" rx="3" fill="${c}"${aberto ? aberto + ` stroke="${c}"` : ''} style="pointer-events:none"/>`,
+        `<text x="${f(x(i))}" y="${f(ly)}" text-anchor="middle" class="mo-rx-ax" style="fill:${c};font-weight:600;pointer-events:none">${_moPesoSinal(p.v)}</text>`);
+    }
     const tip = _moRxTip(c, `${p.rot}${p.aberto ? ' · período do Analítico' : ''}`, '', grade, extra);
-    const ly = p.v < 0 ? y(p.v) + 15 : y(p.v) - 7, topo = Math.min(y(p.v), y0), alt = Math.max(Math.abs(y(p.v) - y0), 1.5);
-    svg.push(`<rect x="${f(x(i) - bw / 2)}" y="${f(topo)}" width="${f(bw)}" height="${f(alt)}" rx="3" fill="${c}"${p.aberto ? ` fill-opacity=".35" stroke="${c}" stroke-width="1.5" stroke-dasharray="4 3"` : ''} style="pointer-events:none"/>`,
-      `<text x="${f(x(i))}" y="${f(ly)}" text-anchor="middle" class="mo-rx-ax" style="fill:${c};font-weight:600;pointer-events:none">${_moPesoSinal(p.v)}</text>`,
-      `<rect class="mo-rx-pt" x="${f(x(i) - slot / 2)}" y="${T - 8}" width="${f(slot)}" height="${H - B - T + 8}" rx="6" data-tip="${tip}" data-col="${c}"/>`);
+    svg.push(`<rect class="mo-rx-pt" x="${f(x(i) - slot / 2)}" y="${T - 8}" width="${f(slot)}" height="${H - B - T + 8}" rx="6" data-tip="${tip}" data-col="${c}"/>`);
     // Ponto das Justificativas Operacionais do mês (Visão Inventário), do
     // lado oposto ao da barra, junto do zero; balão com o texto de cada uma.
     const js = p.aberto ? [] : _mpJustificativas(p.chave, ps);
@@ -249,7 +281,8 @@ function _mpInvHtml(ps, larg) {
       svg.push(`<circle class="mo-rx-pt mp-just" cx="${f(x(i))}" cy="${f(jy)}" r="5.5" fill="#60a5fa" stroke="var(--bg2)" stroke-width="2" data-tip="${jtip}" data-col="#60a5fa"><title>${js.length} justificativa${js.length === 1 ? '' : 's'}</title></circle>`);
     }
   });
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Variação líquida de inventário a inventário, em barras" style="display:block;overflow:visible">${svg.join('')}</svg>`;
+  const leg = sep ? `<div class="mp-inv-leg">${centrais.map(nome => `<span><i style="background:${corC.get(nome)}"></i>${_moEsc(nome)}</span>`).join('')}</div>` : '';
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Variação de inventário a inventário, em barras${sep ? ' por central' : ''}" style="display:block;overflow:visible">${svg.join('')}</svg>${leg}`;
 }
 
 // ── Regional (Hugo, 18/11/2026: layout "Regional 3" do quadro de layouts) ──
@@ -265,14 +298,68 @@ _mp.niv = new Set();
 _mp.tendModo = (() => { try { return localStorage.getItem('mural.tendModo') || 'unico'; } catch (_) { return 'unico'; } })();
 function muralPainelNivel(l) {
   if (!l) _mp.niv.clear(); else if (_mp.niv.has(l)) _mp.niv.delete(l); else _mp.niv.add(l);
-  muralRender();
+  _mpCentraisRedesenhar();
 }
 function muralPainelTendModo(m) {
   _mp.tendModo = m;
   try { localStorage.setItem('mural.tendModo', m); } catch (_) { /* sem storage */ }
-  muralRender();
+  _mpCentraisRedesenhar();
 }
 const _mpNivFiltro = (ps) => _mp.niv.size ? ps.filter(p => _mp.niv.has(p.nivel)) : ps;
+
+// Seletor de meses e Único/Separado do inventário da regional (Hugo,
+// 18/11/2026): até MP_INV_MAX meses fechados + o período; padrão = os últimos
+// MURAL_RX_MESES + o período. Os meses valem também para a tendência dos
+// cartões. Trocar só redesenha os gráficos (o painel não é refeito).
+_mp.invSel = null;
+_mp.invModo = (() => { try { return localStorage.getItem('mural.invModo') || 'unico'; } catch (_) { return 'unico'; } })();
+function _mpInvMesesDisp() {
+  const P = muralPeriodo();
+  return Array.from({ length: MP_INV_MAX }, (_, i) => {
+    const d = new Date(P.ini.getFullYear(), P.ini.getMonth() - MP_INV_MAX + i, 1);
+    return { chave: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      rot: d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(d.getFullYear()).slice(2) };
+  });
+}
+const _mpInvSel = () => _mp.invSel || new Set([..._mpInvMesesDisp().slice(-MURAL_RX_MESES).map(m => m.chave), 'mes']);
+const _mpInvOpts = (s) => (s.tipo === 'regional' ? { meses: _mpInvSel(), sep: _mp.invModo === 'separado' } : {});
+function _mpInvCtlHtml(aberto = false) {
+  const sel = _mpInvSel(), disp = _mpInvMesesDisp(), n = disp.filter(m => sel.has(m.chave)).length;
+  const bt = (k, rot) => `<button class="mp-mes${sel.has(k) ? ' on' : ''}" onclick="muralInvMes('${k}')" aria-pressed="${sel.has(k)}">${rot}</button>`;
+  return `<details class="mp-meses"${aberto ? ' open' : ''}><summary class="btn btn-sm" title="Meses exibidos no gráfico e na tendência dos cartões"><i class="ti ti-calendar-month"></i>${n} ${n === 1 ? 'mês' : 'meses'}${sel.has('mes') ? ' + período' : ''}<i class="ti ti-chevron-down"></i></summary>
+      <div class="mp-meses-pop"><div class="mp-meses-at"><span class="mo-hint">Últimos</span>${[3, 6, 12].map(k => `<button class="mp-mes" onclick="muralInvAtalho(${k})">${k}</button>`).join('')}</div>
+        <div class="mp-meses-grade">${disp.map(m => bt(m.chave, m.rot)).join('')}${bt('mes', 'Período')}</div></div></details>
+    <div class="mp-modo" role="group" aria-label="Barras do inventário">${[['unico', 'Único'], ['separado', 'Separado']]
+      .map(([k, r]) => `<button class="${_mp.invModo === k ? 'on' : ''}" onclick="muralInvModo('${k}')" aria-pressed="${_mp.invModo === k}">${r}</button>`).join('')}</div>`;
+}
+function muralInvMes(k) {
+  const s = new Set(_mpInvSel());
+  if (s.has(k)) s.delete(k); else s.add(k);
+  _mp.invSel = s; _mpInvRedesenhar(true);
+}
+function muralInvAtalho(n) { _mp.invSel = new Set([..._mpInvMesesDisp().slice(-n).map(m => m.chave), 'mes']); _mpInvRedesenhar(true); }
+function muralInvModo(m) {
+  _mp.invModo = m;
+  try { localStorage.setItem('mural.invModo', m); } catch (_) { /* sem storage */ }
+  _mpInvRedesenhar(false);
+}
+function _mpInvRedesenhar(aberto) {
+  const ctl = document.getElementById('mp-inv-ctl');
+  if (ctl) ctl.innerHTML = _mpInvCtlHtml(aberto);
+  _mpGraficos();
+}
+// Gráfico de inventário + tendência dos cartões (depois que o acumulado
+// trouxe os meses de cada par: _mp._esc, gravado em _mpDepois).
+function _mpGraficos() {
+  const e = _mp._esc;
+  if (!e) return;
+  const inv = document.getElementById('mp-inv');
+  if (inv) inv.innerHTML = _mpInvHtml(e.ps, inv.clientWidth, _mpInvOpts(e.s));
+  document.querySelectorAll('.mp-ccs .mp-cc-tend[data-c]').forEach(el => {
+    const cps = e.ps.filter(p => p.central === el.dataset.c);
+    el.innerHTML = _mpCartaoTendHtml(cps, _mpNivFiltro(cps), el.clientWidth);
+  });
+}
 const _mpNivTexto = () => MP_NIVEIS.filter(([l]) => _mp.niv.has(l)).map(([, r]) => r.toLowerCase()).join(' + ');
 const _mpCurto = (v) => Math.abs(v) >= 10000 ? (v < 0 ? '−' : v > 0 ? '+' : '') + Math.round(Math.abs(v) / 1000).toLocaleString('pt-BR') + ' t' : _moPesoSinal(v);
 
@@ -289,22 +376,54 @@ function _mpRegionalHtml(ps, cab) {
       <span class="mp-res-var-l"><span><b>${_moEsc(p.central)}</b> · ${_moEsc(p.material)}</span><span class="mono" style="color:${_mpCor(p.v)}">${_moPesoSinal(p.v)}</span></span>
       <span class="mp-res-barra"><i style="width:${(Math.abs(p.v) / max * 100).toFixed(1)}%;background:${_mpCor(p.v)}"></i></span></button>`).join('') || '<p class="mo-hint">Sem variação no período.</p>'}</div>
   </div>`;
+  const inv = `<div class="mp-card"><div class="mp-inv-cab"><h4 class="mp-tit">Variação de inventário a inventário <span class="mo-hint">soma líquida dos ${ps.length} pares</span></h4>
+      <div id="mp-inv-ctl" class="mp-inv-ctl">${_mpInvCtlHtml()}</div></div>
+    <div id="mp-inv" class="mp-inv"><span class="mo-hint">Calculando os inventários…</span></div></div>`;
+  // Pendências saíram da regional (ficam na central, material e Geral); no
+  // lugar, "Ações por criticidade" dentro da seção das centrais (Hugo, 18/11/2026).
+  return `${cab}${resumo}${inv}<div id="mp-centrais" class="mp-centrais">${_mpCentraisHtml(ps)}</div>${_mpTlHtml()}`;
+}
+
+// Ações por criticidade: um card por nível marcado no filtro (sem filtro:
+// Crítico, Urgente e Atenção), com a orientação do relatório da Micro e os
+// números do nível na regional.
+const MP_ACAO = { critico: 'Ação imediata — escalar à gerência', urgente: 'Atenção redobrada — repassar aos operadores',
+  atencao: 'Monitorar — contatar operador', bom: 'Dentro do esperado — sem ação necessária' };
+function _mpAcoesNivelHtml(ps) {
+  const niveis = MP_NIVEIS.filter(([l]) => (_mp.niv.size ? _mp.niv.has(l) : l !== 'bom'));
+  return `<div class="mp-card mp-acoes"><h4 class="mp-tit">Ações por criticidade</h4><div class="mp-acoes-grade">${niveis.map(([l, rot]) => {
+    const ms = ps.filter(p => p.nivel === l), v = ms.reduce((t, p) => t + p.v, 0), nc = new Set(ms.map(p => p.central)).size;
+    return `<div class="mp-acao" style="--c:${MP_NIVEL_COR[l]}"><div class="mp-acao-cab">${_mpIco(l)}<b>${rot}</b></div>
+      <p class="mp-acao-txt">${MP_ACAO[l]}</p>
+      <div class="mp-acao-nums"><span><b>${ms.length}</b> materia${ms.length === 1 ? 'l' : 'is'}</span><span><b>${nc}</b> centra${nc === 1 ? 'l' : 'is'}</span>
+        <span class="mono" style="color:${_mpCor(v)}">${_moPesoSinal(v)}</span></div></div>`;
+  }).join('')}</div></div>`;
+}
+
+// Seção "Centrais da regional": título, Único/Separado da tendência, filtro de
+// criticidade (vale só para os cartões) e os cartões. Redesenhada sozinha
+// quando o filtro ou o modo mudam (também no HTML exportado).
+function _mpCentraisHtml(ps) {
   const niv = `<div class="mp-niv" role="group" aria-label="Filtrar as centrais pela criticidade dos materiais"><span class="mo-hint">Criticidade dos materiais</span>
     <button class="mp-niv-b${_mp.niv.size ? '' : ' on'}" onclick="muralPainelNivel('')" aria-pressed="${!_mp.niv.size}">Todos</button>
     ${MP_NIVEIS.map(([l, rot]) => { const n = ps.filter(p => p.nivel === l).length, on = _mp.niv.has(l);
       return `<button class="mp-niv-b mp-niv-l${on ? ' on' : ''}" style="--c:${MP_NIVEL_COR[l]}" onclick="muralPainelNivel('${l}')" aria-pressed="${on}"${n || on ? '' : ' disabled'}>${_mpIco(l)}${n} ${rot}</button>`; }).join('')}</div>`;
-  const inv = `<div class="mp-card"><h4 class="mp-tit">Variação de inventário a inventário <span class="mo-hint">soma líquida dos ${ps.length} pares</span></h4>
-    <div id="mp-inv" class="mp-inv"><span class="mo-hint">Calculando os inventários…</span></div></div>`;
   const cards = [..._mpAgrupar(ps, p => p.central)].map(([c, cps]) => ({ c, cps, fcps: _mpNivFiltro(cps), s: _mpSaude(cps) }))
     .filter(x => x.fcps.length).sort((a, b) => a.s.score - b.s.score);
   const modo = `<div class="mp-modo" role="group" aria-label="Linhas da tendência das centrais"><span class="mo-hint">Tendência</span>${[['unico', 'Único'], ['separado', 'Separado']]
     .map(([k, r]) => `<button class="${_mp.tendModo === k ? 'on' : ''}" onclick="muralPainelTendModo('${k}')" aria-pressed="${_mp.tendModo === k}">${r}</button>`).join('')}</div>`;
-  // Filtro de criticidade dentro da seção das centrais (vale só para os cartões).
-  return `${cab}${resumo}${inv}
-    <div class="mp-cc-sec"><h4 class="mp-tit">Centrais da regional <span class="mo-hint">${_mp.niv.size ? `só as centrais com materiais ${_mpNivTexto()} · ` : ''}pior saúde primeiro</span></h4>${modo}</div>
+  return `<div class="mp-cc-sec"><h4 class="mp-tit">Centrais da regional <span class="mo-hint">${_mp.niv.size ? `só as centrais com materiais ${_mpNivTexto()} · ` : ''}pior saúde primeiro</span></h4>${modo}</div>
     ${niv}
     <div class="mp-ccs">${cards.map(x => _mpCartaoHtml(x.c, x.cps, x.fcps, x.s)).join('') || '<p class="mo-hint">Nenhuma central com materiais nesse nível.</p>'}</div>
-    ${_mpPendHtml()}${_mpTlHtml()}`;
+    ${_mpAcoesNivelHtml(ps)}`;
+}
+// Redesenha só a seção das centrais (e as tendências dos cartões, se o
+// acumulado já trouxe os meses); sem ela na tela, refaz o painel.
+function _mpCentraisRedesenhar() {
+  const el = document.getElementById('mp-centrais');
+  if (!el || !_mp._esc) { muralRender(); return; }
+  el.innerHTML = _mpCentraisHtml(_mp._esc.ps);
+  _mpGraficos();
 }
 
 // Grupos de nível do cartão e as linhas do modo Separado — mesma ordem e
@@ -348,7 +467,10 @@ function _mpCartaoTendHtml(cps, fcps, larg) {
     ms.forEach(m => rotM.set(m.chave, m.rot));
     return [p, new Map(ms.map(m => [m.chave, m.v]))];
   }));
-  const ord = [...rotM.keys()].sort(), n = ord.length + 1, ult = n - 1;
+  // Os meses do seletor do inventário (e o período, se marcado); ult = índice
+  // do período (-1 quando desmarcado).
+  const sel = _mpInvSel(), ord = [...rotM.keys()].sort().filter(k => sel.has(k));
+  const n = ord.length + (sel.has('mes') ? 1 : 0), ult = sel.has('mes') ? n - 1 : -1;
   // Valor de um grupo de pares no ponto i (null = ninguém com inventário no mês).
   const val = (ps, i) => {
     if (i === ult) return ps.reduce((t, p) => t + p.v, 0);
@@ -365,8 +487,9 @@ function _mpCartaoTendHtml(cps, fcps, larg) {
     const r = muralSaude(ds, th);
     return { score: r.score, nivel: r.level === 'ok' ? 'bom' : r.level };
   });
-  const ant = soma.slice(0, ult).filter(x => x != null).pop();
-  const piora = ant != null && Math.abs(soma[ult]) > Math.abs(ant);
+  // Piorando/melhorando: o último ponto mostrado contra o anterior com valor.
+  const comV = soma.filter(x => x != null), ant = comV.length > 1 ? comV[comV.length - 2] : null;
+  const piora = ant != null && Math.abs(comV[comV.length - 1]) > Math.abs(ant);
   const cab = `<div class="mp-cc-tend-l"><span class="mo-hint">Tendência · inventário a inventário</span>${ant == null ? '' : `<b style="color:${piora ? 'var(--red)' : 'var(--green)'}">${piora ? '▼ piorando' : '▲ melhorando'}</b>`}</div>`;
   if (soma.filter(x => x != null).length < 2) return cab + '<p class="mo-hint">Sem inventários suficientes nesta central.</p>';
 
@@ -389,7 +512,7 @@ function _mpCartaoTendHtml(cps, fcps, larg) {
   });
   const colW = (W - L - R) / (n - 1);
   for (let i = 0; i < n; i++) {
-    const rot = i === ult ? 'per.' : rotM.get(ord[i]).slice(0, 1).toUpperCase();
+    const rot = i === ult ? (n > 8 ? 'P' : 'per.') : rotM.get(ord[i]).slice(0, 1).toUpperCase(); // P: com muitos meses não cabe "per."
     svg.push(`<text x="${f(x(i))}" y="${H - 4}" text-anchor="middle" class="mo-rx-ax" style="font-size:11px">${rot}</text>`);
     const titulo = i === ult ? 'Período do Analítico' : rotM.get(ord[i]);
     const grade = sep
@@ -549,11 +672,52 @@ function _mpExpFiltros() {
     if (v && v.size) out.push(`${x.label}: ${[...v].map(val => (x.nome ? x.nome(val) : val)).join(', ')}`);
   });
   if (s.tipo === 'regional') {
+    const sel = _mpInvSel(), ms = _mpInvMesesDisp().filter(m => sel.has(m.chave)).map(m => m.rot);
+    out.push(`Inventário: ${ms.join(', ') || 'nenhum mês'}${sel.has('mes') ? ' + período' : ''} · ${_mp.invModo === 'separado' ? 'Separado por central' : 'Único'}`);
     if (_mp.niv.size) out.push(`Criticidade dos materiais: ${_mpNivTexto()}`);
     out.push(`Tendência das centrais: ${_mp.tendModo === 'separado' ? 'Separado' : 'Único'}`);
   }
   if (_mp.tlTipos.size) out.push(`Linha do tempo: ${MP_TL.filter(([k]) => _mp.tlTipos.has(k)).map(([, r]) => r).join(', ')}`);
   return out;
+}
+
+// Filtros do painel que continuam funcionando no arquivo (Hugo, 18/11/2026):
+// criticidade, Único/Separado (inventário e tendência), meses e chips da
+// linha do tempo. O arquivo leva os dados do escopo e as MESMAS funções de
+// desenho (toString), com stubs para o que é do app (muralRender, Raio-X…).
+const MP_EXP_ATIVOS = /^(muralPainelNivel|muralPainelTendModo|muralInvMes|muralInvAtalho|muralInvModo|muralTlTipo|muralTlMais)\(/;
+function _mpExpScript() {
+  const e = _mp._esc;
+  if (!e) return ''; // os meses ainda não tinham sido calculados: sai estático
+  const fns = { _mpIco, _mpCor, _mpChave, _mpSaude, _mpAgrupar, _mpJustificativas, _mpInvHtml, muralPainelNivel, muralPainelTendModo,
+    _mpNivFiltro, _mpInvMesesDisp, _mpInvSel, _mpInvOpts, _mpInvCtlHtml, muralInvMes, muralInvAtalho, muralInvModo, _mpInvRedesenhar,
+    _mpGraficos, _mpNivTexto, _mpCurto, _mpCentraisHtml, _mpCentraisRedesenhar, _mpCartaoGrupos, _mpCartaoHtml, _mpCartaoTendHtml,
+    _mpTlRender, muralTlTipo, muralTlMais, _mpLinhaAttrs, _mpAcoesNivelHtml, _moEsc, _moKg, _moPeso, _moPesoSinal, _moRxHex, _moRxLinha, _moRxTip,
+    muralSaude, calcHealthScore, classifyVariation, escapeHtml, fmtPtDate, localISODate };
+  const vals = { MP_ACAO, MP_NIVEL_COR, MP_INV_MAX, MP_NIVEIS, MP_NIVEL_NOME, MP_PALETA, MP_TL, MP_TL_PASSO, MURAL_RX_MESES, HEALTH_PENALTIES, _levelIcon };
+  const codigo = Object.entries(fns).map(([n, f]) => { const src = f.toString(); return /^\s*(async\s+)?function[\s*]/.test(src) ? src : `var ${n} = ${src};`; })
+    .concat(Object.entries(vals).map(([n, v]) => `var ${n} = ${JSON.stringify(v)};`)).join('\n');
+  const P = muralPeriodo();
+  const ps = e.ps.map(p => ({ central: p.central, regional: p.regional, material: p.material, v: p.v, nivel: p.nivel, catKey: p.catKey }));
+  const pares = new Set(ps.map(p => p.central + '|||' + p.material));
+  const dados = {
+    P: [P.ini.getTime(), P.fim.getTime()], th: getHealthThresholds(), ps, s: e.s,
+    acum: ps.map(p => [_mpChave(p.central, p.material), _mp.acum.get(_mpChave(p.central, p.material))]).filter(([, a]) => a),
+    js: (state.invJustificativas || []).filter(r => r && r.k && pares.has(r.k.split('|||').slice(1).join('|||'))),
+    tl: _mp._tl ? { ev: _mp._tl.ev.map(({ abrir, ...r }) => r), fixo: _mp._tl.fixo } : null,
+    niv: [..._mp.niv], tendModo: _mp.tendModo, invModo: _mp.invModo, invSel: _mp.invSel ? [..._mp.invSel] : null, tlTipos: [..._mp.tlTipos]
+  };
+  const seguro = (t) => String(t).replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--');
+  return `<script>
+${seguro(codigo)}
+var DADOS = ${seguro(JSON.stringify(dados))};
+var state = { invJustificativas: DADOS.js };
+function muralPeriodo() { return { ini: new Date(DADOS.P[0]), fim: new Date(DADOS.P[1]) }; }
+function getHealthThresholds() { return DADOS.th; }
+function muralRender() {} function muralPainelSel() {} function muralTlAbrir() {} function anSwitchView() {} function muralPainelAba() {} function _hideTip() {}
+var _mp = { sel: DADOS.s, niv: new Set(DADOS.niv), tendModo: DADOS.tendModo, invModo: DADOS.invModo, invSel: DADOS.invSel ? new Set(DADOS.invSel) : null,
+  tlTipos: new Set(DADOS.tlTipos), tlN: 1e9, acum: new Map(DADOS.acum), _esc: { ps: DADOS.ps, s: DADOS.s }, _tl: DADOS.tl };
+<\/script>`;
 }
 
 async function muralPainelExportar(btn) {
@@ -565,7 +729,8 @@ async function muralPainelExportar(btn) {
     if (_mp._tl) { _mp.tlN = Infinity; _mpTlRender(); }
     const clone = painel.cloneNode(true);
     clone.querySelectorAll('.mp-tl-mais').forEach(e => e.remove());
-    clone.querySelectorAll('[onclick]').forEach(e => e.removeAttribute('onclick'));
+    // Ficam só os cliques dos filtros do painel (as funções vão no arquivo).
+    clone.querySelectorAll('[onclick]').forEach(e => { if (!MP_EXP_ATIVOS.test(e.getAttribute('onclick'))) e.removeAttribute('onclick'); });
     const titulo = s.tipo === 'geral' ? 'Geral' : s.tipo === 'item' ? `${s.material} · ${s.central}`
       : s.tipo === 'regional' ? s.regional : s.tipo === 'central' ? s.central : s.material;
     const agora = new Date(), tema = document.body.dataset.theme || '', css = await _dgrCssApp();
@@ -581,7 +746,8 @@ body{margin:0;background:var(--bg);color:var(--text)}
 .mp-exp-topo h1{margin:0;font-size:19px}
 .mp-exp-filtros{display:flex;flex-wrap:wrap;gap:6px}
 .mp-exp-filtros span{font-size:12.5px;padding:3px 9px;border-radius:6px;background:var(--bg3);color:var(--text2)}
-.mp-exp button{pointer-events:none}
+.mp-exp button:not([onclick]){pointer-events:none}
+.mp-exp .mp-cc-cab,.mp-exp .mp-cc-it,.mp-exp .mp-res-var,.mp-exp .mp-tl-ev,.mp-exp .mp-tl-fixo{cursor:default}
 .mp-exp .mp-inv svg,.mp-exp .mp-cc-tend svg{max-width:100%;height:auto}
 </style></head>
 <body${tema ? ` data-theme="${_moEsc(tema)}"` : ''}>
@@ -591,6 +757,7 @@ body{margin:0;background:var(--bg);color:var(--text)}
     <div class="mp-exp-filtros">${_mpExpFiltros().map(f => `<span>${_moEsc(f)}</span>`).join('')}</div></div>
   <section class="mp-painel">${clone.innerHTML}</section>
 </div>
+${_mpExpScript()}
 ${_dgrScriptTooltipApp()}
 </body></html>`;
     const slug = String(titulo).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -958,6 +1125,7 @@ function muralPainelRender(el, itens) {
 // e os blocos que demoram (pendências, acumulado) em segundo plano.
 function _mpDepois(todos) {
   const gen = ++_mp.gen, s = _mp.sel, d = _mp._donuts || {};
+  _mp._esc = null; // os gráficos só redesenham depois do acumulado deste painel
   if (typeof _renderDonut === 'function') {
     if (d.centrais) _renderDonut('mp-centrais', d.centrais.counts, [], d.centrais.levelMeta, d.centrais.score, d.centrais.total, d.centrais.itens);
     if (d.mats) _renderDonut('mp-mats', d.mats.counts, [], d.mats.levelMeta, d.mats.score, d.mats.total, d.mats.itens);
@@ -974,22 +1142,24 @@ function _mpDepois(todos) {
   setTimeout(async () => { try {
     const ced = { t: performance.now() };
     const centrais = [...new Set(ps.map(p => p.central))];
-    for (let i = 0; i < centrais.length; i++) {
-      _mpPendCentral(centrais[i]);
-      await muralCederTempo(ced); if (gen !== _mp.gen) return;
+    const box = document.getElementById('mp-pend'); // a regional não tem Pendências: pula o cálculo
+    if (box) {
+      for (let i = 0; i < centrais.length; i++) {
+        _mpPendCentral(centrais[i]);
+        await muralCederTempo(ced); if (gen !== _mp.gen) return;
+      }
+      if (gen !== _mp.gen) return;
+      box.innerHTML = _mpPendCorpoHtml(_mpPendEscopo(ps, centrais, soMat), comDocs);
+      // Explicado (OS duplicadas) dos itens da fila do escopo — o caro; depois redesenha.
+      // Os prazos da lista vêm primeiro (_muralEnriquecer); o explicado espera.
+      while (_mo.enriquecendo) { await new Promise(r => setTimeout(r, 60)); if (gen !== _mp.gen) return; }
+      const fila = ps.filter(p => p.it && !_mp.explic.has(_mpChave(p.central, p.material)));
+      for (let i = 0; i < fila.length; i++) {
+        _mpExplicPar(fila[i]);
+        await muralCederTempo(ced); if (gen !== _mp.gen) return;
+      }
+      if (fila.length && gen === _mp.gen) box.innerHTML = _mpPendCorpoHtml(_mpPendEscopo(ps, centrais, soMat), comDocs);
     }
-    if (gen !== _mp.gen) return;
-    const box = document.getElementById('mp-pend');
-    if (box) box.innerHTML = _mpPendCorpoHtml(_mpPendEscopo(ps, centrais, soMat), comDocs);
-    // Explicado (OS duplicadas) dos itens da fila do escopo — o caro; depois redesenha.
-    // Os prazos da lista vêm primeiro (_muralEnriquecer); o explicado espera.
-    while (_mo.enriquecendo) { await new Promise(r => setTimeout(r, 60)); if (gen !== _mp.gen) return; }
-    const fila = ps.filter(p => p.it && !_mp.explic.has(_mpChave(p.central, p.material)));
-    for (let i = 0; i < fila.length; i++) {
-      _mpExplicPar(fila[i]);
-      await muralCederTempo(ced); if (gen !== _mp.gen) return;
-    }
-    if (fila.length && box && gen === _mp.gen) box.innerHTML = _mpPendCorpoHtml(_mpPendEscopo(ps, centrais, soMat), comDocs);
     if (s.tipo === 'geral') return;
     let tot = 0, nInv = 0;
     for (let i = 0; i < ps.length; i++) {
@@ -998,14 +1168,10 @@ function _mpDepois(todos) {
     }
     const ac = document.getElementById('mp-acum');
     if (ac) ac.innerHTML = `<span class="mo-hint">Acumulado</span><b class="mp-big" style="color:${_mpCor(tot)}">${_moPesoSinal(tot)}</b><small class="mo-hint">${nInv} inventário${nInv === 1 ? '' : 's'} + o período</small>`;
-    const inv = document.getElementById('mp-inv');
-    // O filtro de criticidade da regional vale só para os cartões (Hugo, 18/11/2026).
-    if (inv) inv.innerHTML = _mpInvHtml(ps, inv.clientWidth);
-    // Regional: a tendência de cada cartão (os inventários já estão no cache).
-    document.querySelectorAll('#mural-root .mp-cc-tend[data-c]').forEach(el => {
-      const cps = ps.filter(p => p.central === el.dataset.c);
-      el.innerHTML = _mpCartaoTendHtml(cps, _mpNivFiltro(cps), el.clientWidth);
-    });
+    // Inventário (o filtro de criticidade da regional vale só para os cartões)
+    // e a tendência de cada cartão — os meses já estão no cache.
+    _mp._esc = { ps, s };
+    _mpGraficos();
     _mpTlAtualizar(ps, s);
     const serie = await _mpSerieSaude(ps, gen);
     if (!serie || gen !== _mp.gen) return;

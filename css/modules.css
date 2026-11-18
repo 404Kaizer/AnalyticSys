@@ -13754,6 +13754,35 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-tl-desc { font-size: 13px; color: var(--text2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .mp-tl-mais { align-self: flex-start; margin-top: 8px; }
 .mp-inv circle.mp-just { cursor: help; }
+/* Inventário da regional: seletor de meses + Único/Separado (Hugo, 18/11/2026). */
+.mp-inv-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.mp-inv-cab .mp-tit { margin: 0; flex: 1 1 260px; }
+.mp-inv-ctl { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.mp-inv-ctl .mp-modo { margin-left: 0; }
+.mp-meses { position: relative; }
+.mp-meses > summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.mp-meses > summary::-webkit-details-marker { display: none; }
+.mp-meses[open] > summary .ti-chevron-down { transform: rotate(180deg); }
+.mp-meses-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 300px; padding: 12px; border-radius: 10px; border: 1px solid var(--border2); background: var(--bg2); box-shadow: 0 10px 30px rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 10px; }
+.mp-meses-at { display: flex; align-items: center; gap: 6px; }
+.mp-meses-grade { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.mp-meses-grade .mp-mes:last-child { grid-column: span 4; }
+.mp-mes { font: inherit; font-size: 12.5px; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; }
+.mp-mes:hover { color: var(--text); background: var(--bg3); }
+.mp-mes.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--text); }
+.mp-inv-leg { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 12.5px; color: var(--text2); }
+.mp-inv-leg span { display: inline-flex; align-items: center; gap: 6px; }
+.mp-inv-leg i { width: 10px; height: 10px; border-radius: 3px; }
+/* Ações por criticidade (regional): um card por nível do filtro. */
+.mp-acoes { margin-top: 14px; }
+.mp-acoes-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.mp-acao { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); border-left: 3px solid var(--c); background: color-mix(in srgb, var(--c) 7%, transparent); }
+.mp-acao-cab { display: flex; align-items: center; gap: 8px; }
+.mp-acao-cab b { font-size: 13px; letter-spacing: .08em; color: var(--c); }
+.mp-acao-txt { margin: 0; font-size: 14px; font-weight: 500; color: var(--text); }
+.mp-acao-nums { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; font-size: 13px; color: var(--text2); }
+.mp-acao-nums b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+.mp-acao-nums .mono { margin-left: auto; font-size: 13.5px; }
 /* Exportar HTML: no fim da barra de filtros. */
 .mo-filter-bar .mp-exp-btn { margin-left: auto; }
 .mp-rx { display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }

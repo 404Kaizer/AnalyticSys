@@ -1152,10 +1152,12 @@ function _muralRxChart(rx, lim, acoes, gran = 'dia') {
 const MURAL_RX_MESES = 6;
 // comAberto=false: só os meses fechados (o painel das Operações soma a
 // variação do mês em aberto que já tem, sem recalcular o mês).
-function _muralRxMeses(central, mat, catKey, comAberto = true) {
+// nMeses: o painel das Operações pede até 12 para o seletor de meses do
+// inventário (mural-painel.js); o Raio-X segue com MURAL_RX_MESES.
+function _muralRxMeses(central, mat, catKey, comAberto = true, nMeses = MURAL_RX_MESES) {
   const P = _muralRxPeriodo('mes'), out = []; // meses fechados ANTES do período do Analítico
   const nomeMes = d => d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(d.getFullYear()).slice(2);
-  for (let k = MURAL_RX_MESES; k >= 1; k--) {
+  for (let k = nMeses; k >= 1; k--) {
     const ini = new Date(P.ini.getFullYear(), P.ini.getMonth() - k, 1);
     const fim = new Date(ini.getFullYear(), ini.getMonth() + 1, 0);
     const ate = new Date(fim); ate.setHours(23, 59, 59, 999);
