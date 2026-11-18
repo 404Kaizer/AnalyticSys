@@ -385,18 +385,29 @@ function _mpRegionalHtml(ps, cab) {
 }
 
 // Ações por criticidade: um card por nível marcado no filtro (sem filtro:
-// Crítico, Urgente e Atenção), com a orientação do relatório da Micro e os
-// números do nível na regional.
-const MP_ACAO = { critico: 'Ação imediata — escalar à gerência', urgente: 'Atenção redobrada — repassar aos operadores',
-  atencao: 'Monitorar — contatar operador', bom: 'Dentro do esperado — sem ação necessária' };
+// Crítico, Urgente e Atenção). As ações são as das Configurações → Ações de
+// Relatório (state.acoesRelatorio: por categoria + nível), resolvidas como no
+// relatório da Micro (_resolverAcoesParaMaterial, relatorio.js); materiais que
+// caem na mesma regra dividem o mesmo bloco (Hugo, 18/11/2026).
 function _mpAcoesNivelHtml(ps) {
   const niveis = MP_NIVEIS.filter(([l]) => (_mp.niv.size ? _mp.niv.has(l) : l !== 'bom'));
-  return `<div class="mp-card mp-acoes"><h4 class="mp-tit">Ações por criticidade</h4><div class="mp-acoes-grade">${niveis.map(([l, rot]) => {
+  const catNome = (k) => (typeof _REL_CAT_NOMES !== 'undefined' && _REL_CAT_NOMES[k]) || 'Sem cadastro';
+  const resolver = (p, l) => (l === 'bom' || typeof _resolverAcoesParaMaterial !== 'function' ? null : _resolverAcoesParaMaterial(p.material, p.v, '', l, p.catKey, ''));
+  return `<div class="mp-card mp-acoes"><h4 class="mp-tit">Ações por criticidade <span class="mo-hint">definidas em Configurações → Ações de Relatório</span></h4><div class="mp-acoes-grade">${niveis.map(([l, rot]) => {
     const ms = ps.filter(p => p.nivel === l), v = ms.reduce((t, p) => t + p.v, 0), nc = new Set(ms.map(p => p.central)).size;
-    return `<div class="mp-acao" style="--c:${MP_NIVEL_COR[l]}"><div class="mp-acao-cab">${_mpIco(l)}<b>${rot}</b></div>
-      <p class="mp-acao-txt">${MP_ACAO[l]}</p>
-      <div class="mp-acao-nums"><span><b>${ms.length}</b> materia${ms.length === 1 ? 'l' : 'is'}</span><span><b>${nc}</b> centra${nc === 1 ? 'l' : 'is'}</span>
-        <span class="mono" style="color:${_mpCor(v)}">${_moPesoSinal(v)}</span></div></div>`;
+    const grupos = new Map();
+    ms.forEach(p => {
+      const acoes = resolver(p, l), k = acoes || '';
+      if (!grupos.has(k)) grupos.set(k, { acoes, cats: new Set(), n: 0 });
+      const g = grupos.get(k); g.cats.add(catNome(p.catKey)); g.n++;
+    });
+    const blocos = [...grupos.values()].sort((a, b) => (b.acoes ? 1 : 0) - (a.acoes ? 1 : 0) || b.n - a.n).map(g => `<div class="mp-acao-g">
+      <div class="mp-acao-cat"><b>${_moEsc([...g.cats].join(' · '))}</b><span class="mo-hint">${g.n} materia${g.n === 1 ? 'l' : 'is'}</span></div>
+      ${g.acoes ? `<ul>${String(g.acoes).split(/[;|\n]/).map(a => a.trim().replace(/^[-•–]\s*/, '')).filter(Boolean).map(a => `<li>${_moEsc(a)}</li>`).join('')}</ul>`
+        : `<p class="mo-hint">${l === 'bom' ? 'Dentro do esperado — sem ação necessária.' : 'Sem ação cadastrada para esta categoria e nível.'}</p>`}</div>`).join('');
+    return `<div class="mp-acao" style="--c:${MP_NIVEL_COR[l]}"><div class="mp-acao-cab">${_mpIco(l)}<b>${rot}</b>
+        <span class="mp-acao-nums"><span><b>${ms.length}</b> materia${ms.length === 1 ? 'l' : 'is'}</span><span><b>${nc}</b> centra${nc === 1 ? 'l' : 'is'}</span><span class="mono" style="color:${_mpCor(v)}">${_moPesoSinal(v)}</span></span></div>
+      ${ms.length ? blocos : '<p class="mo-hint">Nenhum material neste nível.</p>'}</div>`;
   }).join('')}</div></div>`;
 }
 
@@ -544,8 +555,18 @@ const _mpTlHtml = () => `<div class="mp-card"><h4 class="mp-tit">Linha do tempo 
 function _mpTlMontar(ps, s) {
   const P = muralPeriodo(), de = localISODate(P.ini), ate = localISODate(P.fim);
   const noPer = (iso) => !!iso && iso >= de && iso <= ate, iso = (d) => (d ? localISODate(d) : '');
-  const cent = new Set(ps.map(p => normalizeText(p.central))), soMat = s.tipo === 'material' ? normalizeText(s.material) : null;
-  const doEscopo = (c, m) => cent.has(normalizeText(c || '')) && (!soMat || normalizeText(m || '') === soMat);
+  // Central comparada pela FILIAL do cadastro (origem, alias ou CNPJ): o
+  // Registro grava origem || alias, a análise usa outro nome — por texto
+  // exato não casava e os Registros sumiam da linha (Hugo, 18/11/2026).
+  const fil = typeof getFilialLookupIndex === 'function' ? getFilialLookupIndex().exact : null;
+  const cKey = (c) => {
+    const n = normalizeText(String(c || '').trim());
+    const f = fil && (fil.get(n) || fil.get(String(c || '').replace(/\D/g, '')));
+    return f ? normalizeText(f.alias || f.origem) : n;
+  };
+  const nomeDe = new Map(ps.map(p => [cKey(p.central), p.central])); // chave → nome usado no painel
+  const cent = new Set(nomeDe.keys()), soMat = s.tipo === 'material' ? normalizeText(s.material) : null;
+  const doEscopo = (c, m) => cent.has(cKey(c)) && (!soMat || normalizeText(m || '') === soMat);
   const regDe = new Map(ps.map(p => [p.central, p.regional]));
   const abrirItem = (c, m) => () => muralPainelSel({ dataset: { t: 'item', r: regDe.get(c) || '', c, m } });
   const ev = [];
@@ -574,8 +595,11 @@ function _mpTlMontar(ps, s) {
 
   // Registros operacionais (solicitacoes.js / Supabase): só o envio, na data do ocorrido.
   (typeof _sol !== 'undefined' ? _sol.lista : []).forEach(r => {
-    const d = String(r.data_ocorrido || '').slice(0, 10), central = String(r.central || '').split('||')[0];
-    if (r.status === 'excluida' || !noPer(d) || !cent.has(normalizeText(central))) return;
+    const d = String(r.data_ocorrido || '').slice(0, 10);
+    let k = cKey(r.central);
+    if (!cent.has(k) && r.cnpj_central) k = cKey(r.cnpj_central);
+    if (r.status === 'excluida' || !noPer(d) || !cent.has(k)) return;
+    const central = nomeDe.get(k) || r.central;
     const mats = (r.itens || []).map(i => i.material).filter(Boolean);
     if (soMat && !mats.some(m => normalizeText(m) === soMat)) return;
     add('reg', d, Date.parse(r.created_at), `${r.categoria_situacao || 'Registro'}${r.motivo ? ' · ' + r.motivo : ''}`, `${r.protocolo || ''} · ${central}`,
@@ -692,9 +716,9 @@ function _mpExpScript() {
   const fns = { _mpIco, _mpCor, _mpChave, _mpSaude, _mpAgrupar, _mpJustificativas, _mpInvHtml, muralPainelNivel, muralPainelTendModo,
     _mpNivFiltro, _mpInvMesesDisp, _mpInvSel, _mpInvOpts, _mpInvCtlHtml, muralInvMes, muralInvAtalho, muralInvModo, _mpInvRedesenhar,
     _mpGraficos, _mpNivTexto, _mpCurto, _mpCentraisHtml, _mpCentraisRedesenhar, _mpCartaoGrupos, _mpCartaoHtml, _mpCartaoTendHtml,
-    _mpTlRender, muralTlTipo, muralTlMais, _mpLinhaAttrs, _mpAcoesNivelHtml, _moEsc, _moKg, _moPeso, _moPesoSinal, _moRxHex, _moRxLinha, _moRxTip,
+    _mpTlRender, muralTlTipo, muralTlMais, _mpLinhaAttrs, _mpAcoesNivelHtml, _resolverAcoesParaMaterial, _moEsc, _moKg, _moPeso, _moPesoSinal, _moRxHex, _moRxLinha, _moRxTip,
     muralSaude, calcHealthScore, classifyVariation, escapeHtml, fmtPtDate, localISODate };
-  const vals = { MP_ACAO, MP_NIVEL_COR, MP_INV_MAX, MP_NIVEIS, MP_NIVEL_NOME, MP_PALETA, MP_TL, MP_TL_PASSO, MURAL_RX_MESES, HEALTH_PENALTIES, _levelIcon };
+  const vals = { _REL_CAT_NOMES, MP_NIVEL_COR, MP_INV_MAX, MP_NIVEIS, MP_NIVEL_NOME, MP_PALETA, MP_TL, MP_TL_PASSO, MURAL_RX_MESES, HEALTH_PENALTIES, _levelIcon };
   const codigo = Object.entries(fns).map(([n, f]) => { const src = f.toString(); return /^\s*(async\s+)?function[\s*]/.test(src) ? src : `var ${n} = ${src};`; })
     .concat(Object.entries(vals).map(([n, v]) => `var ${n} = ${JSON.stringify(v)};`)).join('\n');
   const P = muralPeriodo();
@@ -704,6 +728,7 @@ function _mpExpScript() {
     P: [P.ini.getTime(), P.fim.getTime()], th: getHealthThresholds(), ps, s: e.s,
     acum: ps.map(p => [_mpChave(p.central, p.material), _mp.acum.get(_mpChave(p.central, p.material))]).filter(([, a]) => a),
     js: (state.invJustificativas || []).filter(r => r && r.k && pares.has(r.k.split('|||').slice(1).join('|||'))),
+    ar: state.acoesRelatorio || [],
     tl: _mp._tl ? { ev: _mp._tl.ev.map(({ abrir, ...r }) => r), fixo: _mp._tl.fixo } : null,
     niv: [..._mp.niv], tendModo: _mp.tendModo, invModo: _mp.invModo, invSel: _mp.invSel ? [..._mp.invSel] : null, tlTipos: [..._mp.tlTipos]
   };
@@ -711,7 +736,7 @@ function _mpExpScript() {
   return `<script>
 ${seguro(codigo)}
 var DADOS = ${seguro(JSON.stringify(dados))};
-var state = { invJustificativas: DADOS.js };
+var state = { invJustificativas: DADOS.js, acoesRelatorio: DADOS.ar };
 function muralPeriodo() { return { ini: new Date(DADOS.P[0]), fim: new Date(DADOS.P[1]) }; }
 function getHealthThresholds() { return DADOS.th; }
 function muralRender() {} function muralPainelSel() {} function muralTlAbrir() {} function anSwitchView() {} function muralPainelAba() {} function _hideTip() {}

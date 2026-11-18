@@ -13677,7 +13677,11 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-resumo { flex-direction: row; flex-wrap: wrap; padding: 18px 0; gap: 22px 0; }
 .mp-res-col { padding: 0 22px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; }
 .mp-res-col + .mp-res-col { border-left: 1px solid var(--border); }
-.mp-res-saude { flex: 1 1 340px; max-width: 420px; }
+.mp-res-saude { flex: 1 1 420px; max-width: 540px; }
+/* Donut maior: acompanha a largura da coluna (proporção do viewBox 420×300)
+   em vez da altura fixa de 300px — enche a altura das outras colunas. */
+.mp-res-saude .macro-donut-area { flex: 1; align-items: center; }
+.mp-res-saude .macro-donut-area svg { height: auto; aspect-ratio: 420 / 300; }
 .mp-res-tend { flex: 1 1 230px; max-width: 290px; }
 .mp-res-tend > div { display: flex; flex-direction: column; }
 .mp-res-top { flex: 999 1 320px; }
@@ -13774,15 +13778,22 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mp-inv-leg span { display: inline-flex; align-items: center; gap: 6px; }
 .mp-inv-leg i { width: 10px; height: 10px; border-radius: 3px; }
 /* Ações por criticidade (regional): um card por nível do filtro. */
-.mp-acoes { margin-top: 14px; }
+/* Seção das centrais: título, filtro, cartões e ações com o mesmo respiro do painel. */
+.mp-centrais { display: flex; flex-direction: column; gap: 14px; }
 .mp-acoes-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .mp-acao { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); border-left: 3px solid var(--c); background: color-mix(in srgb, var(--c) 7%, transparent); }
-.mp-acao-cab { display: flex; align-items: center; gap: 8px; }
-.mp-acao-cab b { font-size: 13px; letter-spacing: .08em; color: var(--c); }
-.mp-acao-txt { margin: 0; font-size: 14px; font-weight: 500; color: var(--text); }
-.mp-acao-nums { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; font-size: 13px; color: var(--text2); }
+.mp-acao-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.mp-acao-cab > b { font-size: 13px; letter-spacing: .08em; color: var(--c); }
+.mp-acao-nums { margin-left: auto; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 12.5px; color: var(--text2); }
 .mp-acao-nums b { font-family: var(--mono); font-weight: 600; color: var(--text); }
-.mp-acao-nums .mono { margin-left: auto; font-size: 13.5px; }
+.mp-acao-nums .mono { font-size: 13px; }
+/* Um bloco por regra das Configurações: categorias + as ações em tópicos. */
+.mp-acao-g { padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--c) 22%, transparent); display: flex; flex-direction: column; gap: 6px; }
+.mp-acao-cat { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13px; }
+.mp-acao-cat .mo-hint { margin-left: auto; font-size: 12.5px; }
+.mp-acao-g ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; line-height: 1.4; }
+.mp-acao-g li::marker { color: var(--c); }
+.mp-acao-g .mo-hint { margin: 0; font-size: 12.5px; }
 /* Exportar HTML: no fim da barra de filtros. */
 .mo-filter-bar .mp-exp-btn { margin-left: auto; }
 .mp-rx { display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
