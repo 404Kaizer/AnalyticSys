@@ -910,6 +910,7 @@ async function muralDevolver(id) {
 //            Micro, com o resumo do card dela (_muralResumoMicro). Sem
 //            análise ainda, do dia 1 até ontem.
 function _muralRxPeriodo(periodo) {
+  if (periodo && periodo.ini && periodo.fim) return periodo; // período livre (aba Sem uso: últimos 90 dias)
   const J = muralJanela();
   const P = muralPeriodo() || { ini: new Date(J.fim.getFullYear(), J.fim.getMonth(), 1), fim: J.fim };
   if (periodo === 'invs') return { ini: new Date(P.ini.getFullYear(), P.ini.getMonth() - MURAL_RX_MESES, 1), fim: P.fim };

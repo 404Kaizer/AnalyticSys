@@ -241,11 +241,13 @@ function SUD_FONTE() {
   function outras(i, o, uf) {
     if (!uf) return '<p class="sud-hint">Esta central está sem UF no cadastro. Preencha em Configurações › Centrais (botão "Preencher UF") para ver as centrais do mesmo estado.</p>';
     if (!o.length) return `<p class="sud-hint">Nenhuma outra central de ${esc(uf)} usou este material nos últimos 90 dias.</p>`;
-    return `<div class="sud-x"><table class="sud-tab sud-tab-s"><thead><tr><th>Central</th><th class="n">Consumo/mês</th><th class="n">Saldo daqui cobre</th></tr></thead><tbody>
+    // Na tela, a linha abre as Movimentações da central × material (no arquivo não há o app).
+    const mov = cfg.modo === 'tela' && cfg.movs;
+    return `<div class="sud-x"><table class="sud-tab${mov ? '' : ' sud-tab-s'}"><thead><tr><th>Central</th><th class="n">Consumo/mês</th><th class="n">Saldo daqui cobre</th></tr></thead><tbody>
       ${o.map(c => { const m = c.mes ? i.kg / c.mes : Infinity;
-        return `<tr><td>${esc(c.central)}<span class="sud-hint"> · ${esc(c.regional)}</span></td><td class="n">${kgF(c.mes)}</td>
+        return `<tr${mov ? ` onclick="SUD.mov(${ref(cache.cent, c.central)})" title="Abrir as movimentações de ${esc(i.material)} em ${esc(c.central)} (últimos 90 dias)"` : ''}><td>${mov ? '<i class="ti ti-arrows-exchange sud-ico" style="color:var(--accent)" aria-hidden="true"></i>' : ''}${esc(c.central)}<span class="sud-hint"> · ${esc(c.regional)}</span></td><td class="n">${kgF(c.mes)}</td>
           <td class="n" style="color:${m <= 3 ? 'var(--green)' : 'var(--text)'}">${m === Infinity ? '—' : m.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + (m < 2 && m >= 1 ? ' mês' : ' meses')}</td></tr>`; }).join('')}</tbody></table></div>
-      <p class="sud-hint">Média dos últimos 3 meses. Em verde: a central gastaria o saldo parado em até 3 meses, boa candidata para a coleta.</p>`;
+      <p class="sud-hint">Média dos últimos 3 meses. Em verde: a central gastaria o saldo parado em até 3 meses, boa candidata para a coleta.${mov ? ' Clique numa central para ver as movimentações.' : ''}</p>`;
   }
   function regua(i, ev, W) {
     const H = 74, L = 8, Rr = W - 8, ini = i.semHist ? D.ini : i.ultUso, span = Math.max(DIA, D.ref - ini), x = (t) => L + (Rr - L) * Math.min(1, Math.max(0, (t - ini) / span));
@@ -348,7 +350,8 @@ function SUD_FONTE() {
     tlTipo(k) { if (!k) st.tl.clear(); else if (st.tl.has(k)) st.tl.delete(k); else st.tl.add(k); redesenhar(); },
     abrir(idx) { const i = vis[idx]; if (!i) return; st.tl.clear();
       if (cfg.modo === 'tela') { if (typeof window[cfg.abrir] === 'function') window[cfg.abrir](i.k); } else { st.sel = i.k; redesenhar(); } },
-    fechar() { st.sel = null; redesenhar(); }
+    fechar() { st.sel = null; redesenhar(); },
+    mov(n) { const f = window[cfg.movs]; if (typeof f === 'function' && cfg.sel) f(cfg.sel, cache.cent[n]); }
   };
 }
 var SUD = SUD_FONTE();

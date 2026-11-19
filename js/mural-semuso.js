@@ -198,7 +198,7 @@ function suPainelHtml() {
     <button class="btn" style="margin-left:auto" onclick="suRelatorioExportar(this, true)"><i class="ti ti-file-download"></i> Baixar relatório do material</button>` : '';
   const D = _suDados(its);
   if (it) D.det[_moChave(it)] = _suDetalhe(it, _suCtxAcoes());
-  return SUD.html(D, { modo: 'tela', sel: it ? _moChave(it) : null, abrir: 'suSelChave', voltar: 'suSel(null)', acoes,
+  return SUD.html(D, { modo: 'tela', sel: it ? _moChave(it) : null, abrir: 'suSelChave', voltar: 'suSel(null)', movs: 'suMovimentacoes', acoes,
     baixar: '<button class="btn btn-sm" onclick="suRelatorioExportar(this)" title="Baixar o relatório (com os filtros aplicados) num arquivo HTML"><i class="ti ti-file-download"></i> Baixar relatório</button>' });
 }
 
@@ -315,6 +315,21 @@ function _suDetalhe(i, ctx) {
 
 function suSelChave(k) { _su.sel = k; muralRender(); }
 
+// Clique numa central de "Onde este material tem uso": o modal de
+// Movimentações da Visão Micro (o mesmo do Mural) para essa central × o
+// material aberto, nos 90 dias do quadro.
+function suMovimentacoes(k, central) {
+  const it = suItens().find(i => _moChave(i) === k);
+  if (!it || !central || typeof muralRaioXCalcular !== 'function') return;
+  const fim = new Date(_su.calc.ref), ini = new Date(fim);
+  ini.setDate(ini.getDate() - 90);
+  const rx = muralRaioXCalcular(central, it.material, getCatKeyDoCadastro(it.material), { ini, fim });
+  if (!rx) { toast('Não foi possível montar as movimentações.', 'error'); return; }
+  window.__analiticoDetailCache = window.__analiticoDetailCache || new Map();
+  window.__analiticoDetailCache.set('semuso-mov', { ...rx.payload, key: 'semuso-mov' });
+  openAnaliticoDetailModal('semuso-mov');
+}
+
 // Arquivo baixado: o mesmo dashboard (módulo SUD inteiro + dados) no shell
 // dos relatórios do sistema; o material abre na gaveta. Com soItem, o
 // arquivo já abre no material selecionado.
@@ -367,4 +382,4 @@ function suComentar() {
   openVarComModal(b);
 }
 
-Object.assign(window, { suSel, suSelChave, suComentar, suRelatorioExportar });
+Object.assign(window, { suSel, suSelChave, suMovimentacoes, suComentar, suRelatorioExportar });
