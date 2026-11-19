@@ -14170,3 +14170,7 @@ p.sud-hint { margin: 6px 0 0; }
 .cu-pb { padding-left: 12px; padding-right: 12px; }
 .cu-pb th { white-space: nowrap; letter-spacing: .03em; }
 .cu-pb td.n { font-size: 11.5px; }
+#cu-map .agg { fill-opacity: .22; stroke-opacity: .9; cursor: pointer; }
+#cu-map .agg:hover { fill-opacity: .4; }
+#cu-map .lbl.agg { font-family: var(--mono); font-weight: 600; }
+.cu-legend .dica { color: var(--text); font-size: 11.5px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }

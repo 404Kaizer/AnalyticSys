@@ -307,7 +307,7 @@ function _cuMapaInit() {
   CU.proj = d3.geoMercator().fitSize([1000, 1000], CU.br);
   CU.path = d3.geoPath(CU.proj);
   _cuSvg = d3.select('#cu-map'); _cuG = _cuSvg.append('g');
-  ['st', 'mun', 'stl', 'rt', 'hit', 'f', 'c', 'b', 'l'].forEach(k => _cuGr[k] = _cuG.append('g'));
+  ['st', 'mun', 'stl', 'agg', 'rt', 'hit', 'f', 'c', 'b', 'l'].forEach(k => _cuGr[k] = _cuG.append('g'));
   _cuZoom = d3.zoom().scaleExtent([.6, 800]).on('zoom', e => { _cuG.attr('transform', e.transform); if (Math.abs(e.transform.k - CU.K) > 1e-6) { CU.K = e.transform.k; _cuRescale(); } });
   _cuSvg.call(_cuZoom).on('dblclick.zoom', null);
   _cuGr.st.selectAll('path').data(CU.br.features).join('path').attr('class', 'st').attr('d', CU.path)
@@ -343,10 +343,15 @@ function _cuMunDoPonto(uf, ll) { return ll && CU.mun[uf]?.fc.features.find(f => 
 function _cuBounds() {
   const F = CU.F;
   if (F.cen) {
+    // Padrão: central + seus fornecedores (o conteúdo deste nível). "Ver só o município" aproxima.
     const c = CU.cen.get(F.cen), ll = _cuLL(c?.cnpj);
     const m = _cuMunDoPonto(_cuUfCen(c), ll);
-    if (m) return CU.path.bounds(m);
-    if (ll) { const p = CU.proj(ll), r = 1.2; return [[p[0] - r, p[1] - r], [p[0] + r, p[1] + r]]; }
+    let b = m ? CU.path.bounds(m) : ll ? (p => [[p[0] - 1.2, p[1] - 1.2], [p[0] + 1.2, p[1] + 1.2]])(CU.proj(ll)) : null;
+    if (b && !CU.soMun) {
+      const pts = [...new Set(_cuNfsF().filter(n => n.cen === F.cen).map(n => n.forn))].map(_cuXY).filter(Boolean);
+      if (pts.length) b = [[Math.min(b[0][0], ...pts.map(p => p[0] - 4)), Math.min(b[0][1], ...pts.map(p => p[1] - 4))], [Math.max(b[1][0], ...pts.map(p => p[0] + 4)), Math.max(b[1][1], ...pts.map(p => p[1] + 4))]];
+    }
+    if (b) return b;
   }
   if (F.reg) {
     const regs = F.uf ? _cuRegsDaUf(F.uf) : [];
@@ -370,22 +375,24 @@ function _cuFit(b, dur = 750) {
   const t = d3.zoomIdentity.translate(w / 2 - k * (b[0][0] + b[1][0]) / 2, h / 2 - k * (b[0][1] + b[1][1]) / 2).scale(k);
   (dur ? _cuSvg.transition().duration(dur) : _cuSvg).call(_cuZoom.transform, t);
 }
-function _cuFitFornecedores() {
-  const c = CU.cen.get(CU.F.cen), pts = [_cuXY(c?.cnpj), ...[...new Set(_cuNfsF().map(n => n.forn))].map(_cuXY)].filter(Boolean);
-  if (pts.length) _cuFit([[d3.min(pts, p => p[0]) - 4, d3.min(pts, p => p[1]) - 4], [d3.max(pts, p => p[0]) + 4, d3.max(pts, p => p[1]) + 4]]);
-}
+function _cuAlternaMunicipio() { CU.soMun = !CU.soMun; _cuCrumbs(); _cuFit(_cuBounds()); }
 function _cuHeat(ix) { const c = d3.color(_cuCss(ix >= 0 ? '--red' : '--green')) || d3.color('#888'); c.opacity = Math.min(.85, .12 + Math.abs(ix) / .12 * .73); return c + ''; }
 function _cuRtCor(ix) { return _cuCss(ix > .06 ? '--red' : ix > .02 ? '--amber' : ix < -.03 ? '--green' : '--text2'); }
 
+// O mapa revela um nível por clique, para não poluir:
+//   Brasil   → só estados, com bolha de gasto + selo de alertas por estado;
+//   Estado   → uma bolha por regional (estado com várias regionais);
+//   Regional → as centrais;
+//   Central  → rotas, fornecedores com compra e até 10 alternativas em cinza
+//              (os mais próximos que vendem os mesmos materiais).
+// Fornecedor em foco (painel, comparador ou filtro) mostra as rotas dele em qualquer nível.
+function _cuNivel() { const F = CU.F; return F.cen ? 'cen' : F.reg ? 'reg' : F.uf ? 'uf' : 'br'; }
+function _cuFornFoco() { const s = CU.sel; return s?.t === 'forn' ? s.id : s?.t === 'rota' ? s.forn : CU.F.forn || null; }
 function _cuDesenhar() {
   if (!_cuSvg) return;
-  const F = CU.F, L = CU.L, sel = CU.sel, arr = _cuNfsF(), ref = _cuRef(arr);
+  const F = CU.F, L = CU.L, sel = CU.sel, arr = _cuNfsF(), ref = _cuRef(arr), nivel = _cuNivel(), fornFoco = _cuFornFoco();
   const cenPos = new Map();
   CU.cen.forEach(c => { const xy = _cuXY(c.cnpj); if (xy) cenPos.set(c.alias, xy); });
-  const links = Object.entries(_cuGroup(arr, n => n.cen + '\u0001' + n.forn)).map(([k, a]) => { const [c, f] = k.split('\u0001'); const s = _cuAgg(a); return { c, f, a, s, ix: _cuIdx(a, ref), mats: [...s.mats] }; })
-    .filter(l => cenPos.has(l.c) && _cuXY(l.f));
-  const foco = l => sel && ((sel.t === 'forn' && l.f === sel.id) || (sel.t === 'rota' && l.c === sel.cen && l.f === sel.forn) || (sel.t === 'cen' && l.c === sel.id));
-  const fornAtivos = new Set(links.map(l => l.f));
   const cenUfs = new Set([...CU.cen.values()].filter(c => cenPos.has(c.alias)).map(_cuUfCen));
   const ufFoco = F.uf || (F.reg && _cuUfCen([...CU.cen.values()].find(c => c.regional === F.reg) || {}));
   const porUf = L.calor && !ufFoco ? _cuGroup(arr, n => _cuUfCen(CU.cen.get(n.cen))) : {};
@@ -399,54 +406,91 @@ function _cuDesenhar() {
     _cuCarregarMun(ufFoco);
     const m = CU.mun[ufFoco];
     if (m) {
-      const cs = [...CU.cen.values()].filter(c => _cuUfCen(c) === ufFoco && _cuLL(c.cnpj));
       const munSel = F.cen ? _cuMunDoPonto(ufFoco, _cuLL(CU.cen.get(F.cen)?.cnpj)) : null;
       const comCentral = L.calor ? new Map() : null;
-      if (comCentral) cs.forEach(c => { const mm = _cuMunDoPonto(ufFoco, _cuLL(c.cnpj)); if (mm) (comCentral.get(mm) || comCentral.set(mm, []).get(mm)).push(c.alias); });
+      if (comCentral) [...CU.cen.values()].filter(c => _cuUfCen(c) === ufFoco && _cuLL(c.cnpj)).forEach(c => { const mm = _cuMunDoPonto(ufFoco, _cuLL(c.cnpj)); if (mm) (comCentral.get(mm) || comCentral.set(mm, []).get(mm)).push(c.alias); });
       m.sel.attr('class', f => 'mn' + (f === munSel ? ' sel' : ''))
         .style('fill', f => { if (!comCentral || f === munSel) return null; const al = comCentral.get(f); if (!al) return null; const a = arr.filter(n => al.includes(n.cen)); return a.length ? _cuHeat(_cuIdx(a, ref)) : null; });
     }
   }
-  // rotas
+  // rotas: só no nível da central, ou as do fornecedor em foco
+  const base = nivel === 'cen' ? arr.filter(n => n.cen === F.cen) : fornFoco ? arr.filter(n => n.forn === fornFoco) : [];
+  const vis = Object.entries(_cuGroup(base, n => n.cen + '\u0001' + n.forn)).map(([k, a]) => { const [c, f] = k.split('\u0001'); const s = _cuAgg(a); return { c, f, a, s, ix: _cuIdx(a, ref), mats: [...s.mats] }; })
+    .filter(l => cenPos.has(l.c) && _cuXY(l.f));
+  const foco = l => sel && ((sel.t === 'forn' && l.f === sel.id) || (sel.t === 'rota' && l.c === sel.cen && l.f === sel.forn));
   const curva = l => { const a = cenPos.get(l.c), b = _cuXY(l.f), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1]; return `M${b[0]},${b[1]}Q${mx - dy * .18},${my + dx * .18} ${a[0]},${a[1]}`; };
-  const vis = links.filter(l => !F.cen || l.c === F.cen);
   const vmax = d3.max(vis, l => l.s.g) || 1;
   _cuGr.rt.selectAll('path').data(vis, l => l.c + '|' + l.f).join('path').attr('d', curva)
     .attr('class', L.cor ? 'rt flow' : 'rt')
     .style('stroke', l => L.cor ? _cuRtCor(l.ix) : foco(l) ? _cuCss('--text') : _cuCss('--amber'))
-    .style('opacity', l => sel && (sel.t === 'forn' || sel.t === 'rota') ? (foco(l) ? 1 : .12) : (ufFoco ? .85 : L.cor ? .7 : .38))
-    .each(l => { l.w = L.cor ? .8 + 3.2 * Math.sqrt(l.s.g / vmax) : foco(l) ? 2 : 1.2; });
+    .style('opacity', l => nivel === 'cen' && sel && (sel.t === 'forn' || sel.t === 'rota') ? (foco(l) ? 1 : .2) : .85)
+    .each(l => { l.w = L.cor ? .8 + 3.2 * Math.sqrt(l.s.g / vmax) : foco(l) ? 2 : 1.4; });
   _cuGr.hit.selectAll('path').data(vis, l => l.c + '|' + l.f).join('path').attr('class', 'rthit').attr('d', curva)
     .on('mousemove', (e, l) => { const km = _cuKmPar(l.c, l.f); _cuTip(e, `<b>${_cuE(_cuNomeF(l.f))}</b> → <b>${_cuE(CU.cen.get(l.c).nome)}</b><br><span class="mono">${l.mats.map(_cuE).join(', ')}<br>${km ? _cuNf0.format(km) + ' km · ' : ''}${_cuBrlc(l.s.g)}${l.mats.length === 1 ? ' · ' + _cuP(l.mats[0], l.s.pm) : ''}<br>preço vs média: ${_cuPct(l.ix)}${l.s.d ? ` · ${l.s.d} alerta${l.s.d > 1 ? 's' : ''}` : ''}</span>`); })
     .on('mouseleave', _cuTipOff).on('click', (e, l) => { CU.sel = { t: 'rota', cen: l.c, forn: l.f }; CU.tab = 'nfs'; _cuUpdate(false); });
-  // fornecedores: com compra no recorte em destaque; os demais em cinza
-  // Inclui fornecedor só localizado (custos_geo), sem nenhuma compra na base: aparece em cinza.
-  const candidatos = new Set([...CU.fornMats.keys(), ...[...CU.geo.values()].filter(g => g.tipo === 'fornecedor').map(g => g.cnpj)]);
-  const fl = [...candidatos].filter(fk => _cuXY(fk) && (!F.mat || CU.fornMats.get(fk)?.has(F.mat)));
-  const selF = fk => (sel?.t === 'forn' && sel.id === fk) || (sel?.t === 'rota' && sel.forn === fk);
-  _cuGr.f.selectAll('rect').data(fl, fk => fk).join('rect').attr('class', fk => 'forn' + (fornAtivos.has(fk) ? '' : ' off') + (selF(fk) ? ' sel' : ''))
-    .on('mousemove', (e, fk) => { const a = _cuAgg(arr.filter(n => n.forn === fk)), g = CU.geo.get(fk); _cuTip(e, `<b>${_cuE(_cuNomeF(fk))}</b><br><span class="mono">${_cuE((g?.municipio || '') + (g?.uf ? '/' + g.uf : ''))}<br>${a.n ? _cuBrlc(a.g) + ' no recorte' : 'sem compra no recorte'}</span>`); })
+  // fornecedores: os das rotas visíveis + (nível central) alternativas em cinza
+  const ativos = new Set(vis.map(l => l.f));
+  const fl = [...ativos];
+  if (fornFoco && !ativos.has(fornFoco) && _cuXY(fornFoco)) fl.push(fornFoco);
+  if (nivel === 'cen') {
+    const ll = _cuLL(CU.cen.get(F.cen)?.cnpj), mats = new Set(base.map(n => n.mat));
+    if (ll) {
+      const cand = new Set([...CU.fornMats.keys(), ...[...CU.geo.values()].filter(g => g.tipo === 'fornecedor').map(g => g.cnpj)]);
+      [...cand].filter(fk => !ativos.has(fk) && _cuLL(fk) && (!CU.fornMats.has(fk) || [...CU.fornMats.get(fk)].some(m => mats.has(m))) && (!F.mat || !CU.fornMats.has(fk) || CU.fornMats.get(fk).has(F.mat)))
+        .map(fk => ({ fk, km: _cuKm(ll, _cuLL(fk)) })).sort((a, b) => a.km - b.km).slice(0, 10).forEach(x => fl.push(x.fk));
+    }
+  }
+  const selF = fk => fk === fornFoco && (sel?.t === 'forn' || sel?.t === 'rota');
+  _cuGr.f.selectAll('rect').data(fl, fk => fk).join('rect').attr('class', fk => 'forn' + (ativos.has(fk) ? '' : ' off') + (selF(fk) ? ' sel' : ''))
+    .on('mousemove', (e, fk) => { const a = _cuAgg(arr.filter(n => n.forn === fk)), g = CU.geo.get(fk); _cuTip(e, `<b>${_cuE(_cuNomeF(fk))}</b><br><span class="mono">${_cuE((g?.municipio || '') + (g?.uf ? '/' + g.uf : ''))}<br>${a.n ? _cuBrlc(a.g) + ' no recorte' : 'sem compra no recorte (alternativa)'}</span>`); })
     .on('mouseleave', _cuTipOff).on('click', (e, fk) => { CU.sel = { t: 'forn', id: fk }; CU.tab = 'nfs'; _cuUpdate(false); });
   _cuGr.f.selectAll('rect.off').lower();
-  // centrais
+  // centrais: regional (todas dela), central (só ela), ou as das rotas do fornecedor em foco
   const porCen = _cuGroup(arr, 'cen');
-  const cs = [...CU.cen.values()].filter(c => cenPos.has(c.alias) && porCen[c.alias]);
+  const cenVis = nivel === 'reg' ? c => c.regional === F.reg : nivel === 'cen' ? c => c.alias === F.cen : fornFoco ? c => vis.some(l => l.c === c.alias) : () => false;
+  const cs = [...CU.cen.values()].filter(c => cenPos.has(c.alias) && porCen[c.alias] && cenVis(c));
   cs.forEach(c => { const a = _cuAgg(porCen[c.alias]); c._g = a.g; c._nd = a.d; c._xy = cenPos.get(c.alias); });
   const gmax = d3.max(cs, c => c._g) || 1;
-  const porRegional = F.uf && !F.reg && _cuRegsDaUf(F.uf).length > 1;
-  cs.forEach(c => { c._rr = L.calor ? 4 + 9 * Math.sqrt(c._g / gmax) : 5.5; });
+  cs.forEach(c => { c._rr = L.calor ? 4 + 9 * Math.sqrt(c._g / gmax) : 6; });
   _cuGr.c.selectAll('circle').data(cs, c => c.alias).join('circle')
     .attr('class', c => 'cen' + (F.cen === c.alias || (sel?.t === 'cen' && sel.id === c.alias) || (sel?.t === 'rota' && sel.cen === c.alias) ? ' sel' : ''))
-    .attr('cx', c => c._xy[0]).attr('cy', c => c._xy[1])
-    .style('fill', c => porRegional ? _cuCorReg(c.regional) : null).style('fill-opacity', L.calor ? .75 : 1)
+    .attr('cx', c => c._xy[0]).attr('cy', c => c._xy[1]).style('fill-opacity', L.calor ? .75 : 1)
     .on('mousemove', (e, c) => _cuTip(e, `<b>${_cuE(c.nome)}</b><br><span class="mono">${_cuE(c.regional)}<br>${_cuBrlc(c._g)}${c._nd ? ` · ${c._nd} alerta${c._nd > 1 ? 's' : ''} de preço` : ''}</span>`))
     .on('mouseleave', _cuTipOff)
     .on('click', (e, c) => { Object.assign(CU.F, { uf: _cuUfCen(c), reg: c.regional, cen: c.alias }); CU.sel = { t: 'cen', id: c.alias }; CU.tab = 'nfs'; _cuUpdate(true); });
-  _cuGr.b.selectAll('g').data(L.selos ? cs.filter(c => c._nd > 0) : [], c => c.alias)
+  // bolhas de agregado: estados (Brasil) ou regionais (estado)
+  let bol = [];
+  if (!fornFoco && nivel === 'br') {
+    bol = Object.entries(_cuGroup(arr, n => _cuUfCen(CU.cen.get(n.cen)))).filter(([uf]) => uf).map(([uf, a]) => {
+      // Centro do estado (não a média das centrais): estados vizinhos com centrais na divisa não encavalam.
+      const st = CU.br.features.find(f => CU_UFS[f.properties.codarea] === uf);
+      const xy = st ? CU.path.centroid(st) : null;
+      const s = _cuAgg(a); return { id: 'uf' + uf, xy, g: s.g, nd: s.d, nome: uf, cor: 'var(--accent)', tip: `<b>${uf}</b><br><span class="mono">${_cuBrlc(s.g)} · ${_cuRegsDaUf(uf).length} regional(is) · ${s.d} alertas</span>`, ir: () => _cuClicaUf(uf) };
+    });
+  } else if (!fornFoco && nivel === 'uf') {
+    bol = Object.entries(_cuGroup(arr, n => CU.cen.get(n.cen).regional)).map(([reg, a]) => {
+      const pts = [...new Set(a.map(n => n.cen))].map(x => cenPos.get(x)).filter(Boolean);
+      if (!pts.length) return null;
+      const s = _cuAgg(a); return { id: 'rg' + reg, xy: [d3.mean(pts, p => p[0]), d3.mean(pts, p => p[1])], g: s.g, nd: s.d, nome: reg, cor: _cuCorReg(reg), tip: `<b>${_cuE(reg)}</b><br><span class="mono">${_cuBrlc(s.g)} · ${pts.length} centrais · ${s.d} alertas</span>`, ir: () => { F.reg = reg; CU.sel = { t: 'reg', reg }; _cuUpdate(true); } };
+    }).filter(Boolean);
+  }
+  const bmax = d3.max(bol, b => b.g) || 1;
+  bol.forEach(b => { b._xy = b.xy; b._nd = b.nd; b._rr = 10 + 16 * Math.sqrt(b.g / bmax); });
+  _cuGr.agg.selectAll('circle').data(bol.filter(b => b.xy), b => b.id).join('circle').attr('class', 'agg')
+    .attr('cx', b => b.xy[0]).attr('cy', b => b.xy[1]).style('fill', b => b.cor).style('stroke', b => b.cor)
+    .on('mousemove', (e, b) => _cuTip(e, b.tip)).on('mouseleave', _cuTipOff).on('click', (e, b) => { _cuTipOff(); b.ir(); });
+  // selos de alerta
+  _cuGr.b.selectAll('g').data(L.selos ? [...bol.filter(b => b.xy), ...cs].filter(x => x._nd > 0) : [], x => x.id || x.alias)
     .join(en => { const g = en.append('g').attr('class', 'bdg'); g.append('circle'); g.append('text'); return g; })
-    .each(function (c) { d3.select(this).select('text').text(c._nd); });
-  const lb = [...cs.map(c => ({ x: c._xy[0], y: c._xy[1], t: c.nome, f: false, id: 'c' + c.alias })), ...fl.map(fk => { const p = _cuXY(fk); return { x: p[0], y: p[1], t: _cuNomeF(fk), f: true, off: !fornAtivos.has(fk), id: 'f' + fk }; })];
-  _cuGr.l.selectAll('text').data(lb, d => d.id).join('text').attr('class', d => 'lbl' + (d.f ? ' f' : '') + (d.off ? ' off' : '')).text(d => d.t).attr('x', d => d.x);
+    .each(function (x) { d3.select(this).select('text').text(x._nd > 999 ? '999+' : x._nd); });
+  // rótulos (dy em px de tela; só do que está visível)
+  const lb = [
+    // Nível Brasil: a sigla do estado já está no mapa e o valor fica no tooltip (estados vizinhos encavalariam).
+    ...(nivel === 'uf' ? bol.filter(b => b.xy).map(b => ({ id: 'b' + b.id, x: b.xy[0], y: b.xy[1], t: b.nome + ' · ' + _cuBrlc(b.g), cls: 'lbl agg', dy: b._rr + 12 })) : []),
+    ...cs.map(c => ({ id: 'c' + c.alias, x: c._xy[0], y: c._xy[1], t: c.nome, cls: 'lbl', dy: -10 })),
+    ...fl.map(fk => { const p = _cuXY(fk); return { id: 'f' + fk, x: p[0], y: p[1], t: _cuNomeF(fk), cls: 'lbl f' + (ativos.has(fk) ? '' : ' off'), dy: -9 }; }),
+  ];
+  _cuGr.l.selectAll('text').data(lb, d => d.id).join('text').attr('class', d => d.cls).text(d => d.t).attr('x', d => d.x);
   _cuRescale();
 }
 function _cuRescale() {
@@ -454,11 +498,12 @@ function _cuRescale() {
   const k = CU.K;
   _cuGr.rt.selectAll('path').style('stroke-width', l => l.w / k).style('stroke-dasharray', CU.L.cor ? `${6 / k} ${5 / k}` : `${3 / k} ${3 / k}`);
   _cuGr.hit.selectAll('path').style('stroke-width', 10 / k);
+  _cuGr.agg.selectAll('circle').attr('r', b => b._rr / k).style('stroke-width', 1.5 / k);
   _cuGr.c.selectAll('circle').attr('r', c => c._rr / k).style('stroke-width', 1.5 / k);
   _cuGr.f.selectAll('rect').each(function (fk) { const p = _cuXY(fk), s = (this.classList.contains('off') ? 6 : 8) / k; d3.select(this).attr('x', p[0] - s / 2).attr('y', p[1] - s / 2).attr('width', s).attr('height', s).attr('transform', `rotate(45 ${p[0]} ${p[1]})`).style('stroke-width', 1.3 / k); });
-  _cuGr.b.selectAll('g').each(function (c) { const x = c._xy[0] + 7 / k, y = c._xy[1] - 7 / k; d3.select(this).select('circle').attr('cx', x).attr('cy', y).attr('r', 6.5 / k).style('stroke-width', 1.2 / k); d3.select(this).select('text').attr('x', x).attr('y', y).style('font-size', (8.5 / k) + 'px'); });
+  _cuGr.b.selectAll('g').each(function (x) { const o = (x._rr || 6) * .72 + 3, cx = x._xy[0] + o / k, cy = x._xy[1] - o / k; d3.select(this).select('circle').attr('cx', cx).attr('cy', cy).attr('r', (x._nd > 99 ? 9 : 7) / k).style('stroke-width', 1.2 / k); d3.select(this).select('text').attr('x', cx).attr('y', cy).style('font-size', ((x._nd > 99 ? 7.5 : 8.5) / k) + 'px'); });
   _cuGr.stl.selectAll('text').style('font-size', (11 / k) + 'px').style('display', k > 2.6 ? 'none' : null);
-  _cuGr.l.selectAll('text').style('font-size', (11 / k) + 'px').attr('y', d => d.y - 9 / k).style('stroke-width', 3 / k).style('display', d => (d.f ? k >= 7 : k >= 2.5) ? null : 'none');
+  _cuGr.l.selectAll('text').style('font-size', (11 / k) + 'px').attr('y', d => d.y + d.dy / k).style('stroke-width', 3 / k);
 }
 
 /* ───────── migalhas, legenda, filtros ───────── */
@@ -478,18 +523,24 @@ function _cuCrumbs() {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'c reg'; b.style.setProperty('--rc', _cuCorReg(r)); b.textContent = r;
     b.onclick = () => { F.reg = r; CU.sel = { t: 'reg', reg: r }; _cuUpdate(true); }; el.append(b);
   });
-  if (F.cen) { const b = document.createElement('button'); b.type = 'button'; b.className = 'c'; b.textContent = 'Enquadrar fornecedores'; b.onclick = _cuFitFornecedores; el.append(b); }
+  if (F.cen) { const b = document.createElement('button'); b.type = 'button'; b.className = 'c'; b.textContent = CU.soMun ? 'Ver fornecedores' : 'Ver só o município'; b.onclick = _cuAlternaMunicipio; el.append(b); }
 }
 function _cuLegenda() {
-  const L = CU.L; let h = `<div class="lyr"><b>Camadas</b>
+  // Legenda e dica mudam com o nível: só explica o que está desenhado.
+  const L = CU.L, nivel = _cuNivel(), rotas = nivel === 'cen' || !!_cuFornFoco();
+  const dica = rotas ? 'Clique numa rota ou fornecedor para detalhar' : { br: 'Clique num estado para ver as regionais', uf: 'Clique numa regional para ver as centrais', reg: 'Clique numa central para ver os fornecedores' }[nivel];
+  let h = `<div class="dica">${dica}</div><div class="lyr"><b>Camadas</b>
     <label><input type="checkbox" data-l="selos"${L.selos ? ' checked' : ''}> Selos de alerta</label>
-    <label><input type="checkbox" data-l="cor"${L.cor ? ' checked' : ''}> Rotas coloridas por preço</label>
-    <label><input type="checkbox" data-l="calor"${L.calor ? ' checked' : ''}> Mapa de calor</label></div>
-    <div class="r"><i style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></i>Central</div>
-    <div class="r"><i style="width:8px;height:8px;background:var(--amber);transform:rotate(45deg);margin:0 1px"></i>Fornecedor com compra</div>
-    <div class="r"><i style="width:7px;height:7px;background:var(--text3);transform:rotate(45deg);margin:0 2px"></i>Fornecedor sem compra</div>`;
-  h += L.cor ? `<div class="r"><i style="width:18px;height:3px;background:var(--red)"></i>rota &gt; 6% acima da média</div><div class="r"><i style="width:18px;height:3px;background:var(--amber)"></i>2 a 6% acima</div><div class="r"><i style="width:18px;height:3px;background:var(--green)"></i>abaixo da média</div><div class="r" style="color:var(--text3)">espessura = gasto</div>`
-    : `<div class="r"><i style="width:18px;border-top:2px dashed var(--amber)"></i>Fornecimento no mês</div>`;
+    ${rotas ? `<label><input type="checkbox" data-l="cor"${L.cor ? ' checked' : ''}> Rotas coloridas por preço</label>` : ''}
+    <label><input type="checkbox" data-l="calor"${L.calor ? ' checked' : ''}> Mapa de calor</label></div>`;
+  if ((nivel === 'br' || nivel === 'uf') && !rotas) h += `<div class="r"><i style="width:12px;height:12px;border-radius:50%;background:color-mix(in srgb,var(--accent) 30%,transparent);border:1px solid var(--accent)"></i>${nivel === 'br' ? 'Estado' : 'Regional'} · tamanho = gasto no mês</div>`;
+  if (nivel === 'reg' || rotas) h += `<div class="r"><i style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></i>Central</div>`;
+  if (rotas) {
+    h += `<div class="r"><i style="width:8px;height:8px;background:var(--amber);transform:rotate(45deg);margin:0 1px"></i>Fornecedor com compra</div>`;
+    if (nivel === 'cen') h += `<div class="r"><i style="width:7px;height:7px;background:var(--text3);transform:rotate(45deg);margin:0 2px"></i>Alternativa sem compra (mais próximas)</div>`;
+    h += L.cor ? `<div class="r"><i style="width:18px;height:3px;background:var(--red)"></i>rota &gt; 6% acima da média</div><div class="r"><i style="width:18px;height:3px;background:var(--amber)"></i>2 a 6% acima</div><div class="r"><i style="width:18px;height:3px;background:var(--green)"></i>abaixo da média</div><div class="r" style="color:var(--text3)">espessura = gasto</div>`
+      : `<div class="r"><i style="width:18px;border-top:2px dashed var(--amber)"></i>Fornecimento no mês</div>`;
+  }
   if (L.calor) h += `<div class="r"><i class="grad" style="background:linear-gradient(90deg,var(--green),var(--bg3) 50%,var(--red))"></i></div><div class="r" style="justify-content:space-between;width:120px;color:var(--text3)"><span>−12%</span><span>média</span><span>+12%</span></div>`;
   if (L.selos) h += `<div class="r"><i style="width:12px;height:12px;border-radius:50%;background:var(--red)"></i>NFs em alerta de preço</div>`;
   const el = document.getElementById('cu-legend'); el.innerHTML = h;
@@ -779,6 +830,7 @@ window.cuToggleMonthPicker = function () {
 
 /* ───────── ciclo ───────── */
 function _cuUpdate(refit) {
+  if (CU.F.cen !== CU._cenAnt) { CU.soMun = false; CU._cenAnt = CU.F.cen; } // outra central: volta a enquadrar os fornecedores
   const temMes = _cuMes(CU.mes).length > 0;
   _cuVazio(!CU.nNfs ? 'Nenhuma entrada com material, peso e valor na base. Importe as Entradas para montar os custos.' : !temMes ? `Nenhuma NF em ${_cuYmTxt(CU.mes)}. Escolha outro mês.` : '');
   _cuFiltros(); _cuCrumbs(); _cuLegenda(); _cuDesenhar(); _cuStrip(); _cuPainel();
