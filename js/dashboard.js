@@ -9124,6 +9124,7 @@ const pageRenderers = {
   filiais: () => renderFiliais(),
   materiais: () => renderMateriais(),
   ocorrencias: () => renderOcorrenciasPage(),
+  custos: () => { if (typeof custosRender === 'function') custosRender(); },
   admin: () => { if (typeof renderAdminPage === 'function') renderAdminPage(); },
   // Analítico/Inventário não se redesenham ao abrir (o usuário roda por
   // período) — só quando o cadastro mudou desde a última vez que rodaram

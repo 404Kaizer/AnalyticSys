@@ -221,6 +221,14 @@
         </span>
       </button>
 
+      <button class="tab-item" onclick="navigate('custos')" data-page="custos" data-label="Custos">
+        <span class="tab-icon" style="--tab-color: var(--teal)"><i class="ti ti-map-2"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Custos</span>
+          <span class="tab-sub">fornecedores, rotas e preços</span>
+        </span>
+      </button>
+
       <div class="tab-group-label">Movimentações</div>
 
       <button class="tab-item" onclick="navigate('entradas')" data-page="entradas" data-label="Entradas (NF)">
@@ -2178,6 +2186,47 @@
       <div class="page" id="page-solicitacoes">
         <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-inbox" style="font-size:13px;margin-right:6px"></i>Registros Operacionais</div>
         <div id="sol-page-body"></div>
+      </div>
+
+      <!-- CUSTOS — mapa de fornecedores, rotas, preços e alertas (ADM + INSUMOS; ver js/custos.js) -->
+      <div class="page" id="page-custos">
+        <div class="cu-toolbar">
+          <div class="cal-picker-wrap" id="cu-month-wrap">
+            <button class="cal-picker-trigger has-value" id="cu-month-trigger" onclick="cuToggleMonthPicker()" type="button">
+              <i class="ti ti-calendar-event"></i><span id="cu-month-label">Selecionar mês</span><i class="ti ti-chevron-down cal-chev"></i>
+            </button>
+            <div class="cal-picker-dropdown" id="cu-month-dropdown"><div class="cal-picker-inner" id="cu-month-inner"></div></div>
+          </div>
+          <label class="cu-f">Regional<select class="form-select" id="cu-f-reg"></select></label>
+          <label class="cu-f">Central<select class="form-select" id="cu-f-cen"></select></label>
+          <label class="cu-f">Material<select class="form-select" id="cu-f-mat"></select></label>
+          <label class="cu-f">Fornecedor<select class="form-select" id="cu-f-forn"></select></label>
+          <label class="cu-tog"><input type="checkbox" id="cu-f-div"> Só NFs em alerta</label>
+          <button class="cu-btn" id="cu-f-clear" type="button">Limpar</button>
+          <span class="cu-status" id="cu-status"></span>
+        </div>
+        <div class="cu-main" id="cu-main">
+          <div class="cu-mapcol">
+            <div class="cu-mapwrap" id="cu-mapwrap">
+              <svg id="cu-map" role="img" aria-label="Mapa com centrais e fornecedores"></svg>
+              <div class="cu-crumbs" id="cu-crumbs"></div>
+              <div class="cu-legend" id="cu-legend"></div>
+              <div class="cu-zoom"><button type="button" id="cu-z-in" title="Aproximar">+</button><button type="button" id="cu-z-out" title="Afastar">−</button><button type="button" id="cu-z-fit" title="Enquadrar"><i class="ti ti-arrows-maximize"></i></button></div>
+              <div class="cu-empty" id="cu-empty" hidden></div>
+            </div>
+            <div class="cu-strip" id="cu-strip"></div>
+          </div>
+          <aside class="cu-panel" id="cu-panel"></aside>
+        </div>
+        <div class="cu-tip" id="cu-tip" hidden></div>
+        <div class="cu-modal" id="cu-com" hidden>
+          <div class="cu-mbox" role="dialog" aria-modal="true" aria-labelledby="cu-com-lbl">
+            <div class="cu-mh"><div><span>Comentários do analista</span><b id="cu-com-lbl"></b></div><button class="cu-x" id="cu-com-x" title="Fechar" type="button">×</button></div>
+            <div id="cu-com-list"></div>
+            <form id="cu-com-form"><textarea id="cu-com-txt" placeholder="Registre o que foi verificado, a causa ou a decisão sobre essa comparação"></textarea>
+              <div class="cu-mact"><button class="cu-btn" id="cu-com-cancel" type="button">Fechar</button><button class="cu-btn cu-pri" id="cu-com-salvar" type="submit">Salvar comentário</button></div></form>
+          </div>
+        </div>
       </div>
 
       <!-- COBRANÇAS (ver js/cobrancas.js) -->
@@ -6447,6 +6496,7 @@
 <script defer src="js/dai.js"></script>
 <script defer src="js/cobrancas.js"></script>
 <script defer src="js/solicitacoes.js"></script>
+<script defer src="js/custos.js"></script>
 
 <!-- ═══ MODAL: Nova/Editar Ocorrência ═══ -->
 <div class="modal-overlay" id="oc-modal" role="dialog" aria-modal="true">
