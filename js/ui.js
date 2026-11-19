@@ -876,7 +876,7 @@ const colFilterMeta = {
   custosSap:   { tbodyId: 'tb-custos-sap',  fields: [null, r => (typeof _custosSapResolveMaterial === 'function' ? _custosSapResolveMaterial(r) : ''),'material','central','ano','mes','estoqueTotal','valorTotal','custo',null] },
   imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
   configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
-  filiais:     { tbodyId: 'tb-filiais',     fields: [null,'origem','alias','cnpj','regional',null,'created',null] },
+  filiais:     { tbodyId: 'tb-filiais',     fields: [null,'origem','alias','cnpj','uf','regional',null,'created',null] },
   materiais:   { tbodyId: 'tb-materiais',   fields: [null,'origem','alias','codSap','categoria',null,'created',null] },
 };
 

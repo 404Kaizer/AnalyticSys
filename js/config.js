@@ -383,8 +383,8 @@ const _IMPORTAR_DE_CFG = {
     lista: () => state.filiais,
     chave: filialMatchKey,
     upsert: upsertFiliais,
-    campos: 'origem, alias, cnpj, regional, import_id',
-    normalizar: r => ({ origem: r.origem, alias: r.alias, cnpj: r.cnpj || '', regional: r.regional || '' }),
+    campos: 'origem, alias, cnpj, uf, regional, import_id',
+    normalizar: r => ({ origem: r.origem, alias: r.alias, cnpj: r.cnpj || '', uf: _ufNorm(r.uf), regional: r.regional || '' }),
     singular: 'central', plural: 'centrais',
     novosLabel: n => n === 1 ? 'central nova' : 'centrais novas',
     rotulo: it => `${escapeHtml(it.origem)} <span style="color:var(--text3)">— ${escapeHtml(it.alias)}</span>`,
@@ -1500,6 +1500,7 @@ function normalizeImportedFilial(item, importId) {
     origem: String(src.origem || '').trim(),
     alias: String(src.alias || '').trim(),
     cnpj: String(src.cnpj || '').trim(),
+    uf: _ufNorm(src.uf),
     regional: String(src.regional || '').trim(),
     created: src.created || new Date().toLocaleDateString('pt-BR'),
     importId
@@ -1886,6 +1887,8 @@ function abrirCadastroFilialIndividual(prefill) {
     const aliasInput    = row.querySelector('[data-field="alias"]');
     const cnpjInput     = row.querySelector('[data-field="cnpj"]');
     const regionalInput = row.querySelector('[data-field="regional"]');
+    const ufInput       = row.querySelector('[data-field="uf"]');
+    if (ufInput)       ufInput.value       = _ufNorm(prefill.uf);
     if (origemInput)   origemInput.value   = prefill.origem   || '';
     if (aliasInput)    aliasInput.value    = prefill.alias    || '';
     if (cnpjInput)     cnpjInput.value     = prefill.cnpj     || '';
@@ -1945,6 +1948,7 @@ function abrirEdicaoFiliaisEmLote(recs) {
     row.querySelector('[data-field="origem"]').value = rec.origem || '';
     row.querySelector('[data-field="alias"]').value = rec.alias || '';
     row.querySelector('[data-field="cnpj"]').value = rec.cnpj || '';
+    row.querySelector('[data-field="uf"]').value = _ufNorm(rec.uf);
     if (rec.regional) row.querySelector('[data-field="regional"]').value = rec.regional;
   });
   _setModalCadastroModo({ modalId: 'modal-filiais-individual', btnId: 'btn-salvar-filial-indiv', icone: 'ti-map-pin', singular: 'Central', plural: 'Centrais', editando: true, qtd: recs.length });
@@ -2059,6 +2063,10 @@ function _addFilialIndivRow() {
       <input type="text" class="form-input" data-field="cnpj" placeholder="00.000.000/0000-00">
     </div>
     <div class="form-group">
+      <label class="form-label">UF</label>
+      <input type="text" class="form-input" data-field="uf" placeholder="RJ" maxlength="2" style="text-transform:uppercase">
+    </div>
+    <div class="form-group">
       <label class="form-label">Regional</label>
       <div style="display:flex; gap:6px">
         <select class="form-select" data-field="regional" style="flex:1; min-width:0">
@@ -2084,11 +2092,12 @@ async function salvarFiliaisIndividual(btn) {
     const alias    = row.querySelector('[data-field="alias"]')?.value.trim()    || '';
     const cnpj     = row.querySelector('[data-field="cnpj"]')?.value.trim()     || '';
     const regional = row.querySelector('[data-field="regional"]')?.value.trim() || '';
+    const uf       = _ufNorm(row.querySelector('[data-field="uf"]')?.value);
     if (!origem || !alias) return; // linha em branco ou incompleta — ignora silenciosamente
     if (row.dataset.editOrigemOrig !== undefined) {
-      toEdit.push({ origem, alias, cnpj, regional, origemOriginal: row.dataset.editOrigemOrig, aliasOriginal: row.dataset.editAliasOrig });
+      toEdit.push({ origem, alias, cnpj, uf, regional, origemOriginal: row.dataset.editOrigemOrig, aliasOriginal: row.dataset.editAliasOrig });
     } else {
-      toCreate.push({ origem, alias, cnpj, regional, created: new Date().toLocaleDateString('pt-BR') });
+      toCreate.push({ origem, alias, cnpj, uf, regional, created: new Date().toLocaleDateString('pt-BR') });
     }
   });
 
@@ -2114,7 +2123,7 @@ function editarFiliais(items) {
   (items || []).forEach(item => {
     const idx = state.filiais.findIndex(f => normalizeText(f.origem) === normalizeText(item.origemOriginal) && normalizeText(f.alias) === normalizeText(item.aliasOriginal));
     if (idx < 0) return;
-    const rec = { ...state.filiais[idx], origem: item.origem, alias: item.alias, cnpj: item.cnpj, regional: item.regional };
+    const rec = { ...state.filiais[idx], origem: item.origem, alias: item.alias, cnpj: item.cnpj, uf: item.uf, regional: item.regional };
     state.filiais[idx] = rec;
     registrarRegionalCentral(rec.regional);
     _filiaisSyncUpdate(item.origemOriginal, item.aliasOriginal, rec);
@@ -2132,7 +2141,7 @@ function _filiaisSyncUpdate(oldOrigem, oldAlias, rec) {
   const ownerId = rec.donoId || window.currentUser?.id;
   if (!ownerId) return;
   window.supabaseClient.from('filiais')
-    .update({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null })
+    .update({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, uf: rec.uf || null, regional: rec.regional || null })
     .eq('user_id', ownerId).eq('origem', oldOrigem).eq('alias', oldAlias)
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao atualizar filial:', error); });
 }
@@ -2144,6 +2153,43 @@ function filialMatchKey(item) {
   return [normalizeText(item?.origem), normalizeText(item?.alias)].join('||');
 }
 
+// UF da central (Hugo, 19/11/2026) — só aceita as 27 siglas; o resto vira ''.
+const UFS_BR = new Set('AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' '));
+function _ufNorm(v) { const u = String(v || '').trim().toUpperCase(); return UFS_BR.has(u) ? u : ''; }
+
+// "Preencher UF": consulta o CNPJ de cada central sem UF na BrasilAPI (dado
+// público da Receita) e grava de uma vez. Central sem CNPJ válido fica para
+// preencher à mão no cadastro.
+async function preencherUfFiliais(btn) {
+  const semUf = (state.filiais || []).filter(f => !f.uf);
+  const alvo = semUf.filter(f => String(f.cnpj || '').replace(/\D/g, '').length === 14);
+  const semCnpj = semUf.length - alvo.length;
+  if (!alvo.length) { toast(semUf.length ? `${semCnpj} central(is) sem UF e sem CNPJ válido: preencha à mão no cadastro` : 'Todas as centrais já têm UF'); return; }
+  _setBtnLoading(btn, true, `Consultando ${alvo.length} CNPJ...`);
+  const porCnpj = new Map();
+  let ok = 0, falha = 0;
+  try {
+    for (const f of alvo) {
+      const c = String(f.cnpj).replace(/\D/g, '');
+      if (!porCnpj.has(c)) {
+        let uf = '';
+        try { const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${c}`); if (r.ok) uf = _ufNorm((await r.json()).uf); } catch (_) { /* fica sem UF */ }
+        porCnpj.set(c, uf);
+        // ponytail: ritmo fixo para não esbarrar no limite da BrasilAPI; se ficar lento com muitas centrais, consultar em lotes paralelos.
+        await new Promise(res => setTimeout(res, 300));
+      }
+      const uf = porCnpj.get(c);
+      if (!uf) { falha++; continue; }
+      f.uf = uf; ok++;
+      _filiaisSyncUpdate(f.origem, f.alias, f);
+    }
+  } finally { _setBtnLoading(btn, false); }
+  invalidateFilialLookup();
+  await aplicarMudancaCadastro({ centrais: true });
+  toast(`UF preenchida em ${ok} central(is)${falha ? ` · ${falha} sem resposta da consulta` : ''}${semCnpj ? ` · ${semCnpj} sem CNPJ` : ''}`, falha && !ok ? 'error' : undefined);
+}
+window.preencherUfFiliais = preencherUfFiliais;
+
 // Sincroniza com Supabase TODO cadastro de filial — manual ou importado em
 // lote (Fase 4, Etapa 2; até aqui só o manual sincronizava). Guarda
 // import_id na nuvem para a futura etapa de exclusão em cascata (Fase 4,
@@ -2151,7 +2197,7 @@ function filialMatchKey(item) {
 function _filiaisSyncUpsert(rec) {
   if (!window.supabaseClient) return;
   window.supabaseClient.from('filiais')
-    .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }, { onConflict: 'user_id,origem,alias' })
+    .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, uf: rec.uf || null, regional: rec.regional || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }, { onConflict: 'user_id,origem,alias' })
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar filial:', error); });
 }
 
@@ -2159,7 +2205,7 @@ function _filiaisSyncUpsert(rec) {
 // subiram pra nuvem. Mesmo padrão de _materiaisSyncUpsertBatch.
 async function _filiaisSyncUpsertBatch(recs) {
   if (!window.supabaseClient || !recs || !recs.length) return;
-  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }));
+  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, uf: rec.uf || null, regional: rec.regional || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }));
   for (let i = 0; i < rows.length; i += CADASTRO_SYNC_BATCH_SIZE) {
     const { error } = await window.supabaseClient.from('filiais').upsert(rows.slice(i, i + CADASTRO_SYNC_BATCH_SIZE), { onConflict: 'user_id,origem,alias' });
     if (error) { console.warn('[Supabase] Falha ao sincronizar lote de filiais:', error); break; }
@@ -2182,7 +2228,7 @@ async function syncFiliaisFromSupabase() {
     // outro usuário é opt-in via "Importar de". Supervisão continua
     // irrestrita (não passa por aqui).
     const { data, error } = await window.supabaseClient.from('filiais')
-      .select('user_id, origem, alias, cnpj, regional, import_id, created_at, origem_usuario_id')
+      .select('user_id, origem, alias, cnpj, uf, regional, import_id, created_at, origem_usuario_id')
       .eq('user_id', window.currentUser?.id);
     if (error) throw error;
     // O BANCO MANDA (30/07) — ver syncMateriaisFromSupabase pro mesmo motivo:
@@ -2196,7 +2242,7 @@ async function syncFiliaisFromSupabase() {
         // _filiaisSyncUpdate() quando o Supervisor edita a central de outro.
         donoId: r.user_id,
         importadoDeId: r.origem_usuario_id || undefined,
-        origem: r.origem, alias: r.alias, cnpj: r.cnpj, regional: r.regional,
+        origem: r.origem, alias: r.alias, cnpj: r.cnpj, uf: _ufNorm(r.uf), regional: r.regional,
         importId: r.import_id || undefined,
         created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : (existenteLocal?.created || new Date().toLocaleDateString('pt-BR')),
       };
@@ -2244,7 +2290,7 @@ function parseFiliaisRows(rows) {
   };
 
   const headerLooksLikeMeta = header.some(h => [
-    'ORIGEM', 'ORIGINAL', 'ALIAS', 'SIGLA', 'DESCRICAO', 'DESCRIÇÃO', 'FILIAL', 'CENTRAL', 'CNPJ', 'REGIONAL'
+    'ORIGEM', 'ORIGINAL', 'ALIAS', 'SIGLA', 'DESCRICAO', 'DESCRIÇÃO', 'FILIAL', 'CENTRAL', 'CNPJ', 'UF', 'REGIONAL'
   ].includes(h));
 
   let startRow = 0;
@@ -2252,6 +2298,7 @@ function parseFiliaisRows(rows) {
   let aliasIdx = 1;
   let cnpjIdx = 2;
   let regionalIdx = 3;
+  let ufIdx = -1;
 
   if (headerLooksLikeMeta) {
     startRow = 1;
@@ -2259,6 +2306,7 @@ function parseFiliaisRows(rows) {
     aliasIdx    = findIdx('alias', 'sigla', 'padronizada', 'central padrão', 'central padrao');
     cnpjIdx     = findIdx('cnpj', 'cpf cnpj', 'documento');
     regionalIdx = findIdx('regional', 'regiao', 'região', 'responsavel', 'responsável', 'gestor');
+    ufIdx       = findIdx('uf', 'estado');
     if (origemIdx < 0) origemIdx = 0;
     if (aliasIdx < 0) aliasIdx = 1;
     if (cnpjIdx < 0) cnpjIdx = 2;
@@ -2270,6 +2318,7 @@ function parseFiliaisRows(rows) {
     alias:    String(row[aliasIdx]    || '').trim(),
     cnpj:     String(row[cnpjIdx]     || '').trim(),
     regional: String(row[regionalIdx] || '').trim(),
+    uf:       ufIdx >= 0 ? _ufNorm(row[ufIdx]) : '',
     created: new Date().toLocaleDateString('pt-BR')
   })).filter(r => r.origem && r.alias);
 }
@@ -2425,6 +2474,7 @@ function exportarFiliaisExcel() {
     'Origem': f.origem || '',
     'Sigla': f.alias || '',
     'CNPJ': f.cnpj || '',
+    'UF': f.uf || '',
     'Regional': f.regional || ''
   }));
 

@@ -3649,6 +3649,9 @@
               <button class="btn" onclick="exportarFiliaisExcel()">
                 <i class="ti ti-file-spreadsheet"></i> Exportar Excel
               </button>
+              <button class="btn" onclick="preencherUfFiliais(this)" title="Consulta o CNPJ de cada central sem UF (BrasilAPI, dados públicos da Receita) e preenche o estado de todas de uma vez">
+                <i class="ti ti-map-2"></i> Preencher UF
+              </button>
               <button class="btn js-atualizar-cadastros" onclick="atualizarCadastros()" title="Reaplica o cadastro atual de Centrais e Materiais sobre Entradas, Saídas, Lançamentos e SAP já importados, e atualiza todas as telas que dependem desses cadastros">
                 <i class="ti ti-refresh"></i> Atualizar Cadastros
               </button>
@@ -3668,6 +3671,7 @@
                   <th>Original</th>
                   <th>Sigla</th>
                   <th>CNPJ</th>
+                  <th>UF</th>
                   <th>Regional</th>
                   <th>Dono</th>
                   <th>Criado em</th>
@@ -3675,7 +3679,7 @@
                 </tr>
               </thead>
               <tbody id="tb-filiais">
-                <tr><td colspan="8"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>
+                <tr><td colspan="9"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>
               </tbody>
             </table>
           </div>

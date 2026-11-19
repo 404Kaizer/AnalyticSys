@@ -6996,7 +6996,7 @@ function renderFiliais() {
   const { data, pageData } = getListPageData('filiais');
   updateListPageInfo('filiais');
   if (!data.length) {
-    tb.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>';
     renderPendenciasPadronizacao();
     _renderNovosPendentesBox('filiais');
     return;
@@ -7007,6 +7007,7 @@ function renderFiliais() {
       <td class="td-mono">${f.origem}</td>
       <td class="td-mono">${f.alias}</td>
       <td class="td-muted">${f.cnpj || '—'}</td>
+      <td class="td-muted">${f.uf || '—'}</td>
       <td class="td-muted">${f.regional || '—'}</td>
       <td class="td-muted">${_donoDisplay(f)}</td>
       <td class="td-muted">${f.created || '—'}</td>

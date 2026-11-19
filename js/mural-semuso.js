@@ -258,9 +258,11 @@ function _suDetalhe(i, ctx) {
   });
   serie.forEach(m => { m.c = Math.max(0, m.c); delete m.a; delete m.b; });
 
+  // Só centrais do mesmo estado (UF do cadastro de filiais — Hugo, 19/11/2026).
   const outras = [], lim = refTs - 90 * DIA, fil = getFilialLookupIndex().exact;
+  const ufDe = (c) => String(fil.get(normalizeText(c))?.uf || "").toUpperCase(), uf = ufDe(i.central);
   for (const [c, mats] of getSapIndex().byCentralMat) {
-    const a2 = c !== i.central && mats.get(i.material);
+    const a2 = uf && c !== i.central && ufDe(c) === uf && mats.get(i.material);
     if (!a2) continue;
     let cons = 0, u = 0;
     a2.forEach(r => { const ts = parseDateTs(r.dtLanc); if (ts === null || ts < lim || !uso(r)) return; cons -= num(r.peso); if (ts > u) u = ts; });
@@ -308,7 +310,7 @@ function _suDetalhe(i, ctx) {
       [r.motivo ? `Motivo ${r.motivo}` : '', r.status ? `Status: ${r.status}` : ''].filter(Boolean).join(' · '));
   });
   ev.sort((a, b) => a.d - b.d);
-  return { serie, outras: outras.slice(0, 8), ev };
+  return { serie, outras: outras.slice(0, 8), uf, ev };
 }
 
 function suSelChave(k) { _su.sel = k; muralRender(); }
