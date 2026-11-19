@@ -13888,3 +13888,24 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .sol-btn-excluir { color: var(--text3); }
 .sol-btn-excluir:hover { color: var(--red); border-color: var(--red-border); background: var(--red-bg); }
 .sol-det-tabela th, .sol-det-tabela td { padding: 8px 12px; }
+/* Operações · relatório Sem uso (19/11/2026): KPIs, barras e tabela — sem script, vale no HTML baixado */
+.su-rel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.su-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 18px; }
+.su-kpi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.su-kpi b { font-family: var(--mono); font-size: 22px; font-weight: 500; white-space: nowrap; }
+.su-kpi small { font-size: 12px; color: var(--text3); }
+.su-graf { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.su-bar { display: grid; grid-template-columns: minmax(90px, 30%) minmax(60px, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; padding: 3px 0; }
+.su-bar-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.su-bar-n small, .su-bar-v small { display: block; font-size: 11.5px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; }
+.su-bar-t { height: 10px; border-radius: 5px; background: var(--bg4); display: flex; overflow: hidden; }
+.su-bar-t i { display: block; height: 100%; }
+.su-bar-v { text-align: right; white-space: nowrap; }
+.su-bar-v b { font-family: var(--mono); font-weight: 500; }
+.su-tab-wrap { overflow-x: auto; margin: 0 -4px; }
+.su-tab { width: 100%; border-collapse: collapse; font-size: 13px; }
+.su-tab th { text-align: left; font-weight: 500; color: var(--text2); padding: 6px 8px; border-bottom: 1px solid var(--border3); white-space: nowrap; position: sticky; top: 0; background: var(--bg2); }
+.su-tab td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.su-tab td small { color: var(--text3); }
+.su-tab .n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.su-tab tbody tr:hover { background: var(--bg3); }
