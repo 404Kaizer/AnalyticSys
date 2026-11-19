@@ -393,13 +393,14 @@ function _cuDesenhar() {
   const F = CU.F, L = CU.L, sel = CU.sel, arr = _cuNfsF(), ref = _cuRef(arr), nivel = _cuNivel(), fornFoco = _cuFornFoco();
   const cenPos = new Map();
   CU.cen.forEach(c => { const xy = _cuXY(c.cnpj); if (xy) cenPos.set(c.alias, xy); });
-  const cenUfs = new Set([...CU.cen.values()].filter(c => cenPos.has(c.alias)).map(_cuUfCen));
+  // Estado destacado = tem central (com UF), mesmo que ela ainda não tenha coordenada.
+  const cenUfs = new Set([...CU.cen.values()].filter(c => cenPos.has(c.alias) || CU.cenComCompra?.has(c.alias)).map(_cuUfCen).filter(Boolean));
   const ufFoco = F.uf || (F.reg && _cuUfCen([...CU.cen.values()].find(c => c.regional === F.reg) || {}));
   const porUf = L.calor && !ufFoco ? _cuGroup(arr, n => _cuUfCen(CU.cen.get(n.cen))) : {};
   // estados (+ calor no nível Brasil)
   _cuGr.st.selectAll('path').attr('class', f => { const uf = CU_UFS[f.properties.codarea]; return 'st' + (cenUfs.has(uf) ? ' has' : '') + (ufFoco && uf !== ufFoco ? ' dim' : ''); })
     .style('fill', f => { if (!L.calor || ufFoco) return null; const a = porUf[CU_UFS[f.properties.codarea]]; return a ? _cuHeat(_cuIdx(a, ref)) : null; });
-  _cuGr.stl.style('display', ufFoco ? 'none' : null);
+  _cuGr.stl.style('display', ufFoco ? 'none' : null).selectAll('text').classed('has', f => cenUfs.has(CU_UFS[f.properties.codarea]));
   // municípios do estado em foco
   Object.entries(CU.mun).forEach(([uf, m]) => m.sel.style('display', uf === ufFoco ? null : 'none'));
   if (ufFoco) {
