@@ -14230,3 +14230,10 @@ p.sud-hint { margin: 6px 0 0; }
 .cu-fr-form label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); min-width: 0; }
 .cu-fr-form .larga { grid-column: 1 / -1; }
 .cu-fr-form .form-select, .cu-fr-form .form-input { font-size: 12px; padding: 5px 8px; text-transform: none; letter-spacing: 0; width: 100%; min-width: 0; }
+.cu-legend.fechada { padding: 0; border: 0; background: none; }
+.cu-leg-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border2); background: var(--bg2); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.cu-leg-btn:hover { border-color: var(--accent); }
+.cu-leg-aviso { color: var(--amber); font-size: 11px; }
+.cu-leg-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cu-leg-top b { font-size: 11px; color: var(--text); }
+.cu-leg-top .cu-leg-tg { border: 1px solid var(--border2); background: var(--bg3); color: var(--text2); width: 22px; height: 22px; border-radius: 6px; cursor: pointer; line-height: 1; }

@@ -665,7 +665,15 @@ function _cuLegenda() {
   }
   if (L.calor) h += `<div class="r"><i class="grad" style="background:linear-gradient(90deg,var(--green),var(--bg3) 50%,var(--red))"></i></div><div class="r" style="justify-content:space-between;width:120px;color:var(--text3)"><span>−12%</span><span>média</span><span>+12%</span></div>`;
   if (L.selos) h += `<div class="r"><i style="width:12px;height:12px;border-radius:50%;background:var(--red)"></i>NFs em alerta de preço</div>`;
-  const el = document.getElementById('cu-legend'); el.innerHTML = h;
+  // Recolhida por padrão (atrapalhava a visão do mapa); a escolha fica guardada no navegador.
+  if (CU.legAberta === undefined) { try { CU.legAberta = localStorage.getItem('custos.legenda') === '1'; } catch (_) { CU.legAberta = false; } }
+  const el = document.getElementById('cu-legend');
+  const fora = nivel === 'cen' ? _cuForaDoMapa(_cuNfsF().filter(n => n.cen === CU.F.cen)).forns.length : 0;
+  el.classList.toggle('fechada', !CU.legAberta);
+  el.innerHTML = CU.legAberta
+    ? `<div class="cu-leg-top"><b>Legenda e camadas</b><button type="button" class="cu-leg-tg" title="Recolher a legenda">−</button></div>${h}`
+    : `<button type="button" class="cu-leg-tg cu-leg-btn" title="${_cuE(dica)}"><i class="ti ti-list-details"></i> Legenda${fora ? ` <span class="cu-leg-aviso" title="${fora} fornecedor(es) com compra sem localização">${fora} fora do mapa</span>` : ''}</button>`;
+  el.querySelector('.cu-leg-tg').onclick = () => { CU.legAberta = !CU.legAberta; try { localStorage.setItem('custos.legenda', CU.legAberta ? '1' : '0'); } catch (_) { /* sem storage */ } _cuLegenda(); };
   el.querySelectorAll('[data-l]').forEach(i => i.onchange = () => { CU.L[i.dataset.l] = i.checked; _cuUpdate(false); });
 }
 // Seleção múltipla com busca (Regional, Central, Material, Fornecedor). O conjunto é o
