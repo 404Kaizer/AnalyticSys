@@ -14002,3 +14002,10 @@ p.sud-hint { margin: 6px 0 0; }
 .sud i.sud-ico { width: auto; height: auto; background: none; border-radius: 0; display: inline-block; font-size: 14px; line-height: 1; margin-right: 5px; vertical-align: -1px; }
 .sud-legl i.sud-ico { margin: 0; font-size: 13px; }
 .sud-det-cab > .sud-ico { font-size: 18px !important; margin-top: 4px; }
+/* Sem abreviar (Hugo, 19/11/2026): desfaz o corte global de tabela (components.css: layout fixo, td 240px com "…"). */
+.sud-tab, .sud-heat { table-layout: auto; width: 100%; min-width: 100%; }
+.sud-tab tbody td, .sud-heat tbody td, .sud-heat tbody th { max-width: none; overflow: visible; text-overflow: clip; white-space: normal; }
+.sud-tab tbody td.n, .sud-tab tbody td:first-child { white-space: nowrap; }
+.sud-tab thead th, .sud-heat thead th { min-width: 0; padding: 7px 8px; }
+.sud-placar b { overflow: visible; text-overflow: clip; }
+.sud-placar b.sud-txt { white-space: normal; overflow-wrap: anywhere; }

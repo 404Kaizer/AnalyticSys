@@ -90,15 +90,36 @@ function SUD_FONTE() {
         <text x="${x(i)}" y="${H - B + 15}" text-anchor="middle" class="sud-ax">${esc(d.n)}</text>
         <text x="${x(i)}" y="${H - B + 28}" text-anchor="middle" class="sud-ax sud-ax2">${d.q} ${d.q === 1 ? 'par' : 'pares'}</text></g>`; }).join('')}</svg>`;
   }
+  // Texto em SVG não quebra sozinho: quebra por palavra em linhas de até n
+  // caracteres (~7 px cada). Nunca abrevia (Hugo, 19/11/2026); null = uma
+  // palavra sozinha não cabe.
+  const PX = 8.2; // largura média de um caractere a 12–12,5 px (maiúsculas incluídas)
+  function quebra(t, n) {
+    const out = []; let l = '';
+    for (const p of String(t).split(/\s+/).filter(Boolean)) {
+      if (p.length > n) return null;
+      if (!l) l = p; else if ((l + ' ' + p).length <= n) l += ' ' + p; else { out.push(l); l = p; }
+    }
+    if (l) out.push(l);
+    return out;
+  }
+  const tspans = (x, y, linhas, dy) => linhas.map((l, k) => `<tspan x="${x}" y="${y + k * dy}">${esc(l)}</tspan>`).join('');
   function barrasH(dados, W = 900) {
-    const rowH = 28, H = dados.length * rowH + 4, lab = Math.min(220, Math.round(W * .36)), valW = 92, max = Math.max(...dados.map(d => d.pend + d.trat), 1), w = (v) => (W - lab - valW - 12) * v / max;
-    return `<svg class="sud-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ranking">${dados.map((d, i) => { const y = i * rowH + 4, tot = d.pend + d.trat;
-      return `<g class="sud-hov" ${d.on ? `onclick="${d.on}"` : ''} data-sud-tip="${T(d.n, [['Valor parado', rs(tot)], ['Sem tratativa', rs(d.pend)], ['Pares', d.q], ...(d.extra || [])])}">
+    const valW = 92, maior = Math.max(...dados.map(d => d.n.length), 4), palavra = Math.max(...dados.flatMap(d => String(d.n).split(/\s+/).map(p => p.length)), 4);
+    const lab = Math.round(Math.max(palavra * PX + 12, Math.min(maior * PX + 12, W * .45)));
+    const max = Math.max(...dados.map(d => d.pend + d.trat), 1), w = (v) => (W - lab - valW - 12) * v / max;
+    let y = 4;
+    const g = dados.map(d => {
+      const linhas = quebra(d.n, Math.floor((lab - 12) / PX)) || [d.n], rowH = Math.max(28, linhas.length * 15 + 12), tot = d.pend + d.trat, yb = y + (rowH - 28) / 2;
+      const s = `<g class="sud-hov" ${d.on ? `onclick="${d.on}"` : ''} data-sud-tip="${T(d.n, [['Valor parado', rs(tot)], ['Sem tratativa', rs(d.pend)], ['Pares', d.q], ...(d.extra || [])])}">
         <rect x="0" y="${y - 2}" width="${W}" height="${rowH}" fill="transparent"/>
-        <text x="0" y="${y + 13}" class="sud-ax sud-ax-l">${esc(d.n.length > 30 ? d.n.slice(0, 29) + '…' : d.n)}</text>
-        <rect x="${lab}" y="${y + 3}" width="${Math.max(1, w(d.pend))}" height="13" rx="3" fill="${d.c || 'var(--amber)'}"/>
-        <rect x="${lab + w(d.pend)}" y="${y + 3}" width="${w(d.trat)}" height="13" rx="3" fill="var(--green)" opacity=".55"/>
-        <text x="${W}" y="${y + 13}" text-anchor="end" class="sud-val">${rsK(tot)}</text></g>`; }).join('')}</svg>`;
+        <text class="sud-ax sud-ax-l">${tspans(0, y + 13, linhas, 15)}</text>
+        <rect x="${lab}" y="${yb + 3}" width="${Math.max(1, w(d.pend))}" height="13" rx="3" fill="${d.c || 'var(--amber)'}"/>
+        <rect x="${lab + w(d.pend)}" y="${yb + 3}" width="${w(d.trat)}" height="13" rx="3" fill="var(--green)" opacity=".55"/>
+        <text x="${W}" y="${yb + 13}" text-anchor="end" class="sud-val">${rsK(tot)}</text></g>`;
+      y += rowH; return s;
+    }).join('');
+    return `<svg class="sud-svg" viewBox="0 0 ${W} ${y + 2}" role="img" aria-label="Ranking">${g}</svg>`;
   }
   function squarify(itens, x, y, w, h) {
     const out = []; let fila = itens.filter(i => i.v > 0).sort((a, b) => b.v - a.v); const tot = soma(fila, i => i.v) || 1, k = w * h / tot;
@@ -115,16 +136,19 @@ function SUD_FONTE() {
   }
   function treemap(its, W) {
     const H = W < 520 ? 300 : 380; let svg = '';
-    const corta = (t, w) => { const n = Math.max(0, Math.floor((w - 16) / 7)); return t.length > n ? (n > 3 ? t.slice(0, n - 1) + '…' : '') : t; };
+    const cabe = (w) => Math.max(1, Math.floor((w - 16) / (PX + .5)));
     squarify(agrupa(its, i => i.regional).map(g => ({ n: g.n, v: g.tot, g })), 0, 0, W, H).forEach(R => {
+      // Cabeçalho da regional inteiro, em quantas linhas precisar (sem "…").
+      const cab = quebra(String(R.n).toUpperCase() + ' · ' + rsK(R.v), cabe(R.w)) || [], hh = Math.max(18, cab.length * 13 + 6);
       svg += `<rect x="${R.x + 1}" y="${R.y + 1}" width="${Math.max(0, R.w - 2)}" height="${Math.max(0, R.h - 2)}" rx="6" fill="var(--bg3)"/>`
-        + `<text x="${R.x + 8}" y="${R.y + 13}" class="sud-ax sud-ax-cab">${esc(corta(String(R.n).toUpperCase() + ' · ' + rsK(R.v), R.w))}</text>`;
-      squarify(agrupa(R.g.its, i => i.central).map(c => ({ n: c.n, v: c.tot, c })), R.x + 3, R.y + 18, Math.max(1, R.w - 6), Math.max(1, R.h - 21)).forEach(C => {
+        + (cab.length && hh < R.h - 20 ? `<text class="sud-ax sud-ax-cab">${tspans(R.x + 8, R.y + 13, cab, 13)}</text>` : '');
+      squarify(agrupa(R.g.its, i => i.central).map(c => ({ n: c.n, v: c.tot, c })), R.x + 3, R.y + hh, Math.max(1, R.w - 6), Math.max(1, R.h - hh - 3)).forEach(C => {
         const c = C.c, pct = c.tot ? c.pend / c.tot : 0, pior = ['critico', 'urgente', 'atencao'].find(n => c.its.some(i => i.nivel === n));
-        const cor = pct === 0 ? 'var(--green)' : NIV[pior][1], nome = corta(c.n, C.w);
+        const cor = pct === 0 ? 'var(--green)' : NIV[pior][1], nome = quebra(c.n, cabe(C.w));
+        const txt = nome && C.h > nome.length * 14 + 22 && C.w > 40;
         svg += `<g class="sud-hov" onclick="SUD.central(${ref(cache.cent, c.n)})" data-sud-tip="${T(c.n, [['Regional', esc(R.n)], ['Valor parado', rs(c.tot)], ['Sem tratativa', `${rs(c.pend)} (${Math.round(pct * 100)}%)`], ['Pares', c.q], ['Pior nível', NIV[pior][0]]])}">
           <rect x="${C.x + 1.5}" y="${C.y + 1.5}" width="${Math.max(0, C.w - 3)}" height="${Math.max(0, C.h - 3)}" rx="4" fill="${cor}" opacity="${(.28 + .55 * pct).toFixed(2)}"/>
-          ${C.w > 70 && C.h > 34 ? `<text x="${C.x + 8}" y="${C.y + 18}" class="sud-tm">${esc(nome)}</text><text x="${C.x + 8}" y="${C.y + 33}" class="sud-val">${rsK(c.tot)}</text>` : ''}</g>`;
+          ${txt ? `<text class="sud-tm">${tspans(C.x + 8, C.y + 18, nome, 14)}</text>${C.w > rsK(c.tot).length * PX + 16 ? `<text x="${C.x + 8}" y="${C.y + 18 + nome.length * 14 + 1}" class="sud-val">${rsK(c.tot)}</text>` : ''}` : ''}</g>`;
       });
     });
     return `<svg class="sud-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Valor parado por regional e central">${svg}</svg>`;
