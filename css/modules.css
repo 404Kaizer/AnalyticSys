@@ -13888,24 +13888,114 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .sol-btn-excluir { color: var(--text3); }
 .sol-btn-excluir:hover { color: var(--red); border-color: var(--red-border); background: var(--red-bg); }
 .sol-det-tabela th, .sol-det-tabela td { padding: 8px 12px; }
-/* Operações · relatório Sem uso (19/11/2026): KPIs, barras e tabela — sem script, vale no HTML baixado */
-.su-rel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.su-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 18px; }
-.su-kpi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.su-kpi b { font-family: var(--mono); font-size: 22px; font-weight: 500; white-space: nowrap; }
-.su-kpi small { font-size: 12px; color: var(--text3); }
-.su-graf { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
-.su-bar { display: grid; grid-template-columns: minmax(90px, 30%) minmax(60px, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; padding: 3px 0; }
-.su-bar-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.su-bar-n small, .su-bar-v small { display: block; font-size: 11.5px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; }
-.su-bar-t { height: 10px; border-radius: 5px; background: var(--bg4); display: flex; overflow: hidden; }
-.su-bar-t i { display: block; height: 100%; }
-.su-bar-v { text-align: right; white-space: nowrap; }
-.su-bar-v b { font-family: var(--mono); font-weight: 500; }
-.su-tab-wrap { overflow-x: auto; margin: 0 -4px; }
-.su-tab { width: 100%; border-collapse: collapse; font-size: 13px; }
-.su-tab th { text-align: left; font-weight: 500; color: var(--text2); padding: 6px 8px; border-bottom: 1px solid var(--border3); white-space: nowrap; position: sticky; top: 0; background: var(--bg2); }
-.su-tab td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-.su-tab td small { color: var(--text3); }
-.su-tab .n { text-align: right; font-family: var(--mono); white-space: nowrap; }
-.su-tab tbody tr:hover { background: var(--bg3); }
+/* Operações · dashboard Sem uso (semuso-dash.js, 19/11/2026) — vale na tela e no HTML baixado */
+.sud { --sud-red2: #be123c; display: flex; flex-direction: column; gap: 10px; min-width: 0; color: var(--text); font-size: 14px; }
+body[data-theme="light"] .sud { --sud-red2: #9f1239; }
+.sud-dash { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; min-width: 0; }
+.sud-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 14px 18px 0; }
+.sud-cab h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.sud-cab .sud-hint { flex: 1 1 220px; }
+.sud-hint { color: var(--text2); font-size: 12.5px; font-weight: 400; }
+p.sud-hint { margin: 6px 0 0; }
+.sud-rod { margin: 0 4px; }
+.sud-filtro { display: flex; align-items: center; gap: 8px; padding: 10px 18px 0; font-size: 13px; color: var(--text2); }
+.sud-abas { display: flex; gap: 2px; padding: 10px 18px 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.sud-aba { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; cursor: pointer; color: var(--text2); white-space: nowrap; font: inherit; font-size: 14px; }
+.sud-aba.on { color: var(--text); border-bottom-color: var(--accent); }
+.sud-aba span { font-family: var(--mono); font-size: 11.5px; color: var(--text3); margin-left: 5px; }
+.sud-pane { padding: 18px; display: grid; gap: 22px; min-width: 0; }
+.sud-sec { min-width: 0; }
+.sud-sec h4 { margin: 0 0 10px; font-size: 12.5px; font-weight: 500; color: var(--text2); letter-spacing: .05em; text-transform: uppercase; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.sud-sec h4 .sud-hint { text-transform: none; letter-spacing: 0; }
+.sud-g2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 28px; }
+.sud-vered { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13.5px; color: var(--text2); }
+.sud-vered a { color: var(--accent); cursor: pointer; }
+.sud-vered a:hover { text-decoration: underline; }
+.sud-selo { font-size: 12px; font-weight: 600; letter-spacing: .04em; padding: 3px 9px; border-radius: 6px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); white-space: nowrap; }
+.sud-placar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
+.sud-placar > div { padding: 14px 16px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sud-placar > div + div { border-left: 1px solid var(--border); }
+.sud-placar span { font-size: 11.5px; color: var(--text2); letter-spacing: .05em; text-transform: uppercase; }
+.sud-placar b { font-family: var(--mono); font-weight: 500; font-size: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sud-placar b.sud-txt { font-family: var(--font); font-size: 18px; }
+.sud-placar small { color: var(--text2); font-size: 12px; }
+.sud-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.sud-svg text { font-family: var(--font); }
+.sud-ax { fill: var(--text2); font-size: 11px; }
+.sud-ax2 { fill: var(--text3); }
+.sud-ax-l { fill: var(--text); font-size: 12.5px; }
+.sud-ax-cab { font-weight: 600; letter-spacing: .04em; }
+.sud-svg .sud-val { fill: var(--text); font-size: 11px; font-family: var(--mono); }
+.sud-svg .sud-big, .sud-big { fill: var(--text); font-size: 22px; font-weight: 500; font-family: var(--mono); }
+.sud-tm { fill: var(--text); font-size: 12px; font-weight: 500; }
+.sud-grid { stroke: var(--border2); }
+.sud-hov { cursor: pointer; }
+.sud-hov:hover { opacity: .82; }
+.sud-dl { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.sud-legl { display: grid; gap: 8px; min-width: 0; flex: 1 1 160px; }
+.sud-legl > div { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: baseline; font-size: 13px; }
+.sud-legl i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+.sud-legl small { display: block; color: var(--text2); font-size: 12px; }
+.sud-num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.sud-nums { display: grid; gap: 10px; font-size: 13px; }
+.sud-nums b { display: block; font-size: 18px; font-weight: 500; text-align: left; }
+.sud-nums small { font-family: var(--font); font-size: 12px; color: var(--text2); }
+.sud-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text2); margin-top: 6px; }
+.sud-leg span { display: inline-flex; align-items: center; gap: 6px; }
+.sud-leg i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.sud-x { overflow-x: auto; }
+.sud-heat { width: 100%; border-collapse: separate; border-spacing: 3px; font-size: 12.5px; }
+.sud-heat th { font-weight: 400; color: var(--text2); text-align: center; padding: 2px 4px; white-space: nowrap; }
+.sud-heat tbody th { text-align: left; }
+.sud-heat td { border-radius: 6px; text-align: center; font-family: var(--mono); font-size: 12px; padding: 9px 4px; }
+.sud-heat td.z { color: var(--text3); }
+.sud-heat .n { text-align: right; font-family: var(--mono); }
+.sud-ferr { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-bottom: 10px; }
+.sud-ferr input { flex: 1 1 220px; background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; padding: 7px 10px; color: var(--text); font: inherit; min-width: 0; }
+.sud-chip { background: none; border: 1px solid var(--border2); border-radius: 14px; padding: 4px 10px; font: inherit; font-size: 12.5px; cursor: pointer; color: var(--text2); display: inline-flex; align-items: center; gap: 5px; }
+.sud-chip.on { border-color: var(--accent); color: var(--text); background: var(--accent-dim); }
+.sud-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.sud-tab { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sud-tab th { text-align: left; font-weight: 500; color: var(--text2); padding: 7px 8px; border-bottom: 1px solid var(--border3); white-space: nowrap; }
+.sud-tab .sud-ord { cursor: pointer; user-select: none; }
+.sud-tab th.n, .sud-tab td.n { text-align: right; }
+.sud-tab td { padding: 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.sud-tab td b { font-weight: 500; }
+.sud-tab td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.sud-tab:not(.sud-tab-s) tbody tr { cursor: pointer; }
+.sud-tab:not(.sud-tab-s) tbody tr:hover { background: var(--bg3); }
+.sud-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; letter-spacing: .03em; }
+.sud-tag i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.sud-det { padding: 18px; display: grid; gap: 20px; min-width: 0; }
+.sud-det-cab { display: flex; gap: 12px; align-items: flex-start; }
+.sud-det-cab > div { flex: 1; min-width: 0; }
+.sud-det-cab h3 { margin: 0; font-size: 18px; font-weight: 600; }
+.sud-det-cab > .sud-dot { width: 10px; height: 10px; margin-top: 8px; }
+.sud-tl { display: grid; }
+.sud-ev { display: grid; grid-template-columns: 76px 22px 1fr; gap: 0 8px; align-items: start; }
+.sud-ev .dt { font-family: var(--mono); font-size: 12px; color: var(--text2); padding-top: 2px; text-align: right; }
+.sud-ev-hoje .dt { color: var(--text); }
+.sud-ev .mk { position: relative; height: 100%; display: flex; justify-content: center; }
+.sud-ev .mk::before { content: ""; position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border2); }
+.sud-ev:first-child .mk::before { top: 9px; }
+.sud-ev:last-child .mk::before { bottom: calc(100% - 9px); }
+.sud-ev .mk i { position: relative; margin-top: 4px; width: 11px; height: 11px; border-radius: 50%; background: var(--bg2); border: 2px solid var(--c); }
+.sud-ev .mk i.cheio { background: var(--c); }
+.sud-ev .tx { padding-bottom: 14px; min-width: 0; }
+.sud-ev .tx > b { font-weight: 500; font-size: 13.5px; }
+.sud-ev .tp { font-size: 11px; color: var(--c); letter-spacing: .05em; text-transform: uppercase; margin-right: 6px; font-weight: 600; }
+.sud-ev .tx p { margin: 2px 0 0; color: var(--text2); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.sud-ev .tx p b { color: var(--text); font-weight: 500; }
+.sud-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.sud-fundo { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 900; }
+.sud-gaveta { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100%); background: var(--bg2); border-left: 1px solid var(--border2); z-index: 901; overflow-y: auto; box-shadow: -12px 0 40px rgba(0,0,0,.35); }
+.sud-tip { position: fixed; z-index: 9999; pointer-events: none; display: none; background: var(--bg2); border: 1px solid var(--border3); border-radius: 10px; padding: 10px 12px; font-family: var(--font); font-size: 12.5px; color: var(--text); box-shadow: 0 8px 28px rgba(0,0,0,.4); max-width: 260px; }
+.sud-tip b { display: block; margin-bottom: 3px; }
+.sud-tip-l { display: flex; justify-content: space-between; gap: 14px; color: var(--text2); }
+.sud-tip-l span:last-child { color: var(--text); font-family: var(--mono); }
+@media (max-width: 640px) {
+  .sud-placar > div + div { border-left: 0; border-top: 1px solid var(--border); }
+  .sud-pane, .sud-det { padding: 14px 12px; }
+  .sud-ev { grid-template-columns: 62px 20px 1fr; }
+}
+.sud-heat th, .sud-tab th { background: none; font-family: var(--font); font-size: 12.5px; text-transform: none; letter-spacing: 0; position: static; }
