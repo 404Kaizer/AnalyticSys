@@ -13170,7 +13170,6 @@ tr.sap-fechamento td {
    páginas). Em Importar/Configurações só ficam os blocos marcados
    .cob-insumos (cards da Cobrança, próximas etapas).
 ══════════════════════════════════════════ */
-body.role-insumos .tab-group-label,
 body.role-insumos .tab-item:not([data-page="cobrancas"]):not([data-page="importar"]):not([data-page="configuracoes"]):not([data-page="ocorrencias"]):not([data-page="entradas"]):not([data-page="saidas"]),
 body.role-insumos #page-importar > :not(.cob-insumos):not(.es-insumos),
 body.role-insumos #page-importar .import-grid.es-insumos > :not(.es-card),
