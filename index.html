@@ -2204,6 +2204,7 @@
           <label class="cu-tog"><input type="checkbox" id="cu-f-div"> Só NFs em alerta</label>
           <button class="cu-btn" id="cu-f-clear" type="button">Limpar</button>
           <span class="cu-status" id="cu-status"></span>
+          <button class="cu-btn" id="cu-diag-abrir" type="button" title="Confere se cada regional, central e fornecedor está no mapa"><i class="ti ti-map-search"></i> Diagnóstico</button>
         </div>
         <div class="cu-main" id="cu-main">
           <div class="cu-mapcol">
@@ -2219,6 +2220,13 @@
           <aside class="cu-panel" id="cu-panel"></aside>
         </div>
         <div class="cu-tip" id="cu-tip" hidden></div>
+        <div class="cu-modal" id="cu-diag" hidden>
+          <div class="cu-mbox cu-wide" role="dialog" aria-modal="true" aria-labelledby="cu-diag-tit">
+            <div class="cu-mh"><div><span>Diagnóstico do mapa</span><b id="cu-diag-tit">Regionais, centrais e fornecedores</b></div><button class="cu-x" id="cu-diag-x" title="Fechar" type="button">×</button></div>
+            <div class="cu-diag-bar"><input class="form-input" id="cu-diag-busca" placeholder="Buscar central, código, regional, fornecedor ou CNPJ"><label class="cu-tog"><input type="checkbox" id="cu-diag-so"> Só o que está fora do mapa</label><button class="cu-btn" id="cu-diag-refazer" type="button">Buscar endereços de novo</button></div>
+            <div class="cu-pb" id="cu-diag-body"></div>
+          </div>
+        </div>
         <div class="cu-modal" id="cu-com" hidden>
           <div class="cu-mbox" role="dialog" aria-modal="true" aria-labelledby="cu-com-lbl">
             <div class="cu-mh"><div><span>Comentários do analista</span><b id="cu-com-lbl"></b></div><button class="cu-x" id="cu-com-x" title="Fechar" type="button">×</button></div>

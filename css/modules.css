@@ -14174,3 +14174,15 @@ p.sud-hint { margin: 6px 0 0; }
 #cu-map .agg:hover { fill-opacity: .4; }
 #cu-map .lbl.agg { font-family: var(--mono); font-weight: 600; }
 .cu-legend .dica { color: var(--text); font-size: 11.5px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+#cu-map .cen.off { fill: var(--text3); }
+.cu-mbox.cu-wide { width: 1000px; height: 85vh; }
+.cu-diag-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.cu-diag-bar .form-input { flex: 1 1 260px; min-width: 0; font-size: 12px; padding: 6px 10px; }
+.cu-diag-bar .cu-tog { padding-bottom: 0; }
+.cu-diag-res { display: flex; gap: 8px; flex-wrap: wrap; }
+.cu-diag-res div { background: var(--bg3); border-radius: 8px; padding: 8px 12px; font-size: 12px; }
+.cu-diag-res b { font-family: var(--mono); font-size: 15px; display: block; }
+.cu-pill.err { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
+.cu-pill.warn { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); }
+#cu-diag-body td { font-size: 12px; }
+#cu-diag-body td.mot { color: var(--text2); font-size: 11.5px; }

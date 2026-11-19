@@ -38,7 +38,7 @@ const CU = {
   iniciado: false, base: null,  // promessa da carga única (d3, malha, cadastros)
   chave: '', NFS: [], porMes: new Map(), minYm: 0,
   unMat: new Map(), nomeForn: new Map(), fornMats: new Map(),
-  cen: new Map(), geo: new Map(), cnpjPorNome: new Map(),
+  cen: new Map(), geo: new Map(), cnpjPorNome: new Map(), fornCad: new Map(),
   coms: [], comPorChave: new Map(), comAtual: null, comEditId: null,
   br: null, mun: {}, munCarregando: {}, K: 1, W: 800, H: 600,
 };
@@ -109,7 +109,7 @@ function _cuGarantirBase() {
     _cuMontarCentrais([...(state.filiais || []), ...filiais]);
     geo.forEach(g => CU.geo.set(g.cnpj, g));
     _cuSetComs(coms);
-    forns.forEach(f => { const c = String(f.cnpj || '').replace(/\D/g, ''); if (c.length === 14) CU.cnpjPorNome.set(_cuNomeNorm(f.nome), c); });
+    forns.forEach(f => { const c = String(f.cnpj || '').replace(/\D/g, ''); if (c.length === 14) { CU.cnpjPorNome.set(_cuNomeNorm(f.nome), c); CU.fornCad.set(c, f.nome || c); } });
     _cuMapaInit();
     if (sb) {
       // ponytail: recarrega a tabela inteira a cada mudança (é pequena); se crescer, aplicar só o payload.
@@ -291,7 +291,7 @@ function _cuEscopo() {
   return 'BR';
 }
 const _cuEscopoNome = k => k === 'BR' ? 'Brasil' : k.startsWith('reg:') ? k.slice(4) : k.startsWith('uf:') ? k.slice(3) : (CU.cen.get(k)?.nome || k);
-function _cuNomeF(fk) { return CU.nomeForn.get(fk) || CU.geo.get(fk)?.nome || (fk.startsWith('n:') ? fk.slice(2) : fk); }
+function _cuNomeF(fk) { return CU.nomeForn.get(fk) || CU.fornCad.get(fk) || CU.geo.get(fk)?.nome || (fk.startsWith('n:') ? fk.slice(2) : fk); }
 function _cuRegsDaUf(uf) { return [...new Set([...CU.cen.values()].filter(c => _cuUfCen(c) === uf && CU.cenComCompra?.has(c.alias)).map(c => c.regional))].sort(); }
 function _cuCorReg(reg) { const regs = _cuRegsDaUf(CU.F.uf); const i = regs.indexOf(reg); return `var(${CU_SER[(i < 0 ? 0 : i) % CU_SER.length]})`; }
 
@@ -437,7 +437,7 @@ function _cuDesenhar() {
     if (ll) {
       const cand = new Set([...CU.fornMats.keys(), ...[...CU.geo.values()].filter(g => g.tipo === 'fornecedor').map(g => g.cnpj)]);
       [...cand].filter(fk => !ativos.has(fk) && _cuLL(fk) && (!CU.fornMats.has(fk) || [...CU.fornMats.get(fk)].some(m => mats.has(m))) && (!F.mat || !CU.fornMats.has(fk) || CU.fornMats.get(fk).has(F.mat)))
-        .map(fk => ({ fk, km: _cuKm(ll, _cuLL(fk)) })).sort((a, b) => a.km - b.km).slice(0, 10).forEach(x => fl.push(x.fk));
+        .forEach(fk => fl.push(fk)); // todas, de qualquer estado (pedido do Hugo); nome só no tooltip
     }
   }
   const selF = fk => fk === fornFoco && (sel?.t === 'forn' || sel?.t === 'rota');
@@ -448,14 +448,15 @@ function _cuDesenhar() {
   // centrais: regional (todas dela), central (só ela), ou as das rotas do fornecedor em foco
   const porCen = _cuGroup(arr, 'cen');
   const cenVis = nivel === 'reg' ? c => c.regional === F.reg : nivel === 'cen' ? c => c.alias === F.cen : fornFoco ? c => vis.some(l => l.c === c.alias) : () => false;
-  const cs = [...CU.cen.values()].filter(c => cenPos.has(c.alias) && porCen[c.alias] && cenVis(c));
-  cs.forEach(c => { const a = _cuAgg(porCen[c.alias]); c._g = a.g; c._nd = a.d; c._xy = cenPos.get(c.alias); });
+  // Na regional entram todas as centrais dela; sem NF no mês ficam em cinza (antes sumiam).
+  const cs = [...CU.cen.values()].filter(c => cenPos.has(c.alias) && cenVis(c) && (porCen[c.alias] || nivel === 'reg' || nivel === 'cen'));
+  cs.forEach(c => { const a = _cuAgg(porCen[c.alias] || []); c._g = a.g; c._nd = a.d; c._sem = !porCen[c.alias]; c._xy = cenPos.get(c.alias); });
   const gmax = d3.max(cs, c => c._g) || 1;
   cs.forEach(c => { c._rr = L.calor ? 4 + 9 * Math.sqrt(c._g / gmax) : 6; });
   _cuGr.c.selectAll('circle').data(cs, c => c.alias).join('circle')
-    .attr('class', c => 'cen' + (F.cen === c.alias || (sel?.t === 'cen' && sel.id === c.alias) || (sel?.t === 'rota' && sel.cen === c.alias) ? ' sel' : ''))
+    .attr('class', c => 'cen' + (c._sem ? ' off' : '') + (F.cen === c.alias || (sel?.t === 'cen' && sel.id === c.alias) || (sel?.t === 'rota' && sel.cen === c.alias) ? ' sel' : ''))
     .attr('cx', c => c._xy[0]).attr('cy', c => c._xy[1]).style('fill-opacity', L.calor ? .75 : 1)
-    .on('mousemove', (e, c) => _cuTip(e, `<b>${_cuE(c.nome)}</b><br><span class="mono">${_cuE(c.regional)}<br>${_cuBrlc(c._g)}${c._nd ? ` · ${c._nd} alerta${c._nd > 1 ? 's' : ''} de preço` : ''}</span>`))
+    .on('mousemove', (e, c) => _cuTip(e, `<b>${_cuE(c.nome)}</b><br><span class="mono">${_cuE(c.regional)}<br>${c._sem ? 'sem NF neste mês e filtros' : _cuBrlc(c._g)}${c._nd ? ` · ${c._nd} alerta${c._nd > 1 ? 's' : ''} de preço` : ''}</span>`))
     .on('mouseleave', _cuTipOff)
     .on('click', (e, c) => { Object.assign(CU.F, { uf: _cuUfCen(c), reg: c.regional, cen: c.alias }); CU.sel = { t: 'cen', id: c.alias }; CU.tab = 'nfs'; _cuUpdate(true); });
   // bolhas de agregado: estados (Brasil) ou regionais (estado)
@@ -488,7 +489,7 @@ function _cuDesenhar() {
     // Nível Brasil: a sigla do estado já está no mapa e o valor fica no tooltip (estados vizinhos encavalariam).
     ...(nivel === 'uf' ? bol.filter(b => b.xy).map(b => ({ id: 'b' + b.id, x: b.xy[0], y: b.xy[1], t: b.nome + ' · ' + _cuBrlc(b.g), cls: 'lbl agg', dy: b._rr + 12 })) : []),
     ...cs.map(c => ({ id: 'c' + c.alias, x: c._xy[0], y: c._xy[1], t: c.nome, cls: 'lbl', dy: -10 })),
-    ...fl.map(fk => { const p = _cuXY(fk); return { id: 'f' + fk, x: p[0], y: p[1], t: _cuNomeF(fk), cls: 'lbl f' + (ativos.has(fk) ? '' : ' off'), dy: -9 }; }),
+    ...fl.filter(fk => ativos.has(fk) || fk === fornFoco).map(fk => { const p = _cuXY(fk); return { id: 'f' + fk, x: p[0], y: p[1], t: _cuNomeF(fk), cls: 'lbl f' + (ativos.has(fk) ? '' : ' off'), dy: -9 }; }),
   ];
   _cuGr.l.selectAll('text').data(lb, d => d.id).join('text').attr('class', d => d.cls).text(d => d.t).attr('x', d => d.x);
   _cuRescale();
@@ -537,7 +538,11 @@ function _cuLegenda() {
   if (nivel === 'reg' || rotas) h += `<div class="r"><i style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></i>Central</div>`;
   if (rotas) {
     h += `<div class="r"><i style="width:8px;height:8px;background:var(--amber);transform:rotate(45deg);margin:0 1px"></i>Fornecedor com compra</div>`;
-    if (nivel === 'cen') h += `<div class="r"><i style="width:7px;height:7px;background:var(--text3);transform:rotate(45deg);margin:0 2px"></i>Alternativa sem compra (mais próximas)</div>`;
+    if (nivel === 'cen') {
+      h += `<div class="r"><i style="width:7px;height:7px;background:var(--text3);transform:rotate(45deg);margin:0 2px"></i>Sem compra, vende o mesmo material</div>`;
+      const fora = _cuForaDoMapa(_cuNfsF().filter(n => n.cen === CU.F.cen)).forns.length;
+      if (fora) h += `<div class="r" style="color:var(--amber)"><i class="ti ti-map-pin-off"></i>${fora} fornecedor${fora > 1 ? 'es' : ''} com compra sem localização · veja no Resumo</div>`;
+    }
     h += L.cor ? `<div class="r"><i style="width:18px;height:3px;background:var(--red)"></i>rota &gt; 6% acima da média</div><div class="r"><i style="width:18px;height:3px;background:var(--amber)"></i>2 a 6% acima</div><div class="r"><i style="width:18px;height:3px;background:var(--green)"></i>abaixo da média</div><div class="r" style="color:var(--text3)">espessura = gasto</div>`
       : `<div class="r"><i style="width:18px;border-top:2px dashed var(--amber)"></i>Fornecimento no mês</div>`;
   }
@@ -651,9 +656,11 @@ function _cuListaNfs(arr) {
     d.slice(0, 80).map(n => `<div class="cu-nf ${n.alerta}"><span><b>NF ${_cuE(n.nf)}</b> · ${_cuDataNf(n.d)} <span class="cu-pill ${n.alerta === 'acima' ? 'up' : n.alerta === 'abaixo' ? 'dn' : 'nv'}">${CU_ALERTA[n.alerta]}</span>${n.transf ? ` <span class="cu-pill tr" title="Comprada por ${_cuE(CU.cen.get(n.compra)?.nome || n.compra)}">Transferência</span>` : ''}<br><span class="m">${_cuE(_cuNomeF(n.forn))} → ${_cuE(CU.cen.get(n.cen).nome)}${n.transf ? ` (comprada por ${_cuE(CU.cen.get(n.compra)?.nome || n.compra)})` : ''}<br>${_cuE(n.mat)} · ${_cuQ(n.mat, n.qtd)} · NF ${_cuP(n.mat, n.pr)}${n.alerta === 'novo' ? ' · primeira NF nesta central' : ` · últimas ${n.base}: ${n.min === n.max ? _cuP(n.mat, n.min) : _cuPn(n.mat, n.min) + ' a ' + _cuP(n.mat, n.max)}`}</span></span><span class="d">${n.alerta !== 'novo' ? `<span class="cu-pill ${n.dif > 0 ? 'up' : 'dn'}">${_cuPct(n.pr / (n.dif > 0 ? n.max : n.min) - 1)}</span><br>${n.dif > 0 ? '+' : ''}${_cuBrl(n.dif)}` : ''}<br>${_cuComBtn(n.forn, n.mat, n.cen, n.nf, `NF ${n.nf} · ${_cuNomeF(n.forn)} → ${CU.cen.get(n.cen).nome}`)}</span></div>`).join('') +
     (d.length > 80 ? `<div class="cu-note">+ ${d.length - 80} NFs — filtre por central ou fornecedor para ver todas.</div>` : '');
 }
-function _cuSemLocal() {
-  const cens = [...new Set(_cuMes(CU.mes).map(n => n.cen))].map(a => CU.cen.get(a)).filter(c => !_cuLL(c.cnpj));
-  const forns = [...new Set(_cuMes(CU.mes).map(n => n.forn))].filter(fk => !_cuLL(fk));
+function _cuForaDoMapa(arr) {
+  return { cens: [...new Set(arr.map(n => n.cen))].map(a => CU.cen.get(a)).filter(c => !_cuLL(c.cnpj)), forns: [...new Set(arr.map(n => n.forn))].filter(fk => !_cuLL(fk)) };
+}
+function _cuSemLocal(arr) {
+  const { cens, forns } = _cuForaDoMapa(arr);
   if (!cens.length && !forns.length) return '';
   const motivo = fk => !/^\d{14}$/.test(fk) ? 'sem CNPJ' : CU.geo.get(fk)?.precisao === 'falhou' ? 'endereço não encontrado' : 'buscando';
   return `<div class="cu-sec"><h3>Fora do mapa (sem localização)</h3><div class="cu-note">${cens.length ? `<b>Centrais:</b> ${cens.map(c => _cuE(c.nome) + (c.cnpj ? '' : ' (sem CNPJ no cadastro)')).join(', ')}<br>` : ''}${forns.length ? `<b>Fornecedores:</b> ${forns.slice(0, 40).map(fk => _cuE(_cuNomeF(fk)) + ` (${motivo(fk)})`).join(', ')}${forns.length > 40 ? ` e mais ${forns.length - 40}` : ''}<br>Sem CNPJ: reimporte as Entradas com a coluna CNPJ FORNECEDOR ou cadastre o fornecedor nas Cobranças.` : ''}</div></div>`;
@@ -700,7 +707,7 @@ function _cuPainel() {
       const ls = Object.entries(_cuGroup(arr, 'forn')).map(([f, v]) => ({ f, k: _cuKmPar(s.id, f), s: _cuAgg(v) })).sort((x, y) => (x.k ?? 1e9) - (y.k ?? 1e9));
       body += `<div class="cu-sec"><h3>Fornecedores desta central</h3><div style="overflow-x:auto"><table><thead><tr><th>Fornecedor</th><th class="n">km</th><th class="n">Gasto</th></tr></thead><tbody>${ls.map(l => { const g = CU.geo.get(l.f); return `<tr class="cl" data-rota2="${_cuE(l.f)}"><td>${_cuE(_cuNomeF(l.f))}${g?.municipio ? `<br><span style="color:var(--text3);font-size:11px">${_cuE(g.municipio)}/${_cuE(g.uf)}</span>` : ''}</td><td class="n">${l.k ? _cuNf0.format(l.k) : '–'}</td><td class="n">${_cuBrlc(l.s.g)}</td></tr>`; }).join('')}</tbody></table></div></div>`;
     }
-    if (s.t === 'br') body += _cuSemLocal();
+    if (s.t === 'br' || s.t === 'cen') body += _cuSemLocal(arr);
   } else if (CU.tab === 'forn') {
     if (s.t === 'forn') {
       const cens = new Set(arr.map(n => n.cen)), comp = _cuNfsF().filter(n => cens.has(n.cen) && a.mats.has(n.mat));
@@ -763,7 +770,11 @@ function _cuStrip() {
 /* ───────── geocodificação em segundo plano ───────── */
 async function _cuGeoUm(a) {
   let b = null;
-  try { const r = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + a.cnpj); if (r.ok) b = await r.json(); } catch (_) { /* sem resposta */ }
+  // Falha TEMPORÁRIA (limite 429, 5xx, rede) não vira 'falhou': devolve null e tenta de novo na próxima abertura.
+  // Só 'falhou' quando a BrasilAPI diz que o CNPJ não existe (404) ou quando nada localiza o endereço.
+  let st = 0;
+  try { const r = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + a.cnpj); st = r.status; if (r.ok) b = await r.json(); } catch (_) { st = 0; }
+  if (!b && st !== 404 && st !== 400) return null;
   const row = { cnpj: a.cnpj, tipo: a.tipo, nome: b?.nome_fantasia || b?.razao_social || a.nome || null, logradouro: b?.logradouro || null, numero: b?.numero || null, bairro: b?.bairro || null,
     cep: String(b?.cep || '').replace(/\D/g, '') || null, municipio: b?.municipio || null, uf: b?.uf || null, lat: null, lng: null, precisao: 'falhou', atualizado_em: new Date().toISOString() };
   if (!b) return row;
@@ -788,15 +799,24 @@ async function _cuGeocodificar() {
     const velho = g => g.precisao === 'falhou' && Date.now() - Date.parse(g.atualizado_em) > 30 * 864e5;
     const falta = c => c && (!CU.geo.has(c) || velho(CU.geo.get(c)));
     const alvos = [];
-    CU.cen.forEach(c => { if (c.cnpj && falta(c.cnpj) && CU.cenComCompra?.has(c.alias)) alvos.push({ cnpj: c.cnpj, tipo: 'central', nome: c.nome }); });
-    // Fornecedores do mês escolhido primeiro (por gasto), depois o resto do histórico.
+    // Todas as centrais com CNPJ (inclusive sem compra, que ficam cinza no mapa).
+    CU.cen.forEach(c => { if (c.cnpj && falta(c.cnpj)) alvos.push({ cnpj: c.cnpj, tipo: 'central', nome: c.nome }); });
+    // Fornecedores do mês escolhido primeiro (por gasto), depois o resto do histórico,
+    // depois os cadastrados nas Cobranças sem compra (alternativas em cinza).
     const gasto = new Map(); _cuMes(CU.mes).forEach(n => gasto.set(n.forn, (gasto.get(n.forn) || 0) + n.tot));
     [...CU.fornMats.keys()].filter(fk => /^\d{14}$/.test(fk) && falta(fk)).sort((x, y) => (gasto.get(y) || 0) - (gasto.get(x) || 0))
       .forEach(fk => alvos.push({ cnpj: fk, tipo: 'fornecedor', nome: _cuNomeF(fk) }));
-    let feitos = 0;
+    CU.fornCad.forEach((nome, c) => { if (!CU.fornMats.has(c) && falta(c)) alvos.push({ cnpj: c, tipo: 'fornecedor', nome }); });
+    let feitos = 0, seguidas = 0;
     for (const a of alvos) {
       _cuStatus(`Localizando endereços: ${feitos} de ${alvos.length}`);
       const row = await _cuGeoUm(a); feitos++;
+      if (!row) {
+        // BrasilAPI fora ou limitando: espera mais; 5 seguidas → para e retoma na próxima abertura da aba.
+        if (++seguidas >= 5) { console.warn('[Custos] BrasilAPI sem resposta; a busca de endereços continua na próxima abertura.'); break; }
+        await _cuEspera(3000 * seguidas); continue;
+      }
+      seguidas = 0;
       CU.geo.set(a.cnpj, row);
       const { error } = await window.supabaseClient.from('custos_geo').upsert(row, { onConflict: 'cnpj' });
       if (error) console.warn('[Custos] custos_geo:', error.message);
@@ -805,6 +825,61 @@ async function _cuGeocodificar() {
     }
     if (alvos.length) _cuUpdate(false);
   } finally { CU.geoRodando = false; _cuStatus(''); }
+}
+
+/* ───────── diagnóstico: o que está (e o que não está) no mapa, e por quê ───────── */
+const CU_PRECISAO = { cep: 'pelo CEP', endereco: 'pelo endereço', municipio: 'centro do município', manual: 'manual' };
+function _cuGeoStatus(cnpj) {
+  if (!cnpj) return ['sem CNPJ', 'err'];
+  const g = CU.geo.get(cnpj);
+  if (!g) return [CU.geoRodando ? 'buscando endereço…' : 'endereço ainda não buscado', 'warn'];
+  if (g.precisao === 'falhou' || g.lat == null) return ['endereço não encontrado', 'err'];
+  return [`${CU_PRECISAO[g.precisao] || g.precisao}${g.municipio ? ' · ' + g.municipio + '/' + g.uf : ''}`, 'ok'];
+}
+function _cuDiagnostico() {
+  const nfMes = new Map(), nfBase = new Map(), fMes = new Map();
+  _cuMes(CU.mes).forEach(n => { nfMes.set(n.cen, (nfMes.get(n.cen) || 0) + 1); fMes.set(n.forn, (fMes.get(n.forn) || 0) + 1); });
+  (CU.pares || []).forEach(p => nfBase.set(p.cen, (nfBase.get(p.cen) || 0) + p.n));
+  const cens = [...CU.cen.values()].map(c => {
+    const [geo, st] = _cuGeoStatus(c.cnpj), prob = [];
+    if (c._s === -1) prob.push('não está no cadastro de filiais (o nome nas Entradas é diferente do cadastro?)');
+    else if (!c.cnpj) prob.push('sem CNPJ válido no cadastro de filiais');
+    if (c.regional === 'Sem regional' && c._s !== -1) prob.push('sem regional no cadastro');
+    if (!_cuUfCen(c)) prob.push('sem UF');
+    if (c.cnpj && st !== 'ok') prob.push(geo);
+    if (!nfBase.get(c.alias)) prob.push('nenhuma NF na base de Entradas');
+    else if (!nfMes.get(c.alias)) prob.push('sem NF no mês (aparece em cinza)');
+    return { c, geo, st, prob, mapa: !!_cuLL(c.cnpj), mes: nfMes.get(c.alias) || 0, base: nfBase.get(c.alias) || 0 };
+  }).sort((a, b) => (a.mapa - b.mapa) || a.c.regional.localeCompare(b.c.regional) || a.c.nome.localeCompare(b.c.nome));
+  const regs = Object.entries(_cuGroup(cens, x => x.c.regional)).map(([r, l]) => ({ r, n: l.length, mapa: l.filter(x => x.mapa).length, ufs: [...new Set(l.map(x => _cuUfCen(x.c)).filter(Boolean))].join(', ') || '—', mes: d3.sum(l, x => x.mes) })).sort((a, b) => a.r.localeCompare(b.r));
+  const forns = [...CU.fornMats.keys()].map(fk => { const cnpj = /^\d{14}$/.test(fk) ? fk : ''; const [geo, st] = _cuGeoStatus(cnpj); return { fk, cnpj, geo, st, mapa: !!_cuLL(fk), mes: fMes.get(fk) || 0 }; })
+    .sort((a, b) => (a.mapa - b.mapa) || b.mes - a.mes || _cuNomeF(a.fk).localeCompare(_cuNomeF(b.fk)));
+  const fmtCnpj = c => c ? c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : '—';
+  const pill = (ok, t) => `<span class="cu-pill ${ok}">${_cuE(t)}</span>`;
+  const linha = (busca, fora, html) => `<tr data-busca="${_cuE(_cuNomeNorm(busca))}" data-fora="${fora ? 1 : 0}">${html}</tr>`;
+  const cOk = cens.filter(x => x.mapa).length, fOk = forns.filter(x => x.mapa).length, fMesOk = forns.filter(x => x.mes && x.mapa).length, fMesN = forns.filter(x => x.mes).length;
+  document.getElementById('cu-diag-body').innerHTML = `
+    <div class="cu-diag-res"><div><b>${cOk} de ${cens.length}</b>centrais no mapa</div><div><b>${fMesOk} de ${fMesN}</b>fornecedores com compra em ${CU_MESES[CU.mes % 100 - 1]}/${Math.floor(CU.mes / 100)} no mapa</div><div><b>${fOk} de ${forns.length}</b>fornecedores da base no mapa</div><div><b>${regs.length}</b>regionais</div></div>
+    <div class="cu-note">Uma central entra no mapa quando tem CNPJ no cadastro de filiais e o endereço foi encontrado. No nível Brasil e Estado ela conta na bolha pela UF; na regional, sem NF no mês fica em cinza.</div>
+    <div class="cu-sec"><h3>Centrais</h3><div style="overflow-x:auto"><table><thead><tr><th>Central</th><th>Regional</th><th>UF</th><th>CNPJ</th><th>Localização</th><th class="n">NFs mês</th><th class="n">NFs base</th><th>Problemas</th></tr></thead><tbody>${
+      cens.map(x => linha(`${x.c.nome} ${x.c.alias} ${x.c.regional} ${x.c.cnpj}`, !x.mapa, `<td><b>${_cuE(x.c.nome)}</b>${x.c.nome !== x.c.alias ? `<br><span class="cu-semloc">${_cuE(x.c.alias)}</span>` : ''}</td><td>${_cuE(x.c.regional)}</td><td>${_cuE(_cuUfCen(x.c) || '—')}</td><td class="mono">${fmtCnpj(x.c.cnpj)}</td><td>${pill(x.st, x.mapa ? x.geo : 'fora do mapa')}</td><td class="n">${x.mes}</td><td class="n">${x.base}</td><td class="mot">${x.prob.map(_cuE).join('; ') || '—'}</td>`)).join('')}</tbody></table></div></div>
+    <div class="cu-sec"><h3>Regionais</h3><div style="overflow-x:auto"><table><thead><tr><th>Regional</th><th>UF</th><th class="n">Centrais</th><th class="n">No mapa</th><th class="n">NFs mês</th></tr></thead><tbody>${
+      regs.map(r => linha(`${r.r} ${r.ufs}`, r.mapa < r.n, `<td><b>${_cuE(r.r)}</b></td><td>${_cuE(r.ufs)}</td><td class="n">${r.n}</td><td class="n ${r.mapa < r.n ? 'cu-worse' : ''}">${r.mapa}</td><td class="n">${r.mes}</td>`)).join('')}</tbody></table></div></div>
+    <div class="cu-sec"><h3>Fornecedores com compra na base</h3><div style="overflow-x:auto"><table><thead><tr><th>Fornecedor</th><th>CNPJ</th><th>Localização</th><th class="n">NFs mês</th><th>Materiais</th></tr></thead><tbody>${
+      forns.map(x => linha(`${_cuNomeF(x.fk)} ${x.cnpj}`, !x.mapa, `<td>${_cuE(_cuNomeF(x.fk))}</td><td class="mono">${fmtCnpj(x.cnpj)}</td><td>${pill(x.st, x.st === 'err' && !x.cnpj ? 'sem CNPJ · reimporte as Entradas ou cadastre nas Cobranças' : x.geo)}</td><td class="n">${x.mes}</td><td class="mot">${[...CU.fornMats.get(x.fk)].map(_cuE).join(', ')}</td>`)).join('')}</tbody></table></div></div>`;
+  _cuDiagFiltrar();
+}
+function _cuDiagFiltrar() {
+  const q = _cuNomeNorm(document.getElementById('cu-diag-busca').value), so = document.getElementById('cu-diag-so').checked;
+  document.querySelectorAll('#cu-diag-body tbody tr').forEach(tr => { tr.hidden = (q && !tr.dataset.busca.includes(q)) || (so && tr.dataset.fora !== '1'); });
+}
+function _cuDiagRefazer() {
+  // Esquece as buscas que falharam (e as centrais/fornecedores sem coordenada) e busca de novo.
+  let n = 0;
+  const alvo = c => { const g = c && CU.geo.get(c); if (g && (g.precisao === 'falhou' || g.lat == null)) { CU.geo.delete(c); n++; } };
+  CU.cen.forEach(c => alvo(c.cnpj)); CU.fornMats.forEach((_, fk) => alvo(fk));
+  toast(n ? `Buscando de novo o endereço de ${n} CNPJ(s) em segundo plano.` : 'Nenhuma busca com falha para refazer. Os itens "sem CNPJ" precisam de cadastro.');
+  if (n) _cuGeocodificar().then(() => { if (!document.getElementById('cu-diag').hidden) _cuDiagnostico(); });
 }
 
 /* ───────── tooltip, status, seletor de mês ───────── */
@@ -846,6 +921,12 @@ function _cuInitUI() {
     _cuUpdate(k === 'reg' || k === 'cen');
   }));
   document.getElementById('cu-f-div').addEventListener('change', e => { F.div = e.target.checked; _cuUpdate(false); });
+  document.getElementById('cu-diag-abrir').onclick = () => { if (!CU.pares) return; _cuDiagnostico(); document.getElementById('cu-diag').hidden = false; document.getElementById('cu-diag-busca').focus(); };
+  document.getElementById('cu-diag-x').onclick = () => { document.getElementById('cu-diag').hidden = true; };
+  document.getElementById('cu-diag').addEventListener('click', e => { if (e.target.id === 'cu-diag') e.currentTarget.hidden = true; });
+  document.getElementById('cu-diag-busca').addEventListener('input', _cuDiagFiltrar);
+  document.getElementById('cu-diag-so').addEventListener('change', _cuDiagFiltrar);
+  document.getElementById('cu-diag-refazer').onclick = _cuDiagRefazer;
   document.getElementById('cu-f-clear').addEventListener('click', () => { Object.assign(F, { uf: '', reg: '', cen: '', mat: '', forn: '', div: false }); CU.sel = null; _cuUpdate(true); });
   document.getElementById('cu-z-in').onclick = () => _cuSvg?.transition().duration(300).call(_cuZoom.scaleBy, 1.6);
   document.getElementById('cu-z-out').onclick = () => _cuSvg?.transition().duration(300).call(_cuZoom.scaleBy, 1 / 1.6);
