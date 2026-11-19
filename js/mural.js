@@ -1222,6 +1222,7 @@ function _muralRxBarras(meses, lim) {
 // registro; ocorrência só tem a data de abertura.
 function _moRxDatas(a, longa) {
   const fato = longa ? fmtPtDate(a.quando) : fmtPtDate(a.quando).slice(0, 5);
+  if (a.dataCom) return `fato ${fato} · comentado ${fmtDateBR(a.dataCom).slice(0, 5)}`; // campo do modal
   if (!a.criado) return fato;
   return `fato ${fato} · registrado ${fmtPtDate(a.criado).slice(0, 5)} ${a.criado.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 }
@@ -1231,7 +1232,7 @@ function _muralRxAcoes(central, mat, ini, fim) {
   const coms = (typeof _varComDe === 'function' ? _varComDe(central, mat) : [])
     // quando = data do FATO (escolhida no modal) — posiciona no gráfico;
     // criado = quando foi registrado (Hugo, 10/11/2026: são duas datas).
-    .map(r => ({ quando: _moIsoParaData(r.data) || (r.created_at ? new Date(r.created_at) : null), criado: r.created_at ? new Date(r.created_at) : null, oc: !!r.oc_id,
+    .map(r => ({ quando: _moIsoParaData(r.data) || (r.created_at ? new Date(r.created_at) : null), criado: r.created_at ? new Date(r.created_at) : null, dataCom: r.data_comentario || null, oc: !!r.oc_id,
       titulo: `${r.oc_id ? 'Ocorrência ' + (r.oc_numero || '') : 'Comentário'} · ${r.autor_nome || '—'}`, texto: r.texto || '' }))
     .filter(a => noPer(a.quando));
   const ocs = (Array.isArray(state.ocorrencias) ? state.ocorrencias : [])

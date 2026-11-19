@@ -40,9 +40,16 @@ function _varComIso(d) {
 }
 function _varComHoje() { return _varComIso(new Date()); }
 
+// Data do comentário: campo do modal (data_comentario); linha sem ela cai
+// no dia do registro (created_at).
+function varComDataComentario(r) {
+  if (r.data_comentario) return fmtDateBR(r.data_comentario);
+  return r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : '';
+}
+
 // "Variação 17/11/2026 · comentado 19/11/2026 · Autor"
 function _varComMeta(r) {
-  const em = r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : '';
+  const em = varComDataComentario(r);
   return `Variação ${fmtDateBR(r.data)}${em ? ` · comentado ${em}` : ''} · ${escapeHtml(r.autor_nome || '—')}`;
 }
 
@@ -173,6 +180,7 @@ function openVarComModal(btn) {
   inpData.min = ini; inpData.max = fim;
   const hoje = _varComHoje();
   inpData.value = fim && hoje > fim ? fim : ini && hoje < ini ? ini : hoje;
+  document.getElementById('varcom-data-com').value = hoje;
   document.getElementById('varcom-texto').value = '';
   document.getElementById('varcom-texto').placeholder = semUso ? 'Por que o material está parado…' : 'Motivo da variação…';
   document.getElementById('varcom-btn-oc').style.display = semUso ? 'none' : '';
@@ -229,14 +237,17 @@ async function varComAdicionar(btn) {
   const data  = document.getElementById('varcom-data').value;
   const texto = document.getElementById('varcom-texto').value.trim();
   const causa = document.getElementById('varcom-causa')?.value || '';
+  const dataCom = document.getElementById('varcom-data-com').value;
   if (!data)  { toast('Informe a data da variação.', 'error'); return false; }
+  if (!dataCom) { toast('Informe a data do comentário.', 'error'); return false; }
+  if (dataCom < data) { toast('A data do comentário não pode ser anterior à data da variação.', 'error'); return false; }
   if ((_varComCtx.ini && data < _varComCtx.ini) || (_varComCtx.fim && data > _varComCtx.fim)) {
     toast(`A data da variação deve estar no período (${_varComCtx.periodo}).`, 'error'); return false;
   }
   if (!causa) { toast('Escolha a causa da variação.', 'error'); return false; }
   if (!texto) { toast('Escreva o comentário.', 'error'); return false; }
   if (btn) btn.disabled = true;
-  const r = await _varComInserir({ central: _varComCtx.central, material: _varComCtx.material, data, texto: `Causa: ${causa}. ${texto}` });
+  const r = await _varComInserir({ central: _varComCtx.central, material: _varComCtx.material, data, data_comentario: dataCom, texto: `Causa: ${causa}. ${texto}` });
   if (btn) btn.disabled = false;
   if (!r) return false;
   document.getElementById('varcom-texto').value = '';
