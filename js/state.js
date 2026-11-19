@@ -390,7 +390,7 @@ function getFieldCandidates(field) {
 
 function getSearchableFields(scope) {
   const map = {
-    entradas: ['centralCompra', 'centralDestino', 'nf', 'dtEmissao', 'dtDescarga', 'fornecedor', 'categoria', 'material', 'materialOriginal', 'peso', 'um', 'custo', 'valorTotal'],
+    entradas: ['centralCompra', 'centralDestino', 'nf', 'dtEmissao', 'dtDescarga', 'fornecedor', 'cnpjFornecedor', 'categoria', 'material', 'materialOriginal', 'peso', 'um', 'custo', 'valorTotal'],
     saidas: ['central', 'dtEmissao', 'os', 'contrato', 'categoria', 'fornecedor', 'material', 'materialOriginal', 'peso', 'um', 'custo', 'valorTotal'],
     lancamentos: ['central', 'dtLanc', 'fornecedor', 'municipio', 'categoria', 'material', 'materialOriginal', 'peso', 'um', 'custo', 'valorTotal'],
     sap: ['usuario', 'movimento', 'ref', 'pedido', 'documento', 'central', 'deposito', 'dtDoc', 'dtLanc', 'dtReg', 'material', 'materialOriginal', 'peso', 'um', 'custoUnit', 'valorTotal'],

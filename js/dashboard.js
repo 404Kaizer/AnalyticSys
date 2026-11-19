@@ -7859,7 +7859,16 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         if (!materialOriginal) return null;
         registrarNomeOriginalMaterial('entradas', materialOriginal);
         const categoriaOriginal = String(r[ci('categoria', 9)] || '').trim();
+        // Campos novos (aba Custos) só entram no registro quando vêm preenchidos:
+        // a base tem ~1 mi de linhas e a maioria não tem frete.
+        const extras = {};
+        ENTRADA_EXTRAS.forEach(([campo, conv]) => {
+          const idx = cm[campo];
+          const v = idx !== undefined ? conv(r[idx]) : '';
+          if (v !== '' && v !== 0) extras[campo] = v;
+        });
         return stamp(normalizarCentraisRecord({
+          ...extras,
           importId,
           centralCompra:    String(r[ci('centralCompra',  0)] || ''),
           centralDestino:   String(r[ci('centralDestino', 1)] || ''),
@@ -8500,13 +8509,44 @@ function buildSapColumnMap(headerRow) {
 // é testada, em todas as colunas do arquivo, antes de qualquer campo avançar para a camada 1.
 // Isso garante prioridade real (ex.: CNPJ Comprador sempre vence Central Compradora) independente
 // da ordem física das colunas no arquivo — e não apenas "primeira coluna que aparecer".
+// Colunas extras das Entradas (aba Custos): [campo, conversão]. Na planilha
+// padrão ficam em F (CNPJ FORNECEDOR) e W–AD (frete), mas só são lidas pelo
+// CABEÇALHO, sem fallback de posição: planilha antiga com outro layout
+// gravaria lixo em ~1 mi de linhas. O frete só é guardado por enquanto; o
+// cálculo de custo com frete vem depois.
+const _entTxt = v => String(v ?? '').trim();
+const _entCnpj = v => {
+  const d = String(v ?? '').replace(/\D/g, '');
+  return d.length >= 12 && d.length < 14 ? d.padStart(14, '0') : d; // Excel come zeros à esquerda
+};
+const ENTRADA_EXTRAS = [
+  ['cnpjFornecedor',     _entCnpj],
+  ['freteTipo',          _entTxt],
+  ['transportadora',     _entTxt],
+  ['cnpjTransportadora', _entCnpj],
+  ['freteData',          v => { const d = fmtDate(v); return d === '—' ? '' : d; }],
+  ['freteNumero',        _entTxt],
+  ['freteTotal',         v => num(v)],
+  ['freteChave',         v => String(v ?? '').replace(/\D/g, '')],
+];
+
 function buildEntradaColumnMap(headerRow) {
   const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   const norms = headerRow.map(n);
   const map = {};
   const usedIdx = new Set();
 
+  // Campos da aba Custos primeiro: no tier 0 eles pegam a coluna antes que um
+  // sinônimo solto de outro campo (ex.: 'total' de valorTotal) a roube.
   const defs = {
+    cnpjFornecedor:     [['cnpj fornecedor','cnpj do fornecedor','cnpj forn']],
+    freteTipo:          [['tipo de frete','tipo frete']],
+    cnpjTransportadora: [['cnpj transportadora','cnpj da transportadora','cnpj transp']],
+    transportadora:     [['transportadora']],
+    freteData:          [['data frete','data do frete','dt frete']],
+    freteNumero:        [['nº frete','n° frete','no frete','nro frete','numero frete','número frete']],
+    freteTotal:         [['total frete','valor frete','vl frete']],
+    freteChave:         [['chave frete','chave do frete']],
     centralCompra:  [
       ['cnpj comprador','cnpj do comprador','cnpj compra','cnpj da compra','cnpj central compra','cnpj filial compra'],
       ['central compra','central de compra','central compradora','c. compra','compra','centro compra'],
