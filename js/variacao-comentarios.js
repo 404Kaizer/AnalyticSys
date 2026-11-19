@@ -6,8 +6,9 @@
 // sobre o motivo da variação e pode abrir uma ocorrência já preenchida.
 // Passar o mouse mostra os comentários e as ocorrências vinculadas.
 //
-// Vínculo é central × material, SEM período: o mesmo histórico aparece em
-// qualquer mês analisado, ordenado pela data que o analista escolheu.
+// Vínculo é central × material. Cada linha tem a DATA DA VARIAÇÃO (`data`,
+// escolhida no modal) e a DATA DO COMENTÁRIO (created_at). Tudo se posiciona
+// e filtra pela data da variação: a Micro só mostra os do período analisado.
 // Compartilhado entre todos os usuários (tabela variacao_comentarios — RLS:
 // todo autenticado lê; só o autor ou admin exclui; não há edição).
 //
@@ -24,15 +25,25 @@ const _VARCOM_OC_STATUS = {
   'concluída': 'concluída', inconclusiva: 'inconclusiva',
 };
 
-function _varComDe(central, material) {
+// `data` = DATA DA VARIAÇÃO (escolhida no modal); created_at = DATA DO
+// COMENTÁRIO. ini/fim (ISO 'YYYY-MM-DD', opcionais) restringem pela data da
+// variação — a Micro só mostra os do período analisado (Hugo, 19/11/2026).
+function _varComDe(central, material, ini, fim) {
   return _varComs
-    .filter(r => r.central === central && r.material === material)
+    .filter(r => r.central === central && r.material === material
+              && (!ini || r.data >= ini) && (!fim || r.data <= fim))
     .sort((a, b) => a.data.localeCompare(b.data) || String(a.created_at).localeCompare(String(b.created_at)));
 }
 
-function _varComHoje() {
-  const d = new Date();
+function _varComIso(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function _varComHoje() { return _varComIso(new Date()); }
+
+// "Variação 17/11/2026 · comentado 19/11/2026 · Autor"
+function _varComMeta(r) {
+  const em = r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : '';
+  return `Variação ${fmtDateBR(r.data)}${em ? ` · comentado ${em}` : ''} · ${escapeHtml(r.autor_nome || '—')}`;
 }
 
 // Status só pra quem enxerga a ocorrência (state.ocorrencias segue a RLS
@@ -88,11 +99,11 @@ function _varComRealtimeInit() {
 // ── Ícone da linha ──────────────────────────────────────────
 // Chamado por buildCentralCard (analitico.js). Central/material vão em
 // data-* (lidos via dataset) — nunca interpolados dentro do onclick.
-function varComBtnHtml(central, material, periodo) {
-  const itens = _varComDe(central, material);
+function varComBtnHtml(central, material, periodo, ini, fim) {
+  const itens = _varComDe(central, material, ini, fim);
   const nCom  = itens.filter(r => !r.oc_id).length;
   const temOc = itens.some(r => r.oc_id);
-  return `<button type="button" class="varcom-btn${nCom ? ' tem-com' : ''}${temOc ? ' tem-oc' : ''}" data-central="${escapeHtml(central)}" data-material="${escapeHtml(material)}" data-periodo="${escapeHtml(periodo || '')}" aria-label="Comentários da variação" onclick="openVarComModal(this)" onmouseenter="showVarComTip(event,this)" onmousemove="_moveHelpTip(event)" onmouseleave="_hideHelpTip()"><i class="ti ${nCom ? 'ti-message-dots' : 'ti-message-plus'}"></i>${nCom ? `<span class="varcom-n">${nCom}</span>` : ''}</button>`;
+  return `<button type="button" class="varcom-btn${nCom ? ' tem-com' : ''}${temOc ? ' tem-oc' : ''}" data-central="${escapeHtml(central)}" data-material="${escapeHtml(material)}" data-periodo="${escapeHtml(periodo || '')}" data-ini="${ini || ''}" data-fim="${fim || ''}" aria-label="Comentários da variação" onclick="openVarComModal(this)" onmouseenter="showVarComTip(event,this)" onmousemove="_moveHelpTip(event)" onmouseleave="_hideHelpTip()"><i class="ti ${nCom ? 'ti-message-dots' : 'ti-message-plus'}"></i>${nCom ? `<span class="varcom-n">${nCom}</span>` : ''}</button>`;
 }
 
 // Troca só os ícones já desenhados (sem re-renderizar o card). Sem
@@ -100,23 +111,23 @@ function varComBtnHtml(central, material, periodo) {
 function _varComRefreshBtns(central, material) {
   document.querySelectorAll('.varcom-btn').forEach(b => {
     if (central != null && (b.dataset.central !== central || b.dataset.material !== material)) return;
-    b.outerHTML = varComBtnHtml(b.dataset.central, b.dataset.material, b.dataset.periodo);
+    b.outerHTML = varComBtnHtml(b.dataset.central, b.dataset.material, b.dataset.periodo, b.dataset.ini, b.dataset.fim);
   });
   // Comentário/ocorrência novo conta como ação do dono no Mural de Operações.
   if (typeof muralRender === 'function') muralRender();
 }
 
 function showVarComTip(e, btn) {
-  const itens = _varComDe(btn.dataset.central, btn.dataset.material);
+  const itens = _varComDe(btn.dataset.central, btn.dataset.material, btn.dataset.ini, btn.dataset.fim);
   const coms  = itens.filter(r => !r.oc_id);
   const ocs   = itens.filter(r => r.oc_id);
   const ult   = coms.slice(-3);
   let html = `<div class="varcom-tip-h">Comentários (${coms.length})</div>`;
-  if (!coms.length) html += `<div class="varcom-tip-vazio">Nenhum comentário. Clique para comentar.</div>`;
+  if (!coms.length) html += `<div class="varcom-tip-vazio">Nenhum comentário${btn.dataset.ini ? ' no período' : ''}. Clique para comentar.</div>`;
   if (coms.length > ult.length) html += `<div class="varcom-tip-vazio">+${coms.length - ult.length} anterior(es)</div>`;
   html += ult.map(r => `
     <div class="varcom-tip-item">
-      <div class="varcom-item-meta">${fmtDateBR(r.data)} · ${escapeHtml(r.autor_nome || '—')}</div>
+      <div class="varcom-item-meta">${_varComMeta(r)}</div>
       <div class="varcom-tip-txt">${escapeHtml(r.texto)}</div>
     </div>`).join('');
   html += `<div class="varcom-tip-h" style="margin-top:10px">Ocorrências (${ocs.length})</div>`;
@@ -151,11 +162,17 @@ function openVarComModal(btn) {
   // dataset.semuso: aberto pela aba Sem uso do Mural (mural-semuso.js) —
   // causas próprias e sem o botão de ocorrência (não conta como tratativa lá).
   const semUso = btn.dataset.semuso || '';
-  _varComCtx = { central: btn.dataset.central, material: btn.dataset.material, periodo: btn.dataset.periodo, diff, semUso };
+  const ini = btn.dataset.ini || '', fim = btn.dataset.fim || '';
+  _varComCtx = { central: btn.dataset.central, material: btn.dataset.material, periodo: btn.dataset.periodo, diff, semUso, ini, fim };
   document.getElementById('varcom-sub').textContent = `${_varComCtx.central} · ${_varComCtx.material}`;
   document.getElementById('varcom-var').innerHTML = semUso ? `Sem uso: ${escapeHtml(semUso)}` :
     `Variação${_varComCtx.periodo ? ` em ${escapeHtml(_varComCtx.periodo)}` : ''}: <span class="td-mono ${varClass(diff)}">${varSymbol(diff)} ${fmtKg(Math.abs(diff))}</span>`;
-  document.getElementById('varcom-data').value  = _varComHoje();
+  // Data da variação: dentro do período analisado; padrão = hoje, ou o fim
+  // do período se ele já passou.
+  const inpData = document.getElementById('varcom-data');
+  inpData.min = ini; inpData.max = fim;
+  const hoje = _varComHoje();
+  inpData.value = fim && hoje > fim ? fim : ini && hoje < ini ? ini : hoje;
   document.getElementById('varcom-texto').value = '';
   document.getElementById('varcom-texto').placeholder = semUso ? 'Por que o material está parado…' : 'Motivo da variação…';
   document.getElementById('varcom-btn-oc').style.display = semUso ? 'none' : '';
@@ -175,11 +192,11 @@ function closeVarComModal() {
 }
 
 function _varComRenderLista() {
-  const itens  = _varComDe(_varComCtx.central, _varComCtx.material);
+  const itens  = _varComDe(_varComCtx.central, _varComCtx.material, _varComCtx.ini, _varComCtx.fim);
   const meuId  = window.currentUser?.id;
   const admin  = window.currentUser?.role === 'admin';
   document.getElementById('varcom-lista').innerHTML = itens.length ? itens.map(r => {
-    const meta    = `<div class="varcom-item-meta">${fmtDateBR(r.data)} · ${escapeHtml(r.autor_nome || '—')}</div>`;
+    const meta    = `<div class="varcom-item-meta">${_varComMeta(r)}</div>`;
     const excluir = (r.user_id === meuId || admin)
       ? `<button type="button" class="varcom-del" title="${r.oc_id ? 'Desvincular' : 'Excluir'}" onclick="varComExcluir('${r.id}')"><i class="ti ${r.oc_id ? 'ti-unlink' : 'ti-trash'}"></i></button>`
       : '';
@@ -190,7 +207,7 @@ function _varComRenderLista() {
     }
     const causa = varComCausaDe(r.texto);
     return `<div class="varcom-item"><i class="ti ti-message"></i><div class="varcom-item-body">${meta}${causa ? `<div class="varcom-causa">${escapeHtml(causa)}</div>` : ''}<div class="varcom-item-txt">${escapeHtml(_varComSemCausa(r.texto))}</div></div>${excluir}</div>`;
-  }).join('') : `<div class="varcom-tip-vazio">Nenhum comentário ainda.</div>`;
+  }).join('') : `<div class="varcom-tip-vazio">Nenhum comentário${_varComCtx.ini ? ' neste período' : ' ainda'}.</div>`;
 }
 
 async function _varComInserir(row) {
@@ -212,7 +229,10 @@ async function varComAdicionar(btn) {
   const data  = document.getElementById('varcom-data').value;
   const texto = document.getElementById('varcom-texto').value.trim();
   const causa = document.getElementById('varcom-causa')?.value || '';
-  if (!data)  { toast('Informe a data.', 'error'); return false; }
+  if (!data)  { toast('Informe a data da variação.', 'error'); return false; }
+  if ((_varComCtx.ini && data < _varComCtx.ini) || (_varComCtx.fim && data > _varComCtx.fim)) {
+    toast(`A data da variação deve estar no período (${_varComCtx.periodo}).`, 'error'); return false;
+  }
   if (!causa) { toast('Escolha a causa da variação.', 'error'); return false; }
   if (!texto) { toast('Escreva o comentário.', 'error'); return false; }
   if (btn) btn.disabled = true;
@@ -250,10 +270,12 @@ async function varComAbrirOcorrencia() {
   // ocorrência que o analista acabou de escrever.
   if (document.getElementById('varcom-texto').value.trim() && !(await varComAdicionar())) return;
   const ctx  = _varComCtx;
-  const coms = _varComDe(ctx.central, ctx.material).filter(r => !r.oc_id);
+  // Vínculo da ocorrência fica na data da variação (senão sairia do período).
+  const dataVar = document.getElementById('varcom-data').value;
+  const coms = _varComDe(ctx.central, ctx.material, ctx.ini, ctx.fim).filter(r => !r.oc_id);
   const sinal = ctx.diff > 0 ? '+' : ctx.diff < 0 ? '−' : '';
   const linhas = [`Variação de estoque (Real − Teórico)${ctx.periodo ? ` em ${ctx.periodo}` : ''}: ${sinal}${fmtKg(Math.abs(ctx.diff))} (${varLabel(ctx.diff)}).`];
-  if (coms.length) linhas.push('', 'Comentários do analista:', ...coms.map(r => `• ${fmtDateBR(r.data)} (${r.autor_nome || '—'}): ${r.texto}`));
+  if (coms.length) linhas.push('', 'Comentários do analista:', ...coms.map(r => `• Variação ${fmtDateBR(r.data)} (${r.autor_nome || '—'}): ${r.texto}`));
   // A Micro usa a sigla; o select de Central prefere o nome original.
   const filial = getFilialLookupIndex().exact.get(normalizeText(ctx.central));
   closeVarComModal();
@@ -261,7 +283,7 @@ async function varComAbrirOcorrencia() {
     central:   (filial?.origem || filial?.alias || ctx.central).trim(),
     material:  ctx.material,
     descricao: linhas.join('\n'),
-    onCriada:  (oc) => _varComInserir({ central: ctx.central, material: ctx.material, data: oc.dataAbertura, oc_id: oc.id, oc_numero: oc.numero }),
+    onCriada:  (oc) => _varComInserir({ central: ctx.central, material: ctx.material, data: dataVar || oc.dataAbertura, oc_id: oc.id, oc_numero: oc.numero }),
   });
 }
 

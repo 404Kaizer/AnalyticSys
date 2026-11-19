@@ -578,7 +578,7 @@ function _mpTlMontar(ps, s) {
     if (r.oc_id || !noPer(r.data)) return; // comentário de ocorrência entra como ocorrência
     const causa = typeof varComCausaDe === 'function' ? varComCausaDe(r.texto) : null;
     const resto = typeof _varComSemCausa === 'function' ? _varComSemCausa(r.texto) : r.texto;
-    add('com', r.data, Date.parse(r.created_at), `Comentário · ${r.autor_nome || '—'}`, `${p.material} · ${p.central}`,
+    add('com', r.data, Date.parse(r.created_at), `Comentário · ${r.autor_nome || '—'}${r.created_at ? ` · comentado ${new Date(r.created_at).toLocaleDateString('pt-BR')}` : ''}`, `${p.material} · ${p.central}`,
       (causa ? `<b>${_moEsc(causa)}.</b> ` : '') + _moEsc(resto || ''), abrirItem(p.central, p.material));
   }));
 
