@@ -14237,3 +14237,15 @@ p.sud-hint { margin: 6px 0 0; }
 .cu-leg-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cu-leg-top b { font-size: 11px; color: var(--text); }
 .cu-leg-top .cu-leg-tg { border: 1px solid var(--border2); background: var(--bg3); color: var(--text2); width: 22px; height: 22px; border-radius: 6px; cursor: pointer; line-height: 1; }
+
+/* Padronização do ADM para o INSUMOS (config.js, cadastroEspelhaAdm): Centrais,
+   Materiais e Fatores aparecem só para consulta — some tudo que edita. Exportar,
+   paginação e "Atualizar cadastros" (reaplica localmente) continuam. */
+.padrao-adm-nota { display: none; margin: 4px 0 14px; padding: 9px 12px; border-radius: 8px; font-size: 12px; color: var(--text2); background: var(--accent-dim); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+body.role-insumos .padrao-adm-nota { display: block; }
+body.role-insumos .padrao-adm .alert-pulse-row,
+body.role-insumos .padrao-adm .table-toolbar .btn:not([onclick^="exportar"]):not(.js-atualizar-cadastros),
+body.role-insumos .padrao-adm .table-toolbar input[type="file"],
+body.role-insumos .padrao-adm tbody td .btn-icon,
+body.role-insumos .padrao-adm tbody td button,
+body.role-insumos .padrao-adm table input[type="checkbox"] { display: none !important; }

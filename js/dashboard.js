@@ -9352,6 +9352,9 @@ async function restoreAndRender() {
     } else {
       _lstepSet('norm', 'skip');
     }
+    // INSUMOS espelha o cadastro do ADM: se ele mudou desde o último boot, reaplica as centrais
+    // (os materiais o passo acima já repadronizou). Ver padraoAdmAposBoot (config.js).
+    if (typeof padraoAdmAposBoot === 'function') await padraoAdmAposBoot();
     _lbarSet(50);
     await nextFrame();
 

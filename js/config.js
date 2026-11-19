@@ -1093,6 +1093,7 @@ function upsertFatoresConversao(items) {
 // precisa suportar renomear origem/alias), e este cadastro não tem esse
 // caso: editar um fator não muda a identidade da linha.
 function _fatoresConversaoSyncUpsert(rec) {
+  if (cadastroEspelhaAdm()) return; // INSUMOS espelha o cadastro do ADM: só consulta, nada sobe
   if (!window.supabaseClient) return;
   window.supabaseClient.from('fatores_conversao')
     .upsert({
@@ -1103,6 +1104,7 @@ function _fatoresConversaoSyncUpsert(rec) {
 }
 
 function _fatoresConversaoSyncDelete(id) {
+  if (cadastroEspelhaAdm()) return; // INSUMOS espelha o cadastro do ADM: só consulta, nada sobe
   if (!window.supabaseClient) return;
   window.supabaseClient.from('fatores_conversao')
     .delete()
@@ -1131,9 +1133,7 @@ function _fatoresConversaoSyncDelete(id) {
 async function syncFatoresConversaoFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const { data, error } = await window.supabaseClient.from('fatores_conversao')
-      .select('id, grupo, fornecedor, um_origem, um_destino, fator, created_at')
-      .eq('user_id', window.currentUser?.id);
+    const { data, error } = await _buscarCadastro('fatores_conversao', 'id, grupo, fornecedor, um_origem, um_destino, fator, created_at');
     if (error) throw error;
 
     const remoto = (data || []).map(r => ({
@@ -1144,7 +1144,8 @@ async function syncFatoresConversaoFromSupabase() {
 
     const idsRemotos = new Set(remoto.map(r => r.id));
     const local = Array.isArray(state.fatoresConversao) ? state.fatoresConversao : [];
-    const faltamNaNuvem = local.filter(f => f && f.id && !idsRemotos.has(f.id));
+    // Espelho do ADM (INSUMOS): só o que veio do ADM, nada sobe.
+    const faltamNaNuvem = cadastroEspelhaAdm() ? [] : local.filter(f => f && f.id && !idsRemotos.has(f.id));
 
     state.fatoresConversao = [...remoto, ...faltamNaNuvem];
     faltamNaNuvem.forEach(f => _fatoresConversaoSyncUpsert(f));
@@ -1460,6 +1461,7 @@ function editarMateriais(items) {
 //    inclusive origem/alias, de uma linha que já existe, sem precisar
 //    inserir nada — só precisa ownerId correto no WHERE.
 function _materiaisSyncUpdate(oldOrigem, oldAlias, rec) {
+  if (cadastroEspelhaAdm()) return; // INSUMOS espelha o cadastro do ADM: só consulta, nada sobe
   if (!window.supabaseClient) return;
   const ownerId = rec.donoId || window.currentUser?.id;
   if (!ownerId) return;
@@ -1519,6 +1521,7 @@ function normalizeImportedFilial(item, importId) {
 // cuida da criação, e não queremos sobrescrever com uma string incompatível
 // nas atualizações seguintes.
 function _materiaisSyncUpsert(rec) {
+  if (cadastroEspelhaAdm()) return; // INSUMOS espelha o cadastro do ADM: só consulta, nada sobe
   if (!window.supabaseClient) return;
   window.supabaseClient.from('materiais')
     .upsert({ origem: rec.origem, alias: rec.alias, cod_sap: rec.codSap || null, categoria: rec.categoria || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }, { onConflict: 'user_id,origem,alias' })
@@ -1531,6 +1534,7 @@ function _materiaisSyncUpsert(rec) {
 // _lancSyncUpsertBatch (import.js).
 const CADASTRO_SYNC_BATCH_SIZE = 500;
 async function _materiaisSyncUpsertBatch(recs) {
+  if (cadastroEspelhaAdm()) return; // INSUMOS espelha o cadastro do ADM: só consulta, nada sobe
   if (!window.supabaseClient || !recs || !recs.length) return;
   const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cod_sap: rec.codSap || null, categoria: rec.categoria || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }));
   for (let i = 0; i < rows.length; i += CADASTRO_SYNC_BATCH_SIZE) {
@@ -1547,6 +1551,55 @@ async function _materiaisSyncUpsertBatch(recs) {
 // ser por chave, nuvem tem prioridade em conflito. Depois do merge, sobe
 // pra nuvem qualquer material local que ainda não esteja lá (self-heal da
 // base já existente, mesmo padrão usado em Lançamentos).
+// ═══ Padronização do ADM para o INSUMOS (19/11/2026) ═══
+// O INSUMOS não tem cadastro próprio de Centrais, Materiais e Fatores de
+// conversão: ESPELHA AO VIVO o do ADM e só consulta (decisão do Hugo). As
+// funções padrao_adm_* (migration 20261119_padrao_adm.sql, security definer)
+// devolvem só as linhas dos perfis admin; a RLS das tabelas não muda.
+// Grupos e Regionais já vêm de todos os usuários (syncCatalogosFromSupabase).
+function cadastroEspelhaAdm() { return window.currentUser?.role === 'insumos'; }
+function _buscarCadastro(tabela, cols) {
+  if (cadastroEspelhaAdm()) return window.supabaseClient.rpc('padrao_adm_' + tabela);
+  return window.supabaseClient.from(tabela).select(cols).eq('user_id', window.currentUser?.id);
+}
+function _padraoAdmAssinatura() {
+  const s = JSON.stringify([
+    (state.filiais || []).map(f => [f.origem, f.alias, f.cnpj, f.uf, f.regional]),
+    (state.materiais || []).map(m => [m.origem, m.alias, m.codSap, m.categoria]),
+    (state.fatoresConversao || []).map(f => [f.grupo, f.fornecedor, f.umOrigem, f.umDestino, f.fator]),
+  ]);
+  let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return s.length + ':' + h;
+}
+const _PADRAO_ADM_KEY = 'padraoAdm.assinatura';
+// Boot (depois do STEP 3, que já repadroniza os materiais): se o cadastro do
+// ADM mudou desde a última vez, reaplica as centrais na base deste INSUMOS.
+async function padraoAdmAposBoot() {
+  if (!cadastroEspelhaAdm()) return;
+  const a = _padraoAdmAssinatura();
+  let antes = null; try { antes = localStorage.getItem(_PADRAO_ADM_KEY); } catch (_) { /* sem storage */ }
+  if (a === antes) return;
+  await aplicarMudancaCadastro({ centrais: true });
+  try { localStorage.setItem(_PADRAO_ADM_KEY, a); } catch (_) { /* sem storage */ }
+}
+// "Ao vivo": ao voltar o foco para a janela (no máximo a cada 10 min) busca de
+// novo o cadastro do ADM e repadroniza a base se ele mudou.
+// ponytail: por foco + intervalo, não Realtime (o INSUMOS não lê as linhas do ADM
+// direto, então não recebe os eventos); se precisar de segundos, criar um canal próprio.
+let _padraoAdmUlt = Date.now();
+async function padraoAdmAtualizar() {
+  if (!cadastroEspelhaAdm() || !window.supabaseClient || Date.now() - _padraoAdmUlt < 10 * 60 * 1000) return;
+  _padraoAdmUlt = Date.now();
+  const antes = _padraoAdmAssinatura();
+  await Promise.all([syncFiliaisFromSupabase(), syncMateriaisFromSupabase(), syncFatoresConversaoFromSupabase()]);
+  const depois = _padraoAdmAssinatura();
+  if (depois === antes) return;
+  await aplicarMudancaCadastro({ centrais: true, materiais: true });
+  try { localStorage.setItem(_PADRAO_ADM_KEY, depois); } catch (_) { /* sem storage */ }
+  toast('Padronização do ADM atualizada: Centrais, Materiais e Fatores reaplicados na sua base.');
+}
+window.addEventListener('focus', () => { padraoAdmAtualizar(); });
+
 async function syncMateriaisFromSupabase() {
   try {
     // BUG REAL (04/08): antes buscava a tabela inteira (fetchAllRows, sem
@@ -1559,9 +1612,7 @@ async function syncMateriaisFromSupabase() {
     // Dados por módulo continua vendo tudo (consulta direto, não passa
     // por aqui). Consulta simples (sem paginação por cursor): o total é
     // sempre um catálogo de UM usuário, bem abaixo do teto de 1000 linhas.
-    const { data, error } = await window.supabaseClient.from('materiais')
-      .select('user_id, origem, alias, cod_sap, categoria, import_id, created_at, origem_usuario_id')
-      .eq('user_id', window.currentUser?.id);
+    const { data, error } = await _buscarCadastro('materiais', 'user_id, origem, alias, cod_sap, categoria, import_id, created_at, origem_usuario_id');
     if (error) throw error;
     // O BANCO MANDA (30/07): o self-heal que existia aqui reenviava todo
     // material local ausente da nuvem, o que desfazia qualquer exclusão
@@ -2137,6 +2188,7 @@ function editarFiliais(items) {
 // bypass de admin (só UPDATE tem), então um Supervisor editando a central
 // de outro usuário não conseguiria inserir/conflitar — só atualizar.
 function _filiaisSyncUpdate(oldOrigem, oldAlias, rec) {
+  if (cadastroEspelhaAdm()) return; // INSUMOS espelha o cadastro do ADM: só consulta, nada sobe
   if (!window.supabaseClient) return;
   const ownerId = rec.donoId || window.currentUser?.id;
   if (!ownerId) return;
@@ -2195,6 +2247,7 @@ window.preencherUfFiliais = preencherUfFiliais;
 // import_id na nuvem para a futura etapa de exclusão em cascata (Fase 4,
 // Etapa 7). Falha não bloqueia a UI.
 function _filiaisSyncUpsert(rec) {
+  if (cadastroEspelhaAdm()) return; // INSUMOS espelha o cadastro do ADM: só consulta, nada sobe
   if (!window.supabaseClient) return;
   window.supabaseClient.from('filiais')
     .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, uf: rec.uf || null, regional: rec.regional || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }, { onConflict: 'user_id,origem,alias' })
@@ -2204,6 +2257,7 @@ function _filiaisSyncUpsert(rec) {
 // Upsert em lote — sincronização inicial dos registros locais que ainda não
 // subiram pra nuvem. Mesmo padrão de _materiaisSyncUpsertBatch.
 async function _filiaisSyncUpsertBatch(recs) {
+  if (cadastroEspelhaAdm()) return; // INSUMOS espelha o cadastro do ADM: só consulta, nada sobe
   if (!window.supabaseClient || !recs || !recs.length) return;
   const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, uf: rec.uf || null, regional: rec.regional || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }));
   for (let i = 0; i < rows.length; i += CADASTRO_SYNC_BATCH_SIZE) {
@@ -2227,9 +2281,7 @@ async function syncFiliaisFromSupabase() {
     // Configurações agora mostra só o cadastro do próprio dono; ver o de
     // outro usuário é opt-in via "Importar de". Supervisão continua
     // irrestrita (não passa por aqui).
-    const { data, error } = await window.supabaseClient.from('filiais')
-      .select('user_id, origem, alias, cnpj, uf, regional, import_id, created_at, origem_usuario_id')
-      .eq('user_id', window.currentUser?.id);
+    const { data, error } = await _buscarCadastro('filiais', 'user_id, origem, alias, cnpj, uf, regional, import_id, created_at, origem_usuario_id');
     if (error) throw error;
     // O BANCO MANDA (30/07) — ver syncMateriaisFromSupabase pro mesmo motivo:
     // o self-heal daqui desfazia exclusão feita pelo painel de Supervisão.
