@@ -88,7 +88,7 @@ async function _acCarregar() {
   // Uma consulta por CFOP (contains no jsonb dos itens); a NF com item de mãe e de filha conta como mãe.
   const porChave = new Map();
   const lotes = await Promise.all([...AC.cfop.keys()].map(cfop =>
-    _acFetchAll('cob_sefaz', 'chave, cnpj_emitente, nome, numero, serie, emissao, status, itens', 'chave', q => q.contains('itens', [{ cfop }]))));
+    _acFetchAll('cob_sefaz', 'chave, cnpj_emitente, nome, numero, serie, emissao, status, itens', 'chave', q => q.contains('itens', JSON.stringify([{ cfop }])))));   // string: array vira literal de array do Postgres, não JSON
   lotes.flat().forEach(s => porChave.set(s.chave, s));
   AC.nfs = [...porChave.values()];
   AC.cenIdx = null;
