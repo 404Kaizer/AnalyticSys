@@ -127,17 +127,26 @@ function _acCentrais() {
 }
 
 /* ───────── vínculo filha → mãe ───────── */
-// Chaves (44 dígitos, aceitando espaços/pontos no meio) e números (3+ dígitos)
-// citados nas informações complementares.
+// O complementar vem com muito texto junto (motorista, placas, lacres, frete…).
+// Ex.: "...[LACRES: 988545-988546] [FRETE TOTAL 1.944,99] REMESSA REFERENTE A
+// NFE 0949920 DE 24 09 2026, NF 0949920 23 09 26" → mãe 949920.
+//   chaves: 44 dígitos seguidos ou em blocos de 4 (espaço/ponto entre blocos);
+//   nums:   número logo depois de NF / NFE / NF-E / N.F. / NOTA (FISCAL), com
+//           "Nº"/"NUMERO"/":" opcionais e milhar com ponto ("000.949.920");
+//   soltos: qualquer outro número de 3–9 dígitos — só se nums não achar mãe.
+// Dígitos separados por espaço/hífen NÃO são emendados (datas, lacres).
 // ponytail: número casa com QUALQUER mãe do mesmo fornecedor com esse número;
 // número ambíguo (2 mães, séries diferentes) fica sem vínculo. Filha que cita
 // 2 mães vai para a primeira. Teto: vínculo manual.
+const AC_RE_CHAVE = /(?<!\d)\d{4}(?:[ .]?\d{4}){10}(?!\d)/g;
+const AC_RE_NF = /(?:^|[^A-Z])(?:N\.?\s?F\.?(?:\s?-?\s?E)?|NOTAS?(?:\s+FISCA(?:L|IS))?(?:\s+ELETRONICAS?)?)\s*(?:N[º°O]?\.?\s*|NUM(?:ERO)?\.?\s*)?[:#-]?\s*(\d{1,3}(?:\.\d{3})+|\d{3,9})(?!\d)/g;
 function _acCitacoes(txt) {
-  const s = String(txt || '').replace(/(\d)[\s.\-/](?=\d)/g, '$1');
-  const chaves = s.match(/\d{44}/g) || [];
-  const resto = s.replace(/\d{44}/g, ' ');
-  const nums = (resto.match(/\d{3,9}/g) || []).map(_acNum);
-  return { chaves, nums };
+  const s = normalizeText(txt);
+  const chaves = (s.match(AC_RE_CHAVE) || []).map(c => c.replace(/\D/g, ''));
+  const resto = s.replace(AC_RE_CHAVE, ' ');
+  const nums = [...new Set([...resto.matchAll(AC_RE_NF)].map(m => _acNum(m[1].replace(/\./g, ''))))];
+  const soltos = [...new Set((resto.match(/(?<!\d)\d{3,9}(?!\d)/g) || []).map(_acNum))];
+  return { chaves, nums, soltos };
 }
 
 function _acMontar() {
@@ -173,12 +182,14 @@ function _acMontar() {
     const man = AC.vinc.get(f.chave);
     if (man) { f.mae = maePorChave.get(man.chave_mae) || null; f.vinculo = 'manual'; f.maeNumero = man.numero_mae; }
     else {
-      const { chaves, nums } = _acCitacoes(f.comp);
+      const { chaves, nums, soltos } = _acCitacoes(f.comp);
       const porCh = chaves.map(c => maePorChave.get(c)).find(Boolean);
       if (porCh) { f.mae = porCh; f.vinculo = 'chave'; }
       else {
-        const cands = new Set();
-        nums.forEach(n => (maePorNum.get(f.cnpj + '|' + n) || []).forEach(m => cands.add(m)));
+        // 1º os números ao lado de "NF"; só sem nenhum deles casando, os soltos.
+        const casar = lista => { const c = new Set(); lista.forEach(n => (maePorNum.get(f.cnpj + '|' + n) || []).forEach(m => c.add(m))); return c; };
+        let cands = casar(nums);
+        if (!cands.size) cands = casar(soltos);
         if (cands.size === 1) { f.mae = [...cands][0]; f.vinculo = 'numero'; }
       }
     }

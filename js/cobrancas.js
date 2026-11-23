@@ -377,17 +377,28 @@ function _cobLerArquivo(file) {
 
 // Acha a linha de cabeçalho (nas 10 primeiras) que tenha todas as colunas
 // esperadas (menos as `opcionais`) e devolve { campo: índiceDaColuna }.
-function _cobMapearCabecalho(rows, importCols, opcionais = []) {
+// opts.ordem: campos cujos nomes valem POR PRIORIDADE (o 1º nome que achar
+// coluna vence), não pela posição da coluna. opts.posicao: {campo: índice}
+// usado quando nenhum nome casa e a coluna não é de outro campo.
+function _cobMapearCabecalho(rows, importCols, opcionais = [], opts = {}) {
   for (let i = 0; i < Math.min(rows.length, 10); i++) {
     const heads = rows[i].map(h => normalizeText(h));
     const mapa = {};
     let ok = true;
     for (const [campo, nomes] of Object.entries(importCols)) {
-      const idx = heads.findIndex(h => nomes.some(n => h.startsWith(n)));
+      let idx = -1;
+      if (opts.ordem?.includes(campo)) {
+        for (const n of nomes) { idx = heads.findIndex(h => h.startsWith(n)); if (idx >= 0) break; }
+      } else idx = heads.findIndex(h => nomes.some(n => h.startsWith(n)));
       if (idx >= 0) mapa[campo] = idx;
       else if (!opcionais.includes(campo)) { ok = false; break; }
     }
-    if (ok) return { linha: i, mapa };
+    if (ok) {
+      for (const [campo, p] of Object.entries(opts.posicao || {})) {
+        if (mapa[campo] === undefined && heads.length > p && !Object.values(mapa).includes(p)) mapa[campo] = p;
+      }
+      return { linha: i, mapa };
+    }
   }
   return null;
 }
@@ -497,8 +508,12 @@ const COB_IMPORTS = {
       nome: ['NOME'], municipio: ['MUNICIPIO'], uf: ['UF'], valor_unit: ['VALOR UNITARIO'], valor_total: ['VALOR TOTAL'],
       volume: ['VOLUME'], cfop: ['CFOP'], evento_dest: ['EVENTO DEST'], transportador: ['TRANSPORTADOR'],
       cnpj_transportador: ['CNPJ TRANSPORTADOR'], placa: ['PLACA'], material: ['MATERIAL'],
-      complementar: ['COMPLEMENTAR', 'INFORMACOES COMPLEMENTARES', 'INF. COMPLEMENTAR', 'INF COMPLEMENTAR'],
+      // Nº/chave da nota mãe (acordos.js). Nomes por prioridade: "DESCRICAO"
+      // sozinha é o último recurso; sem cabeçalho nenhum, coluna W (índice 22).
+      complementar: ['DESCRICAO COMPLEMENTAR', 'CAMPO COMPLEMENTAR', 'INFORMACOES COMPLEMENTARES', 'INF. COMPLEMENTAR', 'INF COMPLEMENTAR', 'COMPLEMENTAR', 'DESCRICAO'],
     },
+    ordem: ['complementar'],
+    posicao: { complementar: 22 },
     opcionais: ['municipio', 'uf', 'valor_unit', 'evento_dest', 'transportador', 'cnpj_transportador', 'placa', 'complementar'],
     // Uma linha por ITEM no relatório → uma NF por chave, com os itens em lista.
     montar(linhas) {
@@ -607,7 +622,7 @@ async function cobImportar(tipo, ev) {
   try { rows = await _cobLerArquivo(file); }
   catch (err) { toast(err.message || 'Não foi possível ler o arquivo.', 'error'); return; }
 
-  const cab = _cobMapearCabecalho(rows, cfg.cols, cfg.opcionais);
+  const cab = _cobMapearCabecalho(rows, cfg.cols, cfg.opcionais, { ordem: cfg.ordem, posicao: cfg.posicao });
   if (!cab) {
     const faltam = Object.entries(cfg.cols).filter(([k]) => !cfg.opcionais.includes(k)).map(([, n]) => n[0]);
     toast(`Este não parece o relatório de ${cfg.rotulo}. Colunas esperadas: ${faltam.join(', ')}.`, 'error');
