@@ -14251,3 +14251,72 @@ body.role-insumos .padrao-adm .table-toolbar input[type="file"],
 body.role-insumos .padrao-adm tbody td .btn-icon,
 body.role-insumos .padrao-adm tbody td button,
 body.role-insumos .padrao-adm table input[type="checkbox"] { display: none !important; }
+
+/* ══════════════════════════════════════════
+   CUSTOS — mapa SEMPRE CLARO (referência do Hugo, 23/11/2026): terra cinza clara,
+   estados com central em creme→laranja, centrais/municípios em laranja, foco em
+   verde-azulado, fornecedores em cinza-azulado. Valores fixos de propósito: não
+   seguem o tema do sistema. Lidos também pelo JS (_cuCssM).
+══════════════════════════════════════════ */
+#cu-mapwrap {
+  --mp-mar: #ffffff; --mp-terra: #eceef2; --mp-divisa: #ffffff; --mp-terra-hover: #e2e5ea;
+  --mp-uf-min: #fdf1de; --mp-uf-max: #f5c27a; --mp-uf-borda: #f3d7ad;
+  --mp-sigla: #b4b9c2; --mp-sigla-forte: #7c818b;
+  --mp-mun: #f7c879; --mp-mun-borda: #d08c2e; --mp-mun-linha: rgba(31,41,55,.07);
+  --mp-cen: #f29a1d; --mp-forn: #4b5b70; --mp-forn-off: #b8bec8;
+  --mp-foco: #1497ad; --mp-foco-fundo: rgba(20,151,173,.32);
+  --mp-txt: #1f2937; --mp-txt2: #6b7280; --mp-halo: #ffffff;
+  --mp-rota: #6b7a8f; --mp-neutro: #8a94a6; --mp-bom: #16a34a; --mp-medio: #e08a00; --mp-ruim: #dc2626;
+  --mp-card: #ffffff; --mp-card-borda: #e3e6eb; --mp-sombra: 0 6px 20px rgba(15,23,42,.14);
+  background: var(--mp-mar);
+}
+#cu-map .st { fill: var(--mp-terra); stroke: var(--mp-divisa); stroke-width: 1px; }
+#cu-map .st.has { fill: var(--mp-uf-min); stroke: var(--mp-uf-borda); }
+#cu-map .st:hover { fill: var(--mp-terra-hover); }
+#cu-map .st.has:hover { filter: brightness(.96); }
+#cu-map .st.foco { fill: #fbf4e8; stroke: var(--mp-foco); stroke-width: 2px; }
+#cu-map .st.dim { opacity: .6; }
+#cu-map .stlbl { fill: var(--mp-sigla); font-family: var(--font); font-weight: 700; }
+#cu-map .stlbl.has { fill: var(--mp-sigla-forte); }
+#cu-map .mn { stroke: var(--mp-mun-linha); }
+#cu-map .mn.hasc { fill: var(--mp-mun); stroke: var(--mp-mun-borda); stroke-width: 1.2px; }
+#cu-map .mn.hasc:hover { fill: #f3b65a; }
+#cu-map .mn.sel { fill: var(--mp-foco-fundo); stroke: var(--mp-foco); stroke-width: 2px; }
+/* marcadores com ícone */
+#cu-map .mk { cursor: pointer; }
+#cu-map .mk circle { fill: #fff; stroke-width: 2px; filter: drop-shadow(0 1px 2px rgba(15,23,42,.28)); }
+#cu-map .mk path { fill: none; stroke-width: 2.2px; stroke-linecap: round; stroke-linejoin: round; }
+#cu-map .mk-cen circle { stroke: var(--mp-cen); } #cu-map .mk-cen path { stroke: var(--mp-cen); }
+#cu-map .mk-forn circle { stroke: var(--mp-forn); } #cu-map .mk-forn path { stroke: var(--mp-forn); }
+#cu-map .mk.off circle { stroke: var(--mp-forn-off); } #cu-map .mk.off path { stroke: var(--mp-forn-off); }
+#cu-map .mk.sel circle { fill: var(--mp-foco); stroke: #fff; } #cu-map .mk.sel path { stroke: #fff; }
+#cu-map .mk:hover circle { stroke-width: 3px; }
+/* rótulos, rotas, selos, régua */
+#cu-map .lbl { fill: var(--mp-txt); stroke: var(--mp-halo); font-weight: 600; }
+#cu-map .lbl.f { fill: var(--mp-forn); }
+#cu-map .lbl.off { fill: var(--mp-forn-off); }
+#cu-map .lbl.km { fill: var(--mp-txt2); }
+#cu-map .lbl.agg { fill: var(--mp-txt); }
+#cu-map .bdg circle { stroke: #fff; }
+#cu-map .rg-ln { stroke: var(--mp-txt); }
+#cu-map .rg-pt { fill: var(--mp-foco); stroke: #fff; }
+#cu-map .rg-tx { fill: var(--mp-txt); stroke: var(--mp-halo); }
+/* controles sobre o mapa: cartões brancos em pílula */
+#cu-mapwrap .cu-crumbs .c, #cu-mapwrap .cu-zoom button, #cu-mapwrap .cu-leg-btn { background: var(--mp-card); border-color: var(--mp-card-borda); color: var(--mp-txt); box-shadow: 0 1px 3px rgba(15,23,42,.08); border-radius: 999px; }
+#cu-mapwrap .cu-zoom button { border-radius: 10px; }
+#cu-mapwrap .cu-crumbs .c.cur { border-color: var(--mp-foco); color: var(--mp-foco); }
+#cu-mapwrap .cu-zoom button.on { background: var(--mp-foco); border-color: var(--mp-foco); color: #fff; }
+#cu-mapwrap .cu-legend:not(.fechada) { background: var(--mp-card); border-color: var(--mp-card-borda); color: var(--mp-txt2); box-shadow: var(--mp-sombra); }
+#cu-mapwrap .cu-legend .dica, #cu-mapwrap .cu-leg-top b { color: var(--mp-txt); }
+#cu-mapwrap .cu-legend .lyr { border-color: var(--mp-card-borda); }
+#cu-mapwrap .cu-leg-top .cu-leg-tg { background: #f3f4f6; border-color: var(--mp-card-borda); color: var(--mp-txt2); }
+#cu-mapwrap .cu-regua { background: var(--mp-card); border-color: var(--mp-foco); color: var(--mp-txt); box-shadow: var(--mp-sombra); color-scheme: light; }
+#cu-mapwrap .cu-regua .cu-facts div { background: #f5f6f8; }
+#cu-mapwrap .cu-regua .cu-facts span, #cu-mapwrap .cu-regua-top span { color: var(--mp-txt2); }
+#cu-mapwrap .cu-regua .cu-facts b.tot { color: var(--mp-foco); }
+#cu-mapwrap .cu-regua .form-input { background: #fff; color: var(--mp-txt); border-color: var(--mp-card-borda); }
+#cu-mapwrap .cu-regua .cu-x { background: #f3f4f6; color: var(--mp-txt2); }
+#cu-mapwrap .cu-empty { background: rgba(255,255,255,.75); color: var(--mp-txt2); }
+/* tooltip do mapa: cartão branco com sombra */
+.cu-tip { background: #fff; border-color: #e3e6eb; color: #1f2937; box-shadow: 0 8px 24px rgba(15,23,42,.16); }
+.cu-tip .mono { color: #6b7280; font-family: var(--font); }
