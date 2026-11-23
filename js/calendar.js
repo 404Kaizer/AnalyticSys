@@ -50,6 +50,9 @@
     const fimEl = document.getElementById(pfx + '-dt-fim');
     if (iniEl) iniEl.value = p.startDate ? toISO(p.startDate) : '';
     if (fimEl) fimEl.value = p.endDate ? toISO(p.endDate) : '';
+    // Aviso genérico de mudança (clique, atalho ou limpar) — usado pela aba
+    // Acordos (acordos.js); quem ouve confere se o intervalo está completo.
+    window.dispatchEvent(new CustomEvent('cal-range', { detail: { pfx } }));
   }
 
   // ── Update trigger button label ───────────────────────────────

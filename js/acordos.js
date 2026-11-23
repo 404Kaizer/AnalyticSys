@@ -265,8 +265,18 @@ const AC_FILTROS = [
   { k: 'mats', label: 'Material', icon: 'ti-box', de: m => m.materiais },
 ];
 const AC_ABAS = [['nota_mae', 'ti-file-dollar', 'Nota mãe'], ['rebate', 'ti-receipt-refund', 'Rebate'], ['acordo_financeiro', 'ti-coins', 'Acordo fin.'], ['', 'ti-circle-dashed', 'Sem acordo']];
-const _acPassaMae = m => (!AC.F.regs.size || AC.F.regs.has(m.regional)) && (!AC.F.cens.size || AC.F.cens.has(m.central)) && (!AC.F.mats.size || m.materiais.some(x => AC.F.mats.has(x)));
-const _acTemFiltro = () => !!(AC.F.regs.size || AC.F.cens.size || AC.F.mats.size);
+// Período (seletor do topo, pfx 'ac'): filtra a nota mãe pela EMISSÃO; o saldo
+// continua contando todas as filhas (Hugo, 23/11/2026).
+const _acPassaMae = m => (!AC.per || (m.emissao >= AC.per.ini && m.emissao <= AC.per.fim))
+  && (!AC.F.regs.size || AC.F.regs.has(m.regional)) && (!AC.F.cens.size || AC.F.cens.has(m.central)) && (!AC.F.mats.size || m.materiais.some(x => AC.F.mats.has(x)));
+const _acTemFiltro = () => !!(AC.per || AC.F.regs.size || AC.F.cens.size || AC.F.mats.size);
+window.addEventListener('cal-range', e => {
+  if (e.detail?.pfx !== 'ac') return;
+  const ini = document.getElementById('ac-dt-ini')?.value, fim = document.getElementById('ac-dt-fim')?.value;
+  if (ini && !fim) return;   // 1º clique: espera o fim do intervalo
+  AC.per = ini && fim ? { ini: new Date(ini + 'T00:00:00').getTime(), fim: new Date(fim + 'T23:59:59.999').getTime() } : null;
+  _acDesenhar();
+});
 const _acMaesDe = cnpj => (AC.porForn.get(cnpj)?.maes || []).filter(_acPassaMae);
 const _acGrupoDe = { regional: m => [m.regional || 'Sem regional'], central: m => [m.central || 'Sem central'], material: m => m.materiais.length ? m.materiais : ['Sem material'] };
 
@@ -481,6 +491,7 @@ function _acPainelForn(f) {
 const _acPill = (txt, cor, ic) => `<span class="ac-pill" style="--c:${cor}">${ic ? `<i class="ti ${ic}"></i>` : ''}${txt}</span>`;
 const _acChev = aberto => `<i class="ti ti-chevron-down micro-filial-chev" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s;${aberto ? 'transform:rotate(180deg)' : ''}"></i>`;
 
+const _acDlId = c => (c || 'semcentral').replace(/[^A-Za-z0-9]/g, '_');
 // Subaba "Sem vínculo": filhas cujo complementar não cita a nota mãe — vincular à mão.
 function _acAlertaSemVinc(f, g) {
   if (!g.semVinc.length) return '<div class="mp-card"><p class="mo-hint"><i class="ti ti-circle-check" style="color:var(--green)"></i> Todas as notas filhas deste fornecedor estão vinculadas a uma nota mãe.</p></div>';
@@ -490,10 +501,15 @@ function _acAlertaSemVinc(f, g) {
     ${g.semVinc.map(s => `<tr>
       <td class="mono">${_acE(s.numero)}</td><td>${_acData(s.emissao)}</td><td>${_acE(s.central || '—')}</td><td class="num mono">${_acT(s.peso)}</td>
       <td class="ac-comp" title="${_acE(s.comp)}">${_acE(s.comp || '—')}</td>
-      <td><div class="ac-vinc"><input class="form-input" id="ac-v-${s.chave}" placeholder="Nº ou chave da mãe" list="ac-dl-${f.cnpj}" onkeydown="if(event.key==='Enter')acVincular('${s.chave}')"><button class="btn btn-sm" onclick="acVincular('${s.chave}')" title="Vincular"><i class="ti ti-link"></i></button></div></td>
+      <td><div class="ac-vinc"><input class="form-input" id="ac-v-${s.chave}" placeholder="Nº ou chave da mãe" list="ac-dl-${f.cnpj}-${_acDlId(s.central)}" onkeydown="if(event.key==='Enter')acVincular('${s.chave}')"><button class="btn btn-sm" onclick="acVincular('${s.chave}')" title="Vincular"><i class="ti ti-link"></i></button></div></td>
     </tr>`).join('')}
     </tbody></table></div>
-    <datalist id="ac-dl-${f.cnpj}">${g.maes.map(m => `<option value="${_acE(m.numero)}">${_acE(m.numero)} · ${_acData(m.emissao)} · ${_acT(m.peso)}</option>`).join('')}</datalist>
+    ${[...new Set(g.semVinc.map(s => s.central))].map(c => {
+      // Sugestões só com as mães da central da filha (Hugo, 23/11/2026); filha
+      // sem central (ou central sem mãe conhecida) vê todas as do fornecedor.
+      const daCen = c ? g.maes.filter(m => m.central === c) : [];
+      return `<datalist id="ac-dl-${f.cnpj}-${_acDlId(c)}">${(daCen.length ? daCen : g.maes).map(m => `<option value="${_acE(m.numero)}">${_acE(m.numero)} · ${_acE(m.central || 'sem central')} · ${_acData(m.emissao)} · ${_acT(m.peso)}</option>`).join('')}</datalist>`;
+    }).join('')}
   </div>`;
 }
 

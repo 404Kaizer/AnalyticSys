@@ -2197,7 +2197,36 @@
       </div>
 
       <!-- ACORDOS — notas mães/adiantamentos, rebates e acordos financeiros (ADM + INSUMOS; ver js/acordos.js) -->
-      <div class="page" id="page-acordos"><div id="ac-root"><div class="empty-state"><p>Carregando…</p></div></div></div>
+      <div class="page" id="page-acordos">
+        <!-- Período: filtra as notas mães pela EMISSÃO (o saldo conta todas as filhas). Mesmo seletor do Analítico (calendar.js, pfx 'ac'). -->
+        <div class="analitico-toolbar">
+          <div class="analitico-period" style="align-items:center;gap:10px">
+            <div class="cal-picker-wrap" id="ac-cal-wrap">
+              <button class="cal-picker-trigger" id="ac-cal-trigger" onclick="toggleCalPicker('ac')" type="button" title="Filtra as notas mães pela data de emissão">
+                <i class="ti ti-calendar-event"></i>
+                <span id="ac-cal-label">Selecionar período</span>
+                <i class="ti ti-chevron-down cal-chev" id="ac-cal-chev"></i>
+              </button>
+              <input type="hidden" id="ac-dt-ini">
+              <input type="hidden" id="ac-dt-fim">
+              <div class="cal-picker-dropdown" id="ac-cal-dropdown">
+                <div class="cal-picker-inner" id="ac-cal-inner" data-pfx="ac"></div>
+              </div>
+            </div>
+            <div class="cal-quick-chips">
+              <button class="cal-chip" onclick="calQuickHoje('ac')" type="button">Até hoje</button>
+              <button class="cal-chip" onclick="calQuickOntem('ac')" type="button">Até ontem</button>
+              <button class="cal-chip" onclick="calQuickUltimaTerca('ac')" type="button">Última terça</button>
+              <button class="cal-chip" onclick="calQuickMesAtual('ac')" type="button">Mês atual</button>
+              <button class="cal-chip" onclick="calQuickMesAnterior('ac')" type="button">Mês anterior</button>
+            </div>
+          </div>
+          <div class="analitico-actions">
+            <button class="btn" onclick="calClearRange('ac')" title="Mostrar todas as notas mães"><i class="ti ti-calendar-off"></i> <span>Todo o período</span></button>
+          </div>
+        </div>
+        <div id="ac-root"><div class="empty-state"><p>Carregando…</p></div></div>
+      </div>
 
       <!-- CUSTOS — mapa de fornecedores, rotas, preços e alertas (ADM + INSUMOS; ver js/custos.js) -->
       <div class="page" id="page-custos">
