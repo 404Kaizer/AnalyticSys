@@ -131,15 +131,20 @@ function _acCentrais() {
 // Ex.: "...[LACRES: 988545-988546] [FRETE TOTAL 1.944,99] REMESSA REFERENTE A
 // NFE 0949920 DE 24 09 2026, NF 0949920 23 09 26" → mãe 949920.
 //   chaves: 44 dígitos seguidos ou em blocos de 4 (espaço/ponto entre blocos);
-//   nums:   número logo depois de NF / NFE / NF-E / N.F. / NOTA (FISCAL), com
-//           "Nº"/"NUMERO"/":" opcionais e milhar com ponto ("000.949.920");
+//   nums:   número depois de NF / NFE / NF-E / N.F. / NOTA (FISCAL), com até
+//           4 palavras no meio (padrões dos fornecedores, Hugo 23/11/2026):
+//           "NOTA FISCAL MAE 123", "N.F. MAE N 123", "NF-E REFERENCIADA: 123",
+//           "NF DE FATURAMENTO NO 123", "NOTA FISCAL NUMERO 123"; milhar com
+//           ponto aceito ("000.949.920");
 //   soltos: qualquer outro número de 3–9 dígitos — só se nums não achar mãe.
 // Dígitos separados por espaço/hífen NÃO são emendados (datas, lacres).
 // ponytail: número casa com QUALQUER mãe do mesmo fornecedor com esse número;
 // número ambíguo (2 mães, séries diferentes) fica sem vínculo. Filha que cita
 // 2 mães vai para a primeira. Teto: vínculo manual.
 const AC_RE_CHAVE = /(?<!\d)\d{4}(?:[ .]?\d{4}){10}(?!\d)/g;
-const AC_RE_NF = /(?:^|[^A-Z])(?:N\.?\s?F\.?(?:\s?-?\s?E)?|NOTAS?(?:\s+FISCA(?:L|IS))?(?:\s+ELETRONICAS?)?)\s*(?:N[º°O]?\.?\s*|NUM(?:ERO)?\.?\s*)?[:#-]?\s*(\d{1,3}(?:\.\d{3})+|\d{3,9})(?!\d)/g;
+// Palavras no meio só de letras (MAE, DE, FATURAMENTO, REFERENCIADA, N, NO, Nº…):
+// número errado que escape daqui ainda precisa ser nº de uma mãe do fornecedor.
+const AC_RE_NF = /(?:^|[^A-Z])(?:N\.?\s?F\.?(?:\s?-?\s?E)?|NOTAS?(?:\s+FISCA(?:L|IS))?(?:\s+ELETRONICAS?)?)(?:[\s:.#-]+(?:[A-Z]{1,14}|N[º°])\.?){0,4}[\s:.#-]*(\d{1,3}(?:\.\d{3})+|\d{3,9})(?!\d)/g;
 function _acCitacoes(txt) {
   const s = normalizeText(txt);
   const chaves = (s.match(AC_RE_CHAVE) || []).map(c => c.replace(/\D/g, ''));
