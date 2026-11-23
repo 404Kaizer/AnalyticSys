@@ -14337,3 +14337,20 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos {
 /* tooltip do mapa: cartão branco com sombra */
 .cu-tip { background: var(--mp-card); border-color: var(--mp-card-borda); color: var(--mp-txt); box-shadow: var(--mp-sombra); }
 .cu-tip .mono { color: var(--mp-txt2); font-family: var(--font); }
+
+/* Fluidez do mapa (23/11): sem vector-effect (caro por quadro em centenas de caminhos).
+   A largura das linhas vem de --sw = 1/zoom, atualizada só no FIM do gesto (custos.js);
+   durante o movimento a borda acompanha o zoom e a suavização fica desligada.
+   Estado esmaecido por cor, não por opacity (opacity cria uma camada por caminho). */
+#cu-map { --sw: 1; }
+#cu-map .st { vector-effect: none; stroke-width: calc(var(--sw) * 1px); }
+#cu-map .st:hover, #cu-map .st.has:hover { stroke-width: calc(var(--sw) * 1.5px); }
+#cu-map .st.foco { stroke-width: calc(var(--sw) * 2px); }
+#cu-map .st.dim { opacity: 1; fill: var(--mp-terra-dim); }
+#cu-map .mn { vector-effect: none; stroke-width: calc(var(--sw) * .6px); }
+#cu-map .mn.hasc { stroke-width: calc(var(--sw) * 1.2px); }
+#cu-map .mn.sel { stroke-width: calc(var(--sw) * 2px); }
+#cu-map.movendo path { shape-rendering: optimizeSpeed; }
+#cu-map.movendo text { text-rendering: optimizeSpeed; }
+#page-custos { --mp-terra-dim: #222226; }
+body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --mp-terra-dim: #f4f5f7; }

@@ -401,12 +401,16 @@ function _cuKmPar(cen, fk) { const a = _cuLL(CU.cen.get(cen)?.cnpj), b = _cuLL(f
 let _cuSvg, _cuG, _cuZoom, _cuGr = {};
 function _cuMapaInit() {
   CU.proj = d3.geoMercator().fitSize([1000, 1000], CU.br);
-  CU.path = d3.geoPath(CU.proj);
+  // 3 casas decimais no espaço projetado (0–1000): caminhos bem menores, sem perda visível até o zoom de município.
+  CU.path = d3.geoPath(CU.proj); if (CU.path.digits) CU.path.digits(3);
   _cuSvg = d3.select('#cu-map'); _cuG = _cuSvg.append('g');
   ['st', 'mun', 'stl', 'agg', 'rt', 'hit', 'f', 'c', 'b', 'l', 'rg'].forEach(k => _cuGr[k] = _cuG.append('g'));
   // Fluidez: o transform do grupo muda a cada evento (barato); a reescala de marcadores, rótulos e rotas
   // roda no máximo uma vez por quadro (requestAnimationFrame), não a cada evento de roda/arrasto.
-  _cuZoom = d3.zoom().scaleExtent([.6, 800]).on('zoom', e => { _cuG.attr('transform', e.transform); if (Math.abs(e.transform.k - CU.K) > 1e-6) { CU.K = e.transform.k; if (!CU._raf) CU._raf = requestAnimationFrame(() => { CU._raf = 0; _cuRescale(); }); } });
+  _cuZoom = d3.zoom().scaleExtent([.6, 800])
+    .on('start', () => _cuSvg.classed('movendo', true))
+    .on('end', () => { _cuSvg.classed('movendo', false); _cuSvg.style('--sw', String(1 / CU.K)); }) // largura das linhas: 1x no fim, não a cada quadro
+    .on('zoom', e => { _cuG.attr('transform', e.transform); if (Math.abs(e.transform.k - CU.K) > 1e-6) { CU.K = e.transform.k; if (!CU._raf) CU._raf = requestAnimationFrame(() => { CU._raf = 0; _cuRescale(); }); } });
   _cuSvg.call(_cuZoom).on('dblclick.zoom', null);
   // Troca de tema com a aba aberta: as cores calculadas no desenho (tom dos estados, rotas) vêm das variáveis --mp-*.
   new MutationObserver(() => { if (CU.pares) { _cuDesenhar(); _cuLegenda(); } }).observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
@@ -435,7 +439,11 @@ function _cuCarregarMun(uf) {
   // ponytail: malha municipal só em memória (cache HTTP do navegador cobre o resto); persistir no IndexedDB se a API do IBGE ficar lenta.
   fetch(CU_IBGE + 'estados/' + cod + '?' + CU_GEOJSON + '&intrarregiao=municipio').then(r => r.ok ? r.json() : null).then(g => {
     if (!g) return;
-    CU.mun[uf] = { fc: _cuRewind(g), sel: _cuGr.mun.append('g').selectAll('path').data(g.features).join('path').attr('class', 'mn').attr('d', CU.path) };
+    CU.mun[uf] = { fc: _cuRewind(g), sel: _cuGr.mun.append('g').selectAll('path').data(g.features).join('path').attr('class', 'mn').attr('d', CU.path)
+      // Eventos ligados uma vez; o mapa feição→centrais da regional atual fica em CU._munCen (_cuDesenhar).
+      .on('mousemove', (e, f) => { const cs = CU._munCen?.get(f); if (cs) _cuTip(e, cs.map(c => `<b>${_cuE(c.nome)}</b>`).join('<br>') + `<br><span class="mono">${cs.length > 1 ? 'clique para aproximar' : 'clique para abrir a central'}</span>`); })
+      .on('mouseleave', _cuTipOff)
+      .on('click', (e, f) => { const cs = CU._munCen?.get(f); if (!cs) return; _cuTipOff(); if (cs.length === 1) _cuAbreCentral(cs[0]); else _cuFit(CU.path.bounds(f)); }) };
     _cuDesenhar(); if (CU.F.cen) _cuFit(_cuBounds());
   }).catch(() => {}).finally(() => { CU.munCarregando[uf] = false; });
 }
@@ -465,7 +473,7 @@ function _cuBounds() {
   return CU.path.bounds(st || CU.br);
 }
 function _cuMedir() { const r = document.getElementById('cu-mapwrap').getBoundingClientRect(); CU.W = r.width; CU.H = r.height; }
-function _cuFit(b, dur = 750) {
+function _cuFit(b, dur = 450) {
   if (!_cuSvg || !CU.W) return;
   const aberto = document.getElementById('cu-panel').classList.contains('open');
   const pw = aberto && innerWidth > 820 ? document.getElementById('cu-panel').offsetWidth + 20 : 0;
@@ -525,6 +533,7 @@ function _cuDesenhar() {
   // fica em laranja e clicável (abre a central), inclusive em outro estado (só esse município).
   const naRegional = (nivel === 'reg' || nivel === 'cen') && F.reg;
   const munCen = new Map(); // feição do município → centrais da regional nele
+  CU._munCen = munCen; // lido pelos eventos fixos dos municípios (_cuCarregarMun)
   const ufsReg = new Set();
   if (naRegional) [...CU.cen.values()].filter(c => c.regional === F.reg && _cuLL(c.cnpj)).forEach(c => {
     const uf = _cuUfCen(c); if (!uf) return;
@@ -540,10 +549,7 @@ function _cuDesenhar() {
     m.sel.style('display', f => !ativo ? 'none' : (uf === ufFoco || munCen.has(f)) ? null : 'none');
     if (!ativo) return;
     m.sel.attr('class', f => 'mn' + (munCen.has(f) ? ' hasc' : '') + (f === munSel ? ' sel' : ''))
-      .style('fill', f => { if (!comCentral || f === munSel) return null; const al = comCentral.get(f); if (!al) return null; const a = arr.filter(n => al.includes(n.cen)); return a.length ? _cuHeat(_cuIdx(a, ref)) : null; })
-      .on('mousemove', (e, f) => { const cs = munCen.get(f); if (cs) _cuTip(e, cs.map(c => `<b>${_cuE(c.nome)}</b>`).join('<br>') + `<br><span class="mono">${cs.length > 1 ? 'clique para aproximar' : 'clique para abrir a central'}</span>`); })
-      .on('mouseleave', _cuTipOff)
-      .on('click', (e, f) => { const cs = munCen.get(f); if (!cs) return; _cuTipOff(); if (cs.length === 1) _cuAbreCentral(cs[0]); else _cuFit(CU.path.bounds(f)); });
+      .style('fill', f => { if (!comCentral || f === munSel) return null; const al = comCentral.get(f); if (!al) return null; const a = arr.filter(n => al.includes(n.cen)); return a.length ? _cuHeat(_cuIdx(a, ref)) : null; });
   });
   // rotas: só no nível da central, ou as do fornecedor em foco
   const base = nivel === 'cen' ? arr.filter(n => n.cen === F.cen) : fornFoco ? arr.filter(n => fornFoco.has(n.forn)) : [];
