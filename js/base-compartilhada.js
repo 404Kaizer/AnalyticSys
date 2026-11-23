@@ -171,6 +171,35 @@ async function _baseBaixar(p) {
   return out.length === p.registros ? out : null;
 }
 
+// ── Fatia por dono (23/11/2026) ──────────────────────────────────────────
+// Analista dono de categoria(s) em analistas_categoria (Admin → Formulário
+// Público) só GUARDA as Entradas/Saídas delas — vale pro sistema todo e
+// deixa o boot dele leve. Material sem categoria reconhecida fica com todos.
+// ADM, INSUMOS e quem não é dono de nada: '*' (tudo).
+// Assinatura gravada por pacote no registro de importação (baseFiltro, com
+// baseLocal = quantos ficaram aqui) — trocar o dono refaz a fatia.
+// ponytail: mudança no cadastro de materiais (categoria de um material) não
+// refaz a fatia sozinha; teto = o analista reimportar/ADM republicar. Se
+// precisar, incluir um hash do cadastro na assinatura.
+async function _baseFiltroSig() {
+  if (['admin', 'insumos'].includes(window.currentUser?.role)) return '*';
+  const { data, error } = await window.supabaseClient.from('analistas_categoria')
+    .select('categoria').eq('analista_user_id', window.currentUser.id);
+  if (error) return null;
+  const cats = [...new Set((data || []).map(d => normalizeCategoriaMaterial(d.categoria)).filter(Boolean))].sort();
+  return cats.length ? cats.join('|') : '*';
+}
+
+function _baseFatia(sig) {
+  if (sig === '*') return () => true;
+  const minhas = new Set(sig.split('|'));
+  const conhecidas = new Set(CATEGORIAS_MATERIAL);
+  return r => {
+    const c = normalizeCategoriaMaterial(getCategoriaPorGrupo(r.materialOriginal || r.material) || r.categoriaOriginal || r.categoria);
+    return !conhecidas.has(c) || minhas.has(c);
+  };
+}
+
 // opts.boot: chamado no restoreAndRender antes da padronização/índices
 // (STEP 3/4 fazem isso pra tudo) — então não reaplica nem redesenha aqui.
 function baseSync(opts = {}) {
@@ -184,6 +213,9 @@ async function _baseSyncAgora({ boot = false } = {}) {
   if (error) { console.warn('[Base] Índice indisponível:', error); return; }
   _baseAtiva = data.length > 0;
   if (!_baseAtiva) return;
+  const sig = await _baseFiltroSig();
+  if (sig === null) { console.warn('[Base] Donos das categorias indisponíveis — sync adiado.'); return; }
+  const naFatia = _baseFatia(sig);
 
   const mudaram = [];
   let baixados = 0, falhas = 0;
@@ -199,21 +231,35 @@ async function _baseSyncAgora({ boot = false } = {}) {
       contagem.set(r.importId, (contagem.get(r.importId) || 0) + 1);
     }
     const impPorId = new Map(state.imports.filter(r => r.modulo === nomeImp).map(r => [r.id, r]));
-    const baixar = [...ativos.values()].filter(p => !pend.has(p.import_id) &&
-      (impPorId.get(p.import_id)?.baseVersao !== p.versao || (contagem.get(p.import_id) || 0) !== p.registros));
+    // Por pacote: em dia (nada), refiltrar o que já está aqui (tinha tudo e
+    // agora é fatia — sem baixar de novo) ou baixar.
+    const baixar = [], refiltrar = new Set();
+    for (const p of ativos.values()) {
+      if (pend.has(p.import_id)) continue;
+      const rec = impPorId.get(p.import_id), n = contagem.get(p.import_id) || 0;
+      const filtroRec = rec?.baseFiltro ?? '*';
+      const emDia = rec?.baseVersao === p.versao;
+      if (emDia && filtroRec === sig && n === (rec.baseLocal ?? p.registros)) continue;
+      if (emDia && filtroRec === '*' && n === p.registros) refiltrar.add(p.import_id);
+      else baixar.push(p);
+    }
     const impSobra = [...impPorId.keys()].some(id => !ativos.has(id) && !pend.has(id));
-    if (!baixar.length && !sobra && !impSobra) continue;
+    if (!baixar.length && !refiltrar.size && !sobra && !impSobra) continue;
 
     const novos = new Map();
     for (const p of baixar) {
       const recs = await _baseBaixar(p);
-      if (recs) { novos.set(p.import_id, recs); baixados++; } else falhas++;
+      if (recs) { novos.set(p.import_id, recs.filter(naFatia)); baixados++; } else falhas++;
     }
     // Falhou o download → o local daquele pacote fica como está.
     const ficam = (state[modulo] || []).filter(r => r.fonte === 'manual' || pend.has(r.importId) ||
-      (r.importId && ativos.has(r.importId) && !novos.has(r.importId)));
+      (r.importId && ativos.has(r.importId) && !novos.has(r.importId) && (!refiltrar.has(r.importId) || naFatia(r))));
     for (const recs of novos.values()) for (const r of recs) ficam.push(r);
     state[modulo] = ficam;
+    const local = new Map();
+    for (const id of refiltrar) local.set(id, 0);
+    for (const r of ficam) if (refiltrar.has(r.importId)) local.set(r.importId, local.get(r.importId) + 1);
+    novos.forEach((recs, id) => local.set(id, recs.length));
 
     state.imports = state.imports.filter(r => r.modulo !== nomeImp || ativos.has(r.id) || pend.has(r.id));
     for (const p of ativos.values()) {
@@ -224,6 +270,10 @@ async function _baseSyncAgora({ boot = false } = {}) {
         state.imports.push(rec);
       }
       if (novos.has(p.import_id)) rec.baseVersao = p.versao;
+      if (local.has(p.import_id)) {
+        rec.baseFiltro = sig;
+        rec.baseLocal = rec.registros = local.get(p.import_id);
+      }
     }
     mudaram.push(modulo);
   }
