@@ -406,6 +406,8 @@ function _cuMapaInit() {
   ['st', 'mun', 'stl', 'agg', 'rt', 'hit', 'f', 'c', 'b', 'l', 'rg'].forEach(k => _cuGr[k] = _cuG.append('g'));
   _cuZoom = d3.zoom().scaleExtent([.6, 800]).on('zoom', e => { _cuG.attr('transform', e.transform); if (Math.abs(e.transform.k - CU.K) > 1e-6) { CU.K = e.transform.k; _cuRescale(); } });
   _cuSvg.call(_cuZoom).on('dblclick.zoom', null);
+  // Troca de tema com a aba aberta: as cores calculadas no desenho (tom dos estados, rotas) vêm das variáveis --mp-*.
+  new MutationObserver(() => { if (CU.pares) { _cuDesenhar(); _cuLegenda(); } }).observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
   _cuGr.st.selectAll('path').data(CU.br.features).join('path').attr('class', 'st').attr('d', CU.path)
     .on('click', (e, f) => _cuClicaUf(CU_UFS[f.properties.codarea], e))
     .on('mousemove', (e, f) => {
@@ -668,7 +670,7 @@ function _cuLegenda() {
     ${rotas ? `<label><input type="checkbox" data-l="cor"${L.cor ? ' checked' : ''}> Rotas coloridas por preço</label>` : ''}
     <label><input type="checkbox" data-l="calor"${L.calor ? ' checked' : ''}> Mapa de calor</label></div>`;
   // Ícone de marcador (mesmo desenho do mapa) para a legenda.
-  const ic = (tipo, cor) => `<svg width="18" height="18" viewBox="-12 -12 24 24" aria-hidden="true"><circle r="10.5" style="fill:#fff;stroke:${cor};stroke-width:2"/><path d="${CU_ICONES[tipo]}" transform="translate(-7.2 -7.2) scale(.6)" style="fill:none;stroke:${cor};stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>`;
+  const ic = (tipo, cor) => `<svg width="18" height="18" viewBox="-12 -12 24 24" aria-hidden="true"><circle r="10.5" style="fill:var(--mp-mk-fundo);stroke:${cor};stroke-width:2"/><path d="${CU_ICONES[tipo]}" transform="translate(-7.2 -7.2) scale(.6)" style="fill:none;stroke:${cor};stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>`;
   if (nivel === 'br' && !rotas && !L.calor) h += `<div class="r"><i class="grad" style="width:60px;background:linear-gradient(90deg,var(--mp-uf-min),var(--mp-uf-max))"></i>Estado · tom = gasto no período</div>`;
   if (nivel === 'uf' && !rotas) h += `<div class="r">${ic('reg', 'var(--mp-foco)')}Regional · tamanho = gasto no período</div>`;
   if (nivel === 'reg' || rotas) h += `<div class="r">${ic('cen', 'var(--mp-cen)')}Central</div>`;
@@ -683,7 +685,7 @@ function _cuLegenda() {
     h += L.cor ? `<div class="r"><i style="width:18px;height:3px;background:var(--mp-ruim)"></i>rota &gt; 6% acima da média</div><div class="r"><i style="width:18px;height:3px;background:var(--mp-medio)"></i>2 a 6% acima</div><div class="r"><i style="width:18px;height:3px;background:var(--mp-bom)"></i>abaixo da média</div><div class="r" style="color:var(--mp-txt2)">espessura = gasto</div>`
       : `<div class="r"><i style="width:18px;border-top:2px dashed var(--mp-rota)"></i>Fornecimento no período</div>`;
   }
-  if (L.calor) h += `<div class="r"><i class="grad" style="background:linear-gradient(90deg,var(--mp-bom),#f3f4f6 50%,var(--mp-ruim))"></i></div><div class="r" style="justify-content:space-between;width:120px;color:var(--mp-txt2)"><span>−12%</span><span>média</span><span>+12%</span></div>`;
+  if (L.calor) h += `<div class="r"><i class="grad" style="background:linear-gradient(90deg,var(--mp-bom),var(--mp-chip) 50%,var(--mp-ruim))"></i></div><div class="r" style="justify-content:space-between;width:120px;color:var(--mp-txt2)"><span>−12%</span><span>média</span><span>+12%</span></div>`;
   if (L.selos) h += `<div class="r"><i style="width:12px;height:12px;border-radius:50%;background:var(--mp-ruim)"></i>NFs em alerta de preço</div>`;
   // Recolhida por padrão (atrapalhava a visão do mapa); a escolha fica guardada no navegador.
   if (CU.legAberta === undefined) { try { CU.legAberta = localStorage.getItem('custos.legenda') === '1'; } catch (_) { CU.legAberta = false; } }
