@@ -14354,3 +14354,13 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos {
 #cu-map.movendo text { text-rendering: optimizeSpeed; }
 #page-custos { --mp-terra-dim: #222226; }
 body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --mp-terra-dim: #f4f5f7; }
+
+/* Municípios (23/11, referência): só os que têm central são desenhados — laranja com
+   contorno claro; os da regional aberta são clicáveis (hasc); o da central aberta, ciano.
+   Estado em foco em marrom/laranja com contorno ciano; vizinhos com central mantêm o tom. */
+#page-custos { --mp-foco-uf: #6a4914; }
+body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --mp-foco-uf: #f9dfb2; }
+#cu-map .mn.temc, #cu-map .mn.hasc { fill: var(--mp-mun); stroke: var(--mp-mun-borda); stroke-width: calc(var(--sw) * 1.1px); }
+#cu-map .mn.hasc { cursor: pointer; pointer-events: auto; }
+#cu-map .mn.hasc:hover { fill: var(--mp-mun-hover); }
+#cu-map .mn.sel { fill: var(--mp-foco-fundo); stroke: var(--mp-foco); stroke-width: calc(var(--sw) * 2px); }

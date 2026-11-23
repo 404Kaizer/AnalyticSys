@@ -447,7 +447,13 @@ function _cuCarregarMun(uf) {
     _cuDesenhar(); if (CU.F.cen) _cuFit(_cuBounds());
   }).catch(() => {}).finally(() => { CU.munCarregando[uf] = false; });
 }
-function _cuMunDoPonto(uf, ll) { return ll && CU.mun[uf]?.fc.features.find(f => d3.geoContains(f, ll)); }
+// Município que contém o ponto, com cache (geoContains em ~850 municípios por central custava a cada desenho).
+function _cuMunDoPonto(uf, ll) {
+  if (!ll || !CU.mun[uf]) return undefined;
+  const k = uf + '|' + ll[0] + '|' + ll[1], c = (CU._munPt || (CU._munPt = new Map()));
+  if (!c.has(k)) c.set(k, CU.mun[uf].fc.features.find(f => d3.geoContains(f, ll)));
+  return c.get(k);
+}
 function _cuBounds() {
   const F = CU.F;
   if (F.cen) {
@@ -521,7 +527,8 @@ function _cuDesenhar() {
   const gUf = Object.fromEntries(Object.entries(porUf).map(([u, a]) => [u, _cuAgg(a)]));
   const gUfMax = d3.max(Object.values(gUf), s => s.g) || 1;
   const tom = d3.interpolateRgb(_cuCssM('--mp-uf-min'), _cuCssM('--mp-uf-max'));
-  _cuGr.st.selectAll('path').attr('class', f => { const uf = CU_UFS[f.properties.codarea]; return 'st' + (cenUfs.has(uf) && !ufFoco ? ' has' : '') + (ufFoco && uf === ufFoco ? ' foco' : '') + (ufFoco && uf !== ufFoco ? ' dim' : ''); })
+  _cuGr.st.selectAll('path').attr('class', f => { const uf = CU_UFS[f.properties.codarea]; return 'st' + (cenUfs.has(uf) ? ' has' : '') + (ufFoco && uf === ufFoco ? ' foco' : '') + (ufFoco && uf !== ufFoco && !cenUfs.has(uf) ? ' dim' : ''); })
+  // Referência (23/11): estados com central mantêm o tom em todos os níveis; sem central ficam cinza (dim).
     .style('fill', f => {
       if (ufFoco) return null;
       const uf = CU_UFS[f.properties.codarea], s = gUf[uf];
@@ -546,9 +553,11 @@ function _cuDesenhar() {
   if (comCentral) [...CU.cen.values()].filter(c => _cuUfCen(c) === ufFoco && _cuLL(c.cnpj)).forEach(c => { const mm = _cuMunDoPonto(ufFoco, _cuLL(c.cnpj)); if (mm) (comCentral.get(mm) || comCentral.set(mm, []).get(mm)).push(c.alias); });
   Object.entries(CU.mun).forEach(([uf, m]) => {
     const ativo = uf === ufFoco || ufsReg.has(uf);
-    m.sel.style('display', f => !ativo ? 'none' : (uf === ufFoco || munCen.has(f)) ? null : 'none');
+    // Só município com central tem desenho (referência do Hugo 23/11): os demais nem são desenhados.
+    const temC = new Set(); if (uf === ufFoco) [...CU.cen.values()].forEach(c => { if (_cuUfCen(c) === uf) { const mm = _cuMunDoPonto(uf, _cuLL(c.cnpj)); if (mm) temC.add(mm); } });
+    m.sel.style('display', f => ativo && (temC.has(f) || munCen.has(f) || f === munSel) ? null : 'none');
     if (!ativo) return;
-    m.sel.attr('class', f => 'mn' + (munCen.has(f) ? ' hasc' : '') + (f === munSel ? ' sel' : ''))
+    m.sel.attr('class', f => 'mn' + (temC.has(f) ? ' temc' : '') + (munCen.has(f) ? ' hasc' : '') + (f === munSel ? ' sel' : ''))
       .style('fill', f => { if (!comCentral || f === munSel) return null; const al = comCentral.get(f); if (!al) return null; const a = arr.filter(n => al.includes(n.cen)); return a.length ? _cuHeat(_cuIdx(a, ref)) : null; });
   });
   // rotas: só no nível da central, ou as do fornecedor em foco
