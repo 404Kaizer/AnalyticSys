@@ -14364,3 +14364,9 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --
 #cu-map .mn.hasc { cursor: pointer; pointer-events: auto; }
 #cu-map .mn.hasc:hover { fill: var(--mp-mun-hover); }
 #cu-map .mn.sel { fill: var(--mp-foco-fundo); stroke: var(--mp-foco); stroke-width: calc(var(--sw) * 2px); }
+.cu-strip.fechado { height: auto; flex: none; }
+.cu-cmp-tg { border: 0; background: none; color: var(--text2); cursor: pointer; font-family: inherit; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; padding: 9px 12px; display: inline-flex; align-items: center; gap: 6px; text-align: left; }
+.cu-strip .sh .cu-cmp-tg { padding: 0 2px; }
+.cu-cmp-tg:hover { color: var(--text); }
+.cu-pk em { display: block; margin-top: 2px; font-size: 10.5px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cu-pk b { white-space: nowrap; }

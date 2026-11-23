@@ -166,7 +166,7 @@ async function _cuCalcular(ents) {
   const t0 = performance.now(), N = ents.length;
   let pausa = t0; // cede a thread a cada ~50 ms de trabalho
   const dRow = new Int32Array(N), kgRow = new Float64Array(N), valRow = new Float64Array(N), pkgRow = new Float64Array(N);
-  const diaCache = new Map(), kgUnCache = new Map(), fkPorNome = new Map(), pares = new Map(), lista = [];
+  const diaCache = new Map(), kgUnCache = new Map(), fkPorNome = new Map(), pares = new Map(), lista = [], nfFr = new Map();
   CU.unMat = new Map(); CU.nomeForn = new Map(); CU.fornMats = new Map(); CU.cenComCompra = new Set();
   for (let i = 0; i < N; i++) {
     if ((i & 0xfff) === 0 && performance.now() - pausa > 50) { _cuStatus(`Calculando ${Math.round(i / N * 70)}%`); await _cuEspera(0); pausa = performance.now(); }
@@ -199,6 +199,15 @@ async function _cuCalcular(ents) {
     let pc = pm.get(mat); if (!pc) { pc = new Map(); pm.set(mat, pc); }
     let p = pc.get(cen); if (!p) { p = { forn: fk, mat, cen, rows: [] }; pc.set(cen, p); lista.push(p); }
     p.rows.push(i);
+    // Frete real por NF (todos os materiais da NF juntos): o CTe repetido nos itens conta uma vez (chave ou nº do CTe;
+    // sem chave, o maior valor) e o peso total da NF serve para dividir o frete entre os materiais.
+    const ft = r.freteTotal;
+    if (ft > 0 && r.nf && r.nf !== '—') {
+      const kn = fk + '|' + String(r.nf) + '|' + d; let o = nfFr.get(kn);
+      if (!o) nfFr.set(kn, o = { kg: 0, fr: 0, sem: 0, v: null });
+      o.kg += kg; const kf = r.freteChave || r.freteNumero;
+      if (kf) { if (!o.v || !o.v.has(kf)) { (o.v || (o.v = new Set())).add(kf); o.fr += ft; } } else if (ft > o.sem) o.sem = ft;
+    }
   }
   let minYm = Infinity;
   lista.forEach(p => { const i = p.rows.reduce((a, b) => dRow[b] < dRow[a] ? b : a); const ym = (dRow[i] / 100) | 0; if (ym < minYm) minYm = ym; });
@@ -216,18 +225,20 @@ async function _cuCalcular(ents) {
     for (let j = 0; j < n;) {
       // Itens da mesma NF (mesmo número e data) viram uma NF só.
       const i0 = rows[j], nf = nfDe(i0);
-      let kg = 0, val = 0, pk = 0, tr = -1, jj = j, fr = 0, frSem = 0, vistos = null;
+      let kg = 0, val = 0, pk = 0, tr = -1, jj = j, kgF = 0, frSem = 0;
       do {
         const i = rows[jj], r = ents[i];
         kg += kgRow[i]; val += valRow[i]; pk += pkgRow[i] * kgRow[i];
         if (tr < 0 && r.centralCompra && r.centralDestino && r.centralCompra !== r.centralDestino) tr = i;
-        // Frete real (Entradas): o mesmo CTe repetido nos itens da NF conta uma vez (chave ou nº do CTe); sem chave, o maior.
-        const ft = r.freteTotal;
-        if (ft > 0) { const kf = r.freteChave || r.freteNumero; if (kf) { if (!vistos || !vistos.has(kf)) { (vistos || (vistos = new Set())).add(kf); fr += ft; } } else if (ft > frSem) frSem = ft; }
+        if (r.freteTotal > 0) { kgF += kgRow[i]; if (!nf && r.freteTotal > frSem) frSem = r.freteTotal; } // sem nº de NF: maior valor do item
         jj++;
       } while (jj < n && nf && dRow[rows[jj]] === dRow[i0] && nfDe(rows[jj]) === nf);
       D[m] = dRow[i0]; Q[m] = kg / f; T[m] = val; PR[m] = Math.round(pk / kg * f * dec) / dec; RI[m] = i0; TR[m] = tr;
-      fr += frSem; if (fr > 0) { if (!FR) FR = new Float64Array(n); FR[m] = fr; }
+      // Frete da NF (todos os materiais) dividido pelo peso deste material: antes o frete inteiro do CTe
+      // caía em cada material da NF e um aditivo de poucos kg ficava com o frete do caminhão todo.
+      let fr = frSem;
+      if (kgF > 0 && nf) { const o = nfFr.get(p.forn + '|' + nf + '|' + dRow[i0]); if (o && o.kg) fr = (o.fr + o.sem) * kgF / o.kg; }
+      if (fr > 0) { if (!FR) FR = new Float64Array(n); FR[m] = fr; }
       const b = Math.min(m, 5);
       if (!b) AL[m] = ((D[m] / 100) | 0) !== minYm ? 3 : 0;   // 3 = fornecedor novo (nunca no 1º mês da base)
       else {
@@ -389,7 +400,9 @@ function _cuEscopo() {
 const _cuEscopoNome = k => k === 'BR' ? 'Brasil' : k.startsWith('reg:') ? k.slice(4) : k.startsWith('uf:') ? k.slice(3) : (CU.cen.get(k)?.nome || k);
 function _cuNomeF(fk) { return CU.nomeForn.get(fk) || CU.fornCad.get(fk) || CU.geo.get(fk)?.nome || (fk.startsWith('n:') ? fk.slice(2) : fk); }
 function _cuRegsDaUf(uf) { return [...new Set([...CU.cen.values()].filter(c => _cuUfCen(c) === uf && CU.cenComCompra?.has(c.alias)).map(c => c.regional))].sort(); }
-function _cuCorReg(reg) { const regs = _cuRegsDaUf(CU.F.uf); const i = regs.indexOf(reg); return `var(${CU_SER[(i < 0 ? 0 : i) % CU_SER.length]})`; }
+// Cor da regional (nível Estado): paleta fixa de 12 cores distintas, legível nos dois temas.
+const CU_CORES_REG = ['#f59e0b', '#22c3d9', '#a78bfa', '#f472b6', '#34d399', '#60a5fa', '#fb7185', '#facc15', '#2dd4bf', '#c084fc', '#fb923c', '#4ade80'];
+function _cuCorReg(reg) { const regs = _cuRegsDaUf(CU.F.uf); const i = regs.indexOf(reg); return CU_CORES_REG[(i < 0 ? 0 : i) % CU_CORES_REG.length]; }
 
 /* ───────── posições ───────── */
 function _cuLL(cnpj) { const g = cnpj && CU.geo.get(cnpj); return g && g.lat != null && g.lng != null ? [g.lng, g.lat] : null; }
@@ -441,9 +454,9 @@ function _cuCarregarMun(uf) {
     if (!g) return;
     CU.mun[uf] = { fc: _cuRewind(g), sel: _cuGr.mun.append('g').selectAll('path').data(g.features).join('path').attr('class', 'mn').attr('d', CU.path)
       // Eventos ligados uma vez; o mapa feição→centrais da regional atual fica em CU._munCen (_cuDesenhar).
-      .on('mousemove', (e, f) => { const cs = CU._munCen?.get(f); if (cs) _cuTip(e, cs.map(c => `<b>${_cuE(c.nome)}</b>`).join('<br>') + `<br><span class="mono">${cs.length > 1 ? 'clique para aproximar' : 'clique para abrir a central'}</span>`); })
+      .on('mousemove', (e, f) => { const rg = CU._munReg?.get(f); if (rg) { const r = CU._regInfo?.get(rg); _cuTip(e, `<b>${_cuE(rg)}</b><br><span class="mono">${r ? _cuBrlc(r.s.g) + ' · ' + r.n + ' centra' + (r.n > 1 ? 'is' : 'l') + (r.s.d ? ' · ' + r.s.d + ' alertas' : '') : 'sem NF no período'}<br>clique para abrir a regional</span>`); return; } const cs = CU._munCen?.get(f); if (cs) _cuTip(e, cs.map(c => `<b>${_cuE(c.nome)}</b>`).join('<br>') + `<br><span class="mono">${cs.length > 1 ? 'clique para aproximar' : 'clique para abrir a central'}</span>`); })
       .on('mouseleave', _cuTipOff)
-      .on('click', (e, f) => { const cs = CU._munCen?.get(f); if (!cs) return; _cuTipOff(); if (cs.length === 1) _cuAbreCentral(cs[0]); else _cuFit(CU.path.bounds(f)); }) };
+      .on('click', (e, f) => { const rg = CU._munReg?.get(f); if (rg) { _cuTipOff(); CU.F.reg = rg; CU.sel = { t: 'reg', reg: rg }; _cuUpdate(true); return; } const cs = CU._munCen?.get(f); if (!cs) return; _cuTipOff(); if (cs.length === 1) _cuAbreCentral(cs[0]); else _cuFit(CU.path.bounds(f)); }) };
     _cuDesenhar(); if (CU.F.cen) _cuFit(_cuBounds());
   }).catch(() => {}).finally(() => { CU.munCarregando[uf] = false; });
 }
@@ -541,6 +554,9 @@ function _cuDesenhar() {
   const naRegional = (nivel === 'reg' || nivel === 'cen') && F.reg;
   const munCen = new Map(); // feição do município → centrais da regional nele
   CU._munCen = munCen; // lido pelos eventos fixos dos municípios (_cuCarregarMun)
+  // Nível Estado com várias regionais: município → regional (cor e clique abrem a regional).
+  const porReg = nivel === 'uf' && !fornFoco && _cuRegsDaUf(F.uf).length > 1, temReg = new Map();
+  CU._munReg = porReg ? temReg : null;
   const ufsReg = new Set();
   if (naRegional) [...CU.cen.values()].filter(c => c.regional === F.reg && _cuLL(c.cnpj)).forEach(c => {
     const uf = _cuUfCen(c); if (!uf) return;
@@ -555,11 +571,12 @@ function _cuDesenhar() {
     const ativo = uf === ufFoco || ufsReg.has(uf);
     // Só município com central tem desenho (referência do Hugo 23/11): os demais nem são desenhados.
     // Com regional aberta, só os municípios das centrais DELA (munCen); todos do estado só no nível Estado.
-    const temC = new Set(); if (uf === ufFoco && !F.reg) [...CU.cen.values()].forEach(c => { if (_cuUfCen(c) === uf) { const mm = _cuMunDoPonto(uf, _cuLL(c.cnpj)); if (mm) temC.add(mm); } });
+    const temC = new Set(); if (uf === ufFoco && !F.reg) [...CU.cen.values()].forEach(c => { if (_cuUfCen(c) === uf) { const mm = _cuMunDoPonto(uf, _cuLL(c.cnpj)); if (mm) { temC.add(mm); if (porReg) temReg.set(mm, c.regional); } } });
     m.sel.style('display', f => ativo && (temC.has(f) || munCen.has(f) || f === munSel) ? null : 'none');
     if (!ativo) return;
-    m.sel.attr('class', f => 'mn' + (temC.has(f) ? ' temc' : '') + (munCen.has(f) ? ' hasc' : '') + (f === munSel ? ' sel' : ''))
-      .style('fill', f => { if (!comCentral || f === munSel) return null; const al = comCentral.get(f); if (!al) return null; const a = arr.filter(n => al.includes(n.cen)); return a.length ? _cuHeat(_cuIdx(a, ref)) : null; });
+    m.sel.attr('class', f => 'mn' + (temC.has(f) ? ' temc' : '') + (munCen.has(f) || temReg.has(f) ? ' hasc' : '') + (f === munSel ? ' sel' : ''))
+      .style('stroke', f => porReg && temReg.has(f) ? _cuCorReg(temReg.get(f)) : null)
+      .style('fill', f => { if (porReg && temReg.has(f)) return _cuCorReg(temReg.get(f)); if (!comCentral || f === munSel) return null; const al = comCentral.get(f); if (!al) return null; const a = arr.filter(n => al.includes(n.cen)); return a.length ? _cuHeat(_cuIdx(a, ref)) : null; });
   });
   // rotas: só no nível da central, ou as do fornecedor em foco
   const base = nivel === 'cen' ? arr.filter(n => n.cen === F.cen) : fornFoco ? arr.filter(n => fornFoco.has(n.forn)) : [];
@@ -615,15 +632,10 @@ function _cuDesenhar() {
     .on('mousemove', (e, c) => _cuTip(e, `<b>${_cuE(c.nome)}</b><br><span class="mono">${_cuE(c.regional)}<br>${c._sem ? 'sem NF no período e filtros' : _cuBrlc(c._g)}${c._nd ? ` · ${c._nd} alerta${c._nd > 1 ? 's' : ''} de preço` : ''}</span>`))
     .on('mouseleave', _cuTipOff)
     .on('click', (e, c) => _cuAbreCentral(c));
-  // Estado com várias regionais: um marcador (ícone de mapa) por regional, na cor dela.
-  let bol = [];
-  if (!fornFoco && nivel === 'uf') {
-    bol = Object.entries(_cuGroup(arr, n => CU.cen.get(n.cen).regional)).map(([reg, a]) => {
-      const pts = [...new Set(a.map(n => n.cen))].map(x => cenPos.get(x)).filter(Boolean);
-      if (!pts.length) return null;
-      const s = _cuAgg(a); return { id: 'rg' + reg, xy: [d3.mean(pts, p => p[0]), d3.mean(pts, p => p[1])], g: s.g, nd: s.d, nome: reg, cor: _cuCorReg(reg), tip: `<b>${_cuE(reg)}</b><br><span class="mono">${_cuBrlc(s.g)} · ${pts.length} centrais · ${s.d} alertas</span>`, ir: () => { F.reg = reg; CU.sel = { t: 'reg', reg }; _cuUpdate(true); } };
-    }).filter(Boolean);
-  }
+  // Estado com várias regionais: sem ícones (encavalavam); o município de cada central fica na cor da
+  // regional e o tooltip dele mostra a soma da regional (CU._regInfo, lido pelos eventos fixos).
+  const bol = [];
+  CU._regInfo = nivel === 'uf' && !fornFoco ? new Map(Object.entries(_cuGroup(arr, n => CU.cen.get(n.cen).regional)).map(([r, a]) => [r, { s: _cuAgg(a), n: new Set(a.map(x => x.cen)).size }])) : null;
   const bmax = d3.max(bol, b => b.g) || 1;
   bol.forEach(b => { b._xy = b.xy; b._nd = b.nd; b._rr = 12 + 8 * Math.sqrt(b.g / bmax); });
   _cuMarcador(_cuGr.agg.selectAll('g.mk').data(bol, b => b.id), 'reg')
@@ -675,11 +687,7 @@ function _cuCrumbs() {
     if (i) { const s = document.createElement('span'); s.className = 'sep'; s.textContent = '›'; el.append(s); }
     const b = document.createElement('button'); b.type = 'button'; b.className = 'c' + (cur ? ' cur' : ''); b.textContent = t; if (fn && !cur) b.onclick = fn; el.append(b);
   });
-  // Estado com várias regionais: cada regional vira um botão, na cor dos pontos.
-  if (F.uf && !F.reg && regsUf.length > 1) regsUf.forEach(r => {
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'c reg'; b.style.setProperty('--rc', _cuCorReg(r)); b.textContent = r;
-    b.onclick = () => { F.reg = r; CU.sel = { t: 'reg', reg: r }; _cuUpdate(true); }; el.append(b);
-  });
+  // (As regionais do estado ficam no mapa, pintadas, e no filtro Regional: sem fila de botões aqui.)
   if (F.cen) { const b = document.createElement('button'); b.type = 'button'; b.className = 'c'; b.textContent = CU.soMun ? 'Ver fornecedores' : 'Ver só o município'; b.onclick = _cuAlternaMunicipio; el.append(b); }
 }
 function _cuLegenda() {
@@ -1082,9 +1090,12 @@ function _cuPainel() {
     body = `<div class="cu-chips"><button type="button" class="cu-chip${CU.alTipo === 'nf' ? ' on' : ''}" data-al="nf">Alertas NF (${a.d})</button><button type="button" class="cu-chip${CU.alTipo === 'cte' ? ' on' : ''}" data-al="cte">Alertas CTe (${a.dc})</button></div>` + (CU.alTipo === 'cte' ? _cuListaCte(arr) : _cuListaNfs(arr));
   }
   el.innerHTML = `<div class="cu-ph"><div><div class="ey ${eyc}">${ey}</div><h2>${_cuE(ttl)}</h2><p>${_cuE(sub)}</p>${end ? `<p class="end"><i class="ti ti-map-pin"></i> ${_cuE(end)}</p>` : (s.t === 'cen' || s.t === 'forn') ? '<p class="end">Endereço ainda não localizado (veja o Diagnóstico)</p>' : ''}</div><button type="button" class="cu-x" id="cu-px" title="Fechar">×</button></div>
-    <div class="cu-pk"><div><span>Gasto (NF)</span><b>${_cuBrlc(a.g)}</b> <em>${a.ge > a.g ? '+ frete ' + _cuBrlc(a.ge - a.g) : ''}</em></div><div><span>Volume</span><b>${umMat ? _cuQ(m1, a.q) : _cuTon(d3.sum(arr, n => n.qtd * (_cuU(n.mat) === 'kg' ? 1 : 1000)))}</b></div>
-    <div><span>${umMat ? 'Custo entregue' : 'Custo vs média'}</span><b>${umMat ? _cuP(m1, a.pe) : _cuPct(_cuIdx(arr, ref))}</b>${umMat ? `<em> NF ${_cuPn(m1, a.pm)} + frete ${_cuPn(m1, a.fu)}</em>` : ' <em>índice, NF + frete</em>'}</div>
-    <div><span>Alertas NF · CTe</span><b class="${a.d + a.dc ? 'red' : ''}">${a.d} · ${a.dc}</b> <em>${a.dr + a.dcr ? '+' + _cuBrlc(a.dr + a.dcr) : ''}</em></div></div>
+    <div class="cu-pk">
+      <div><span>Gasto NF</span><b>${_cuBrlc(a.g)}</b><em>${umMat ? _cuQ(m1, a.q) : _cuTon(d3.sum(arr, n => n.qtd * (_cuU(n.mat) === 'kg' ? 1 : 1000)))}</em></div>
+      <div><span>Frete</span><b>${a.ge > a.g ? _cuBrlc(a.ge - a.g) : '—'}</b><em>${a.ge > a.g && a.g ? _cuNf1.format((a.ge - a.g) / a.g * 100) + '% do gasto' : 'sem frete no recorte'}</em></div>
+      <div><span>${umMat ? 'Custo entregue' : 'Custo vs média'}</span><b>${umMat ? _cuP(m1, a.pe) : _cuPct(_cuIdx(arr, ref))}</b><em>${umMat ? 'NF ' + _cuPn(m1, a.pm) + ' + frete ' + _cuPn(m1, a.fu) : 'índice do custo entregue'}</em></div>
+      <div><span>Alertas</span><b class="${a.d + a.dc ? 'red' : ''}">${a.d + a.dc}</b><em>NF ${a.d} · CTe ${a.dc}${a.dr + a.dcr ? ' · +' + _cuBrlc(a.dr + a.dcr) : ''}</em></div>
+    </div>
     <div class="cu-tabs" role="tablist">${tabs.map(([k, t, n]) => `<button type="button" role="tab" class="${k === CU.tab ? 'on' : ''}" data-tab="${k}">${t}${n != null ? `<span class="n ${n ? 'red' : ''}">${n}</span>` : ''}</button>`).join('')}</div>
     <div class="cu-pb">${body}</div>`;
   el.querySelector('#cu-px').onclick = () => { CU.sel = null; _cuUpdate(false); _cuFit(_cuBounds()); };
@@ -1105,7 +1116,13 @@ function _cuPainel() {
 
 /* ───────── comparador ───────── */
 function _cuStrip() {
-  const el = document.getElementById('cu-strip'), arr = _cuNfsF(), mats = [...new Set(arr.map(n => n.mat))].sort();
+  const el = document.getElementById('cu-strip');
+  // Recolhido por padrão (a faixa ocupava um terço da tela); a escolha fica guardada no navegador.
+  if (CU.cmpAberto === undefined) { try { CU.cmpAberto = localStorage.getItem('custos.comparador') === '1'; } catch (_) { CU.cmpAberto = false; } }
+  const alterna = () => { CU.cmpAberto = !CU.cmpAberto; try { localStorage.setItem('custos.comparador', CU.cmpAberto ? '1' : '0'); } catch (_) { /* sem storage */ } _cuStrip(); requestAnimationFrame(() => { _cuMedir(); _cuFit(_cuBounds(), 0); }); };
+  el.classList.toggle('fechado', !CU.cmpAberto);
+  if (!CU.cmpAberto) { el.innerHTML = `<button type="button" class="cu-cmp-tg"><i class="ti ti-chevron-up"></i> Comparador de fornecedores · ${_cuE(_cuEscopoNome(_cuEscopo()))}</button>`; el.querySelector('.cu-cmp-tg').onclick = alterna; return; }
+  const arr = _cuNfsF(), mats = [...new Set(arr.map(n => n.mat))].sort();
   if (!CU.cmpMat || !mats.includes(CU.cmpMat)) CU.cmpMat = CU.F.mat || mats[0];
   const m = CU.cmpMat, am = arr.filter(n => n.mat === m), esc = _cuEscopo();
   // Série de 6 meses de todos os fornecedores numa passada por mês (não uma por fornecedor).
@@ -1119,9 +1136,10 @@ function _cuStrip() {
   const rows = Object.entries(_cuGroup(am, 'forn')).map(([f, v]) => ({ f, s: _cuAgg(v), ser: serie(f) })).sort((x, y) => x.s.pe - y.s.pe); // custo entregue (NF + frete)
   const best = rows[0]?.s.pe, tq = _cuAgg(am).q;
   const spark = ser => { const p = ser.filter(q => q.y != null); if (p.length < 2) return '<svg viewBox="0 0 186 22" width="100%" height="22"></svg>'; const x = d3.scaleLinear().domain([0, 5]).range([2, 184]), ex = d3.extent(p, q => q.y), y = d3.scaleLinear().domain(ex[0] === ex[1] ? [ex[0] * .98, ex[1] * 1.02] : ex).range([20, 3]); return `<svg viewBox="0 0 186 22" width="100%" height="22"><path d="${d3.line().x(q => x(q.x)).y(q => y(q.y))(p)}" style="fill:none;stroke:var(--amber);stroke-width:1.5"/></svg>`; };
-  el.innerHTML = `<div class="sh"><b>Comparador · ${_cuE(_cuEscopoNome(esc))}</b><div class="cu-chips">${mats.map(x => `<button type="button" class="cu-chip${x === m ? ' on' : ''}" data-cm="${_cuE(x)}">${_cuE(x)}</button>`).join('')}</div></div>
+  el.innerHTML = `<div class="sh"><button type="button" class="cu-cmp-tg" title="Recolher o comparador"><i class="ti ti-chevron-down"></i></button><b>Comparador · ${_cuE(_cuEscopoNome(esc))}</b><div class="cu-chips">${mats.map(x => `<button type="button" class="cu-chip${x === m ? ' on' : ''}" data-cm="${_cuE(x)}">${_cuE(x)}</button>`).join('')}</div></div>
     <div class="cu-cards">${rows.map((r, i) => `<div class="cu-card" data-cf="${_cuE(r.f)}"><span class="nm" title="${_cuE(_cuNomeF(r.f))}">${_cuE(_cuNomeF(r.f))}</span><span class="pr" title="Custo entregue = NF + frete">R$ ${_cuPn(m, r.s.pe)}<span style="font-size:11px;color:var(--text3)">/${_cuU(m)} entregue</span></span><span class="sub"><span>NF ${_cuPn(m, r.s.pm)} + frete ${_cuPn(m, r.s.fu)}</span></span><span class="sub"><span class="${i ? 'cu-worse' : 'cu-best'}">${i ? _cuPct(r.s.pe / best - 1) : 'melhor custo'}</span><span>${_cuNf0.format(r.s.q / tq * 100)}% do vol.</span></span>${spark(r.ser)}<span class="sub"><span class="${r.s.d ? 'cu-worse' : ''}">${r.s.d ? r.s.d + ' alerta' + (r.s.d > 1 ? 's' : '') : 'sem alerta'}</span>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`)}</span></div>`).join('') || '<div class="cu-note">Sem NFs no período.</div>'}</div>`;
   el.querySelectorAll('[data-cm]').forEach(b => b.onclick = () => { CU.cmpMat = b.dataset.cm; _cuStrip(); });
+  el.querySelector('.cu-cmp-tg').onclick = alterna;
   el.querySelectorAll('[data-cf]').forEach(b => b.onclick = () => { CU.sel = { t: 'forn', id: b.dataset.cf }; CU.tab = 'forn'; _cuUpdate(false); });
 }
 
