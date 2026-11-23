@@ -1060,7 +1060,20 @@ async function syncImportsFromSupabase() {
     const local = Array.isArray(state.imports) ? state.imports : [];
     const emAndamento = local.filter(r => r.status === 'Processando');
 
-    state.imports = [...emAndamento, ...remoto]
+    // Base compartilhada (base-compartilhada.js): o registro de cada pacote
+    // guarda versão/fatia aqui no local (baseVersao/baseFiltro/baseLocal) e
+    // a maioria nem existe no log do banco (veio de outro usuário). Sem
+    // preservar, todo boot apagava essas marcas e o sync rebaixava a base
+    // INTEIRA — boot de minutos.
+    const porId = new Map(local.map(r => [r.id, r]));
+    const idsRemoto = new Set(remoto.map(r => r.id));
+    remoto.forEach(r => {
+      const l = porId.get(r.id);
+      if (l && l.baseVersao !== undefined) Object.assign(r, { baseVersao: l.baseVersao, baseFiltro: l.baseFiltro, baseLocal: l.baseLocal });
+    });
+    const daBase = local.filter(r => r.baseVersao !== undefined && r.status !== 'Processando' && !idsRemoto.has(r.id));
+
+    state.imports = [...emAndamento, ...remoto, ...daBase]
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar log de importações — mantendo dados locais.', err);
