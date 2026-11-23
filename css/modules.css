@@ -14290,7 +14290,7 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos {
 #cu-map .st { fill: var(--mp-terra); stroke: var(--mp-divisa); stroke-width: 1px; }
 #cu-map .st.has { fill: var(--mp-uf-min); stroke: var(--mp-uf-borda); }
 #cu-map .st:hover { fill: var(--mp-terra-hover); }
-#cu-map .st.has:hover { filter: brightness(.96); }
+#cu-map .st:hover, #cu-map .st.has:hover { stroke: var(--mp-foco); stroke-width: 1.5px; } /* hover só no contorno: filtro custava caro */
 #cu-map .st.foco { fill: var(--mp-foco-uf); stroke: var(--mp-foco); stroke-width: 2px; }
 #cu-map .st.dim { opacity: .6; }
 #cu-map .stlbl { fill: var(--mp-sigla); font-family: var(--font); font-weight: 700; }
@@ -14301,7 +14301,7 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos {
 #cu-map .mn.sel { fill: var(--mp-foco-fundo); stroke: var(--mp-foco); stroke-width: 2px; }
 /* marcadores com ícone */
 #cu-map .mk { cursor: pointer; }
-#cu-map .mk circle { fill: var(--mp-mk-fundo); stroke-width: 2px; filter: drop-shadow(0 1px 2px rgba(15,23,42,.28)); }
+#cu-map .mk circle { fill: var(--mp-mk-fundo); stroke-width: 2.2px; } /* sem drop-shadow: filtro por marcador travava o zoom */
 #cu-map .mk path { fill: none; stroke-width: 2.2px; stroke-linecap: round; stroke-linejoin: round; }
 #cu-map .mk-cen circle { stroke: var(--mp-cen); } #cu-map .mk-cen path { stroke: var(--mp-cen); }
 #cu-map .mk-forn circle { stroke: var(--mp-forn); } #cu-map .mk-forn path { stroke: var(--mp-forn); }

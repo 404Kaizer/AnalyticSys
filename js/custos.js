@@ -404,14 +404,16 @@ function _cuMapaInit() {
   CU.path = d3.geoPath(CU.proj);
   _cuSvg = d3.select('#cu-map'); _cuG = _cuSvg.append('g');
   ['st', 'mun', 'stl', 'agg', 'rt', 'hit', 'f', 'c', 'b', 'l', 'rg'].forEach(k => _cuGr[k] = _cuG.append('g'));
-  _cuZoom = d3.zoom().scaleExtent([.6, 800]).on('zoom', e => { _cuG.attr('transform', e.transform); if (Math.abs(e.transform.k - CU.K) > 1e-6) { CU.K = e.transform.k; _cuRescale(); } });
+  // Fluidez: o transform do grupo muda a cada evento (barato); a reescala de marcadores, rótulos e rotas
+  // roda no máximo uma vez por quadro (requestAnimationFrame), não a cada evento de roda/arrasto.
+  _cuZoom = d3.zoom().scaleExtent([.6, 800]).on('zoom', e => { _cuG.attr('transform', e.transform); if (Math.abs(e.transform.k - CU.K) > 1e-6) { CU.K = e.transform.k; if (!CU._raf) CU._raf = requestAnimationFrame(() => { CU._raf = 0; _cuRescale(); }); } });
   _cuSvg.call(_cuZoom).on('dblclick.zoom', null);
   // Troca de tema com a aba aberta: as cores calculadas no desenho (tom dos estados, rotas) vêm das variáveis --mp-*.
   new MutationObserver(() => { if (CU.pares) { _cuDesenhar(); _cuLegenda(); } }).observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
   _cuGr.st.selectAll('path').data(CU.br.features).join('path').attr('class', 'st').attr('d', CU.path)
     .on('click', (e, f) => _cuClicaUf(CU_UFS[f.properties.codarea], e))
     .on('mousemove', (e, f) => {
-      const uf = CU_UFS[f.properties.codarea], a = _cuAgg(_cuPeriodo().filter(n => _cuUfCen(CU.cen.get(n.cen)) === uf));
+      const uf = CU_UFS[f.properties.codarea], a = _cuAggUf(uf);
       _cuTip(e, `<b>${uf}</b><br><span class="mono">${a.n ? _cuBrlc(a.g) + ' · ' + a.d + ' alertas' : 'sem compras no período'}</span>`);
     })
     .on('mouseleave', _cuTipOff);
@@ -551,7 +553,7 @@ function _cuDesenhar() {
   const curva = l => { const a = cenPos.get(l.c), b = _cuXY(l.f), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1]; return `M${b[0]},${b[1]}Q${mx - dy * .18},${my + dx * .18} ${a[0]},${a[1]}`; };
   const vmax = d3.max(vis, l => l.s.g) || 1;
   _cuGr.rt.selectAll('path').data(vis, l => l.c + '|' + l.f).join('path').attr('d', curva)
-    .attr('class', L.cor ? 'rt flow' : 'rt')
+    .attr('class', 'rt') // sem animação do tracejado: ela redesenhava o mapa inteiro a cada quadro
     .style('stroke', l => L.cor ? _cuRtCor(l.ix) : foco(l) ? _cuCssM('--mp-foco') : _cuCssM('--mp-rota'))
     .style('opacity', l => nivel === 'cen' && sel && (sel.t === 'forn' || sel.t === 'rota') ? (foco(l) ? 1 : .2) : .9)
     .each(l => { l.w = L.cor ? 1 + 3.2 * Math.sqrt(l.s.g / vmax) : foco(l) ? 2.2 : 1.6; });
@@ -570,13 +572,16 @@ function _cuDesenhar() {
         .forEach(fk => fl.push(fk)); // todas, de qualquer estado (pedido do Hugo); nome só no tooltip
     }
   }
+  // Tooltip do fornecedor: soma uma vez por desenho (antes filtrava o recorte inteiro a cada movimento do mouse).
+  const porFornArr = _cuGroup(arr, 'forn'), aggFornCache = new Map();
+  const aggForn = fk => { let s = aggFornCache.get(fk); if (!s) aggFornCache.set(fk, s = _cuAgg(porFornArr[fk] || [])); return s; };
   const selF = fk => !!fornFoco?.has(fk) && (sel?.t === 'forn' || sel?.t === 'rota');
   // Alternativas (cinza) desenhadas primeiro: ficam por baixo dos fornecedores com compra.
   const flOrd = [...fl.filter(fk => !ativos.has(fk)), ...fl.filter(fk => ativos.has(fk))];
   _cuMarcador(_cuGr.f.selectAll('g.mk').data(flOrd, fk => fk), 'forn')
     .attr('class', fk => 'mk mk-forn' + (ativos.has(fk) ? '' : ' off') + (selF(fk) ? ' sel' : ''))
     .each(function (fk) { this._xy = _cuXY(fk); this._s = ativos.has(fk) || selF(fk) ? 1 : .72; })
-    .on('mousemove', (e, fk) => { const a = _cuAgg(arr.filter(n => n.forn === fk)), g = CU.geo.get(fk); _cuTip(e, `<b>${_cuE(_cuNomeF(fk))}</b><br><span class="mono">${_cuE((g?.municipio || '') + (g?.uf ? '/' + g.uf : ''))}<br>${a.n ? _cuBrlc(a.g) + ' no recorte' : 'sem compra no recorte (alternativa)'}</span>`); })
+    .on('mousemove', (e, fk) => { const a = aggForn(fk), g = CU.geo.get(fk); _cuTip(e, `<b>${_cuE(_cuNomeF(fk))}</b><br><span class="mono">${_cuE((g?.municipio || '') + (g?.uf ? '/' + g.uf : ''))}<br>${a.n ? _cuBrlc(a.g) + ' no recorte' : 'sem compra no recorte (alternativa)'}</span>`); })
     .on('mouseleave', _cuTipOff).on('click', (e, fk) => { CU.sel = { t: 'forn', id: fk }; CU.tab = 'nfs'; _cuUpdate(false); })
     .order();
   // centrais: regional (todas dela), central (só ela), ou as das rotas do fornecedor em foco
@@ -1279,7 +1284,14 @@ function _cuDiagRefazer() {
 }
 
 /* ───────── tooltip, status, seletor de mês ───────── */
-function _cuTip(e, h) { const t = document.getElementById('cu-tip'); t.innerHTML = h; t.hidden = false; const r = t.getBoundingClientRect(); let x = e.clientX + 14, y = e.clientY + 14; if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14; if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14; t.style.left = x + 'px'; t.style.top = y + 'px'; }
+// Tooltip: só reescreve e mede o conteúdo quando ele muda; a cada movimento só reposiciona.
+function _cuTip(e, h) { const t = document.getElementById('cu-tip'); if (t._h !== h || t.hidden) { t.innerHTML = h; t._h = h; t.hidden = false; t._r = t.getBoundingClientRect(); } const r = t._r; let x = e.clientX + 14, y = e.clientY + 14; if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14; if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14; t.style.left = x + 'px'; t.style.top = y + 'px'; }
+// Soma por UF do período (tooltip dos estados), refeita só quando o período muda.
+function _cuAggUf(uf) {
+  const per = _cuPeriodo();
+  if (CU._aggUfA !== per) { CU._aggUfA = per; const m = new Map(); per.forEach(n => { const u = _cuUfCen(CU.cen.get(n.cen)); (m.get(u) || m.set(u, []).get(u)).push(n); }); CU._aggUf = new Map([...m].map(([u, a]) => [u, _cuAgg(a)])); }
+  return CU._aggUf.get(uf) || _cuAgg([]);
+}
 function _cuTipOff() { document.getElementById('cu-tip').hidden = true; }
 function _cuStatus(t) { const el = document.getElementById('cu-status'); if (el) el.textContent = t; }
 function _cuVazio(t) { const el = document.getElementById('cu-empty'); el.textContent = t; el.hidden = !t; }
