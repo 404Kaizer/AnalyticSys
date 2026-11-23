@@ -14,7 +14,7 @@
 // COB_PAGINAS_INSUMOS + navigate() em ui.js. O que some na tela é
 // controlado por body.role-insumos (auth.js) + CSS (modules.css).
 
-const COB_PAGINAS_INSUMOS = new Set(['cobrancas', 'importar', 'configuracoes', 'ocorrencias', 'entradas', 'saidas', 'custos']);
+const COB_PAGINAS_INSUMOS = new Set(['cobrancas', 'importar', 'configuracoes', 'ocorrencias', 'entradas', 'saidas', 'custos', 'acordos']);
 
 function cobIsInsumos() {
   return window.currentUser?.role === 'insumos';
@@ -71,9 +71,12 @@ const COB_CADS = {
       { k: 'cfop', rot: 'CFOP', w: '90px' },
       { k: 'resumo', rot: 'Resumo', w: '170px', lista: true },
       { k: 'descricao', rot: 'Descrição' },
+      // Aba Acordos (acordos.js): nota mãe / nota filha da entrega futura.
+      { k: 'acordo', rot: 'Acordo', w: '170px', padrao: '', opcoes: { '': '—', mae: 'Nota mãe', filha: 'Nota filha' } },
     ],
     ordem: (a, b) => a.cfop.localeCompare(b.cfop),
     validar(r) {
+      r.acordo = r.acordo || null;
       r.cfop = _cobDigitos(r.cfop);
       r.resumo = normalizeText(r.resumo);
       r.descricao = String(r.descricao ?? '').trim();
@@ -257,7 +260,7 @@ function _cobLinhaEdicao(tipo, r) {
     const v = escapeHtml(r?.[c.k] ?? '');
     if (c.opcoes) {
       return `<td><select class="form-select" data-k="${c.k}" style="font-size:12px;padding:4px 8px">${
-        Object.entries(c.opcoes).map(([val, rot]) => `<option value="${val}"${(r?.[c.k] || 'cobrar') === val ? ' selected' : ''}>${rot}</option>`).join('')
+        Object.entries(c.opcoes).map(([val, rot]) => `<option value="${val}"${(r?.[c.k] || (c.padrao ?? 'cobrar')) === val ? ' selected' : ''}>${rot}</option>`).join('')
       }</select></td>`;
     }
     const lista = c.lista ? ` list="cob-dl-${tipo}-${c.k}"` : '';
@@ -283,7 +286,8 @@ function cobRenderCadastro(tipo) {
     if (ed !== null && r[cfg.pk] === ed) return _cobLinhaEdicao(tipo, r);
     const tds = cfg.cols.map(c => {
       if (c.opcoes) {
-        return `<td><span class="badge ${r[c.k] === 'cobrar' ? 'badge-green' : 'badge-amber'}">${escapeHtml(c.opcoes[r[c.k]] || r[c.k])}</span></td>`;
+        if (!r[c.k] && c.padrao === '') return '<td class="td-muted">—</td>';
+        return `<td><span class="badge ${r[c.k] === 'cobrar' || r[c.k] === 'mae' ? 'badge-green' : 'badge-amber'}">${escapeHtml(c.opcoes[r[c.k]] || r[c.k])}</span></td>`;
       }
       return `<td${c.k === cfg.pk ? ' class="td-mono"' : ''}>${escapeHtml(c.fmt ? c.fmt(r[c.k]) : (r[c.k] ?? ''))}</td>`;
     }).join('');
@@ -493,8 +497,9 @@ const COB_IMPORTS = {
       nome: ['NOME'], municipio: ['MUNICIPIO'], uf: ['UF'], valor_unit: ['VALOR UNITARIO'], valor_total: ['VALOR TOTAL'],
       volume: ['VOLUME'], cfop: ['CFOP'], evento_dest: ['EVENTO DEST'], transportador: ['TRANSPORTADOR'],
       cnpj_transportador: ['CNPJ TRANSPORTADOR'], placa: ['PLACA'], material: ['MATERIAL'],
+      complementar: ['COMPLEMENTAR', 'INFORMACOES COMPLEMENTARES', 'INF. COMPLEMENTAR', 'INF COMPLEMENTAR'],
     },
-    opcionais: ['municipio', 'uf', 'valor_unit', 'evento_dest', 'transportador', 'cnpj_transportador', 'placa'],
+    opcionais: ['municipio', 'uf', 'valor_unit', 'evento_dest', 'transportador', 'cnpj_transportador', 'placa', 'complementar'],
     // Uma linha por ITEM no relatório → uma NF por chave, com os itens em lista.
     montar(linhas) {
       const porChave = new Map();
@@ -519,6 +524,10 @@ const COB_IMPORTS = {
           material: _cobTxt(c.material), cfop: _cobDigitos(c.cfop) || null,
           volume: num(c.volume),            // SEFAZ exporta volume com ponto decimal ("46.509")
           valor_unit: numXls(c.valor_unit), valor_total: numXls(c.valor_total),
+          // Informações complementares (nº/chave da nota mãe — acordos.js).
+          // ponytail: vai no 1º item (é da NF, repete em toda linha) pra não
+          // mexer na tabela cob_sefaz nem na RPC cob_substituir; virar coluna se precisar filtrar no banco.
+          complementar: nf.itens.length ? undefined : _cobTxt(c.complementar) || undefined,
         });
       });
       return { rows: [...porChave.values()], invalidas };
@@ -734,7 +743,10 @@ function cobCalcular(d, hoje) {
   const hojeMs = Date.parse(hojeISO);
   const sefaz = new Map(d.sefaz.map(s => [s.cnpj_emitente + '|' + s.numero, s]));
   const resumo = new Map(d.cfop.map(c => [c.cfop, c.resumo]));
-  const forn = new Map(d.fornecedores.map(f => [f.cnpj, f]));
+  // Nota mãe (simples faturamento, entrega futura) não é cobrada — é
+  // controlada na aba Acordos (acordos.js). CFOP marcado em cob_cfop.acordo.
+  const cfopMae = new Set(d.cfop.filter(c => c.acordo === 'mae').map(c => c.cfop));
+  const forn =new Map(d.fornecedores.map(f => [f.cnpj, f]));
   const centrais = new Map();
   d.centrais.forEach(c => { const k = _cobDigitos(c.cnpj); if (k && !centrais.has(k)) centrais.set(k, c); });
   const just = new Map(d.justificativas.map(j => [_cobChaveNf(j), j]));
@@ -743,7 +755,7 @@ function cobCalcular(d, hoje) {
   const res = {
     hojeISO, porChave: new Map(), cobraveis: [], cobranca: [], blocos: {},
     canceladas: [], semSefaz: [], fornNovos: [], centraisNaoCad: [],
-    justificativas: [], desconsideradas: [], fora: { hoje: 0, cfop: 0, ignorados: 0, desconsideradas: 0 },
+    justificativas: [], desconsideradas: [], fora: { hoje: 0, cfop: 0, ignorados: 0, desconsideradas: 0, maes: 0 },
   };
   COB_BLOCOS_ORDEM.forEach(b => { res.blocos[b] = []; });
   const fornNovos = new Map(), centraisNC = new Map();
@@ -773,6 +785,7 @@ function cobCalcular(d, hoje) {
     if (desc.has(k)) { res.fora.desconsideradas++; continue; }
     if (s && /cancel/i.test(s.status || '')) { res.canceladas.push(row); continue; }
     if (dias !== null && dias < 1) { res.fora.hoje++; continue; }
+    if (s && itens.some(i => cfopMae.has(i.cfop))) { res.fora.maes++; continue; }
     if (s && !itens.some(i => COB_RESUMOS_COBRADOS.has(resumo.get(i.cfop)))) { res.fora.cfop++; continue; }
     const f = forn.get(p.cnpj_fornecedor);
     if (!f) {
@@ -1001,7 +1014,8 @@ function _cobBaseTxt(res) {
   const p = _cobVigente('pendentes'), s = _cobVigente('sefaz');
   const q = r => r ? `${r.arquivo} (${new Date(r.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })})` : 'sem importação';
   const ns = _cob.imports.filter(r => r.tipo === 'sefaz' && r.vigente).length;
-  return `Pendências: ${q(p)} · SEFAZ: ${ns > 1 ? `${ns} importações, última ` : ''}${q(s)} · Referência: ${_cobFmtData(res.hojeISO)}`;
+  return `Pendências: ${q(p)} · SEFAZ: ${ns > 1 ? `${ns} importações, última ` : ''}${q(s)} · Referência: ${_cobFmtData(res.hojeISO)}`
+    + (res.fora.maes ? ` · ${res.fora.maes} nota(s) mãe fora da cobrança (aba Acordos)` : '');
 }
 
 function _cobRenderCobranca() {

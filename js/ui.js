@@ -33,7 +33,7 @@ function navigate(page) {
   const _role = window.currentUser?.role;
   if (_role === 'insumos' && !COB_PAGINAS_INSUMOS.has(page)) page = 'cobrancas';
   // Custos é só de ADM + INSUMOS (a trava de verdade é a RLS de custos_*).
-  if (page === 'custos' && _role !== 'admin' && _role !== 'insumos') page = 'dashboard';
+  if ((page === 'custos' || page === 'acordos') && _role !== 'admin' && _role !== 'insumos') page = 'dashboard';
   // Inventário foi movido para uma "Visão" dentro do Dashboard Analítico
   // (alterna com a Visão Micro, compartilhando o mesmo período/toolbar).
   if (page === 'inventario') {

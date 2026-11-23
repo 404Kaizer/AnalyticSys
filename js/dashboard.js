@@ -8528,6 +8528,9 @@ const ENTRADA_EXTRAS = [
   ['freteNumero',        _entTxt],
   ['freteTotal',         v => num(v)],
   ['freteChave',         v => String(v ?? '').replace(/\D/g, '')],
+  // Chave de acesso da NF (aba Acordos: central da nota mãe/filha; e tira as
+  // notas mães da base dos analistas de estoque — base-compartilhada.js).
+  ['chave',              v => String(v ?? '').replace(/\D/g, '')],
 ];
 
 function buildEntradaColumnMap(headerRow) {
@@ -8547,6 +8550,7 @@ function buildEntradaColumnMap(headerRow) {
     freteNumero:        [['nº frete','n° frete','no frete','nro frete','numero frete','número frete']],
     freteTotal:         [['total frete','valor frete','vl frete']],
     freteChave:         [['chave frete','chave do frete']],
+    chave:              [['chave de acesso','chave acesso','chave da nf','chave nf','chave nfe','chave da nota']],
     centralCompra:  [
       ['cnpj comprador','cnpj do comprador','cnpj compra','cnpj da compra','cnpj central compra','cnpj filial compra'],
       ['central compra','central de compra','central compradora','c. compra','compra','centro compra'],
@@ -9125,6 +9129,7 @@ const pageRenderers = {
   materiais: () => renderMateriais(),
   ocorrencias: () => renderOcorrenciasPage(),
   custos: () => { if (typeof custosRender === 'function') custosRender(); },
+  acordos: () => { if (typeof acordosRender === 'function') acordosRender(); },
   admin: () => { if (typeof renderAdminPage === 'function') renderAdminPage(); },
   // Analítico/Inventário não se redesenham ao abrir (o usuário roda por
   // período) — só quando o cadastro mudou desde a última vez que rodaram

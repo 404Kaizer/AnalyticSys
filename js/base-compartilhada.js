@@ -205,6 +205,31 @@ function _baseFatia(sig) {
   };
 }
 
+// ── Notas mães fora do estoque (23/11/2026, aba Acordos) ────────────────
+// Nota mãe (CFOP de simples faturamento, entrega futura) não é material
+// físico: quem não é ADM/INSUMOS não a guarda nas Entradas — some da lista
+// e de todos os cálculos. Casa pela chave de acesso ou, nas Entradas
+// importadas antes da coluna de chave, por CNPJ do fornecedor + número.
+// Lista via RPC acordo_maes_ocultas (migration 20261123_acordos.sql).
+// ponytail: mãe que deixa de ser mãe (CFOP corrigido no cadastro) só volta
+// quando o pacote for baixado de novo (ADM republica); mãe nova entra no
+// próximo sync (boot ou mudança na base), não na hora do import do SEFAZ.
+const _baseNumNf = v => String(v ?? '').split('/')[0].replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+async function _baseMaesOcultas() {
+  if (basePodeEditar()) return null;
+  const ch = new Set(), nf = new Set();
+  try {
+    for (let de = 0; ; de += 1000) {
+      const { data, error } = await window.supabaseClient.rpc('acordo_maes_ocultas').range(de, de + 999);
+      if (error) throw error;
+      for (const m of data) { ch.add(m.chave); nf.add(m.cnpj + '|' + m.numero); }
+      if (data.length < 1000) break;
+    }
+  } catch (err) { console.warn('[Base] Lista de notas mães indisponível (rodou o SQL 20261123_acordos?):', err); return null; }
+  return ch.size ? { ch, nf } : null;
+}
+const _baseEhMae = (m, r) => (r.chave && m.ch.has(r.chave)) || (r.cnpjFornecedor && m.nf.has(r.cnpjFornecedor + '|' + _baseNumNf(r.nf)));
+
 // opts.boot: chamado no restoreAndRender antes da padronização/índices
 // (STEP 3/4 fazem isso pra tudo) — então não reaplica nem redesenha aqui.
 function baseSync(opts = {}) {
@@ -220,7 +245,8 @@ async function _baseSyncAgora({ boot = false } = {}) {
   if (!_baseAtiva) return;
   const sig = await _baseFiltroSig();
   if (sig === null) { console.warn('[Base] Donos das categorias indisponíveis — sync adiado.'); return; }
-  const naFatia = _baseFatia(sig);
+  const fatia = _baseFatia(sig);
+  const maes = await _baseMaesOcultas();
 
   const mudaram = [];
   let baixados = 0, falhas = 0;
@@ -233,6 +259,23 @@ async function _baseSyncAgora({ boot = false } = {}) {
     const nomeImp = BASE_IMPORT_MODULO[modulo];
     const ativos = new Map(data.filter(p => p.modulo === modulo && !p.excluido).map(p => [p.import_id, { ...p, versao: Number(p.versao) }]));
     const pend = new Set(_basePendentes);
+    const tiraMae = modulo === 'entradas' && maes;
+    const naFatia = tiraMae ? r => fatia(r) && !_baseEhMae(maes, r) : fatia;
+    // Mãe nova num pacote já baixado: sai do local sem baixar de novo.
+    let tirouMaes = false;
+    if (tiraMae) {
+      const tirados = new Map();
+      state.entradas = (state.entradas || []).filter(r => {
+        if (r.fonte === 'manual' || pend.has(r.importId) || !_baseEhMae(maes, r)) return true;
+        tirados.set(r.importId, (tirados.get(r.importId) || 0) + 1);
+        return false;
+      });
+      for (const [id, n] of tirados) {
+        const rec = state.imports.find(x => x.id === id), p = ativos.get(id);
+        if (rec && p) rec.baseLocal = rec.registros = (rec.baseLocal ?? p.registros) - n;
+      }
+      tirouMaes = tirados.size > 0;
+    }
     if (basePodeEditar()) {
       const orfaos = new Set();
       for (const r of state[modulo] || []) if (r.importId && r.fonte !== 'manual' && !conhecidos.has(r.importId)) orfaos.add(r.importId);
@@ -260,7 +303,7 @@ async function _baseSyncAgora({ boot = false } = {}) {
       else baixar.push(p);
     }
     const impSobra = [...impPorId.keys()].some(id => !ativos.has(id) && !pend.has(id));
-    if (!baixar.length && !refiltrar.size && !sobra && !impSobra) continue;
+    if (!baixar.length && !refiltrar.size && !sobra && !impSobra) { if (tirouMaes) mudaram.push(modulo); continue; }
 
     const novos = new Map();
     for (const p of baixar) {

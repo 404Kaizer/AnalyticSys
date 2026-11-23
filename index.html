@@ -229,6 +229,14 @@
         </span>
       </button>
 
+      <button class="tab-item" onclick="navigate('acordos')" data-page="acordos" data-label="Acordos">
+        <span class="tab-icon" style="--tab-color: var(--gold)"><i class="ti ti-file-dollar"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Acordos</span>
+          <span class="tab-sub">notas mães, rebates e acordos</span>
+        </span>
+      </button>
+
       <div class="tab-group-label">Movimentações</div>
 
       <button class="tab-item" onclick="navigate('entradas')" data-page="entradas" data-label="Entradas (NF)">
@@ -2188,6 +2196,9 @@
         <div id="sol-page-body"></div>
       </div>
 
+      <!-- ACORDOS — notas mães/adiantamentos, rebates e acordos financeiros (ADM + INSUMOS; ver js/acordos.js) -->
+      <div class="page" id="page-acordos"><div id="ac-root"><div class="empty-state"><p>Carregando…</p></div></div></div>
+
       <!-- CUSTOS — mapa de fornecedores, rotas, preços e alertas (ADM + INSUMOS; ver js/custos.js) -->
       <div class="page" id="page-custos">
         <div class="cu-toolbar">
@@ -4047,7 +4058,7 @@
             </div>
             <div class="table-scroll" style="max-height:420px">
               <table>
-                <thead><tr><th>CFOP</th><th>Resumo</th><th>Descrição</th><th></th></tr></thead>
+                <thead><tr><th>CFOP</th><th>Resumo</th><th>Descrição</th><th>Acordo</th><th></th></tr></thead>
                 <tbody id="tb-cob-cfop"></tbody>
               </table>
             </div>
@@ -6515,6 +6526,7 @@
 <script defer src="js/cobrancas.js"></script>
 <script defer src="js/solicitacoes.js"></script>
 <script defer src="js/custos.js"></script>
+<script defer src="js/acordos.js"></script>
 
 <!-- ═══ MODAL: Nova/Editar Ocorrência ═══ -->
 <div class="modal-overlay" id="oc-modal" role="dialog" aria-modal="true">
