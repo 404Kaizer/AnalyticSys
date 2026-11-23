@@ -554,7 +554,8 @@ function _cuDesenhar() {
   Object.entries(CU.mun).forEach(([uf, m]) => {
     const ativo = uf === ufFoco || ufsReg.has(uf);
     // Só município com central tem desenho (referência do Hugo 23/11): os demais nem são desenhados.
-    const temC = new Set(); if (uf === ufFoco) [...CU.cen.values()].forEach(c => { if (_cuUfCen(c) === uf) { const mm = _cuMunDoPonto(uf, _cuLL(c.cnpj)); if (mm) temC.add(mm); } });
+    // Com regional aberta, só os municípios das centrais DELA (munCen); todos do estado só no nível Estado.
+    const temC = new Set(); if (uf === ufFoco && !F.reg) [...CU.cen.values()].forEach(c => { if (_cuUfCen(c) === uf) { const mm = _cuMunDoPonto(uf, _cuLL(c.cnpj)); if (mm) temC.add(mm); } });
     m.sel.style('display', f => ativo && (temC.has(f) || munCen.has(f) || f === munSel) ? null : 'none');
     if (!ativo) return;
     m.sel.attr('class', f => 'mn' + (temC.has(f) ? ' temc' : '') + (munCen.has(f) ? ' hasc' : '') + (f === munSel ? ' sel' : ''))
