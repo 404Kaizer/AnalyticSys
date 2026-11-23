@@ -637,6 +637,9 @@ function _fmtDateInput(v) {
 // valida, normaliza e grava. Retorna { ok, rec } ou { ok:false, erro }.
 // Usada tanto pelo modal (salvarEntrada) quanto pelo Assistente (chat).
 function _criarRegistroEntrada(dados) {
+  // Entradas/Saídas: só admin + insumos escrevem (base compartilhada,
+  // base-compartilhada.js) — analista só consulta, inclusive manual.
+  if (!basePodeEditar()) return { ok: false, erro: 'Entradas e Saídas são mantidas pelo setor de Insumos — analistas só consultam.' };
   const central        = dados.central;
   const centralDestino = dados.centralDestino || central;
   const mat            = dados.mat;
@@ -715,6 +718,9 @@ function salvarEntrada() {
 
 
 function _criarRegistroSaida(dados) {
+  // Entradas/Saídas: só admin + insumos escrevem (base compartilhada,
+  // base-compartilhada.js) — analista só consulta, inclusive manual.
+  if (!basePodeEditar()) return { ok: false, erro: 'Entradas e Saídas são mantidas pelo setor de Insumos — analistas só consultam.' };
   const central = dados.central;
   const mat     = dados.mat;
   const peso    = num(dados.peso);

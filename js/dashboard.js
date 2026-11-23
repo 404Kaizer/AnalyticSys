@@ -7178,8 +7178,8 @@ function removerRegistro(module, index) {
     return;
   }
   const _baseES = module === 'entradas' || module === 'saidas';
-  if (_baseES && actual.importId && !basePodeEditar()) {
-    toast('Entradas e Saídas importadas são mantidas pelo setor de Insumos.', 'error');
+  if (_baseES && !basePodeEditar()) {
+    toast('Entradas e Saídas são mantidas pelo setor de Insumos — analistas só consultam.', 'error');
     return;
   }
   if (!confirm('Deseja realmente excluir este registro?')) return;
@@ -7310,8 +7310,8 @@ function excluirSelecionados(module) {
     }
   }
   const _baseES = module === 'entradas' || module === 'saidas';
-  if (_baseES && !basePodeEditar() && selecionados.some(r => r.importId)) {
-    toast('Entradas e Saídas importadas são mantidas pelo setor de Insumos.', 'error');
+  if (_baseES && !basePodeEditar()) {
+    toast('Entradas e Saídas são mantidas pelo setor de Insumos — analistas só consultam.', 'error');
     return;
   }
   if (!confirm(`Excluir ${selecionados.length} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;

@@ -13178,6 +13178,8 @@ body.role-insumos #page-configuracoes > :not(.cob-insumos) { display: none !impo
 /* Base compartilhada de Entradas/Saídas (base-compartilhada.js): só admin +
    insumos importam; o botão de publicar a base é só do admin. */
 body:not(.role-admin):not(.role-insumos) #page-importar .es-card,
+/* ...e analista só consulta Entradas/Saídas: sem Adicionar, lixeira e seleção em lote. */
+body:not(.role-admin):not(.role-insumos) :is(#page-entradas, #page-saidas) :is([onclick*="modal-manual"], .btn-icon.danger, .th-checkbox, .admin-lote-bar),
 body:not(.role-admin) .es-so-admin { display: none !important; }
 /* Perfil Usuário vê Cobranças só pra consulta: some tudo que edita
    (.cob-edita) — a trava de verdade é a RLS (escrita só admin + insumos). */
