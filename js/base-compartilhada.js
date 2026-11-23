@@ -41,6 +41,11 @@ let _baseRtTimer = null;
 // ou traria de volta o registro recém-excluído).
 const _basePendentes = new Set();
 
+// Chave no Storage: o importId de Saídas tem acento ("imp_Saída_…") e o
+// Storage recusa ("Invalid key"). Tira acento e troca o resto por "_"; a
+// linha do índice continua com o importId original.
+const _baseChave = (id) => String(id).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]/g, '_');
+
 const basePodeEditar = () => ['admin', 'insumos'].includes(window.currentUser?.role);
 const baseAtiva = () => _baseAtiva;
 
@@ -86,7 +91,7 @@ function basePublicar(modulo, importIds, opts = {}) {
         for (let i = 0; i < chunks; i++) {
           const json = JSON.stringify(recs.slice(i * BASE_CHUNK, (i + 1) * BASE_CHUNK));
           hashes.push(await _cbSha256Hex(json));
-          const { error } = await st.upload(`${modulo}/${id}/${versao}/chunk_${i}.json.gz`, await _cbGzipString(json),
+          const { error } = await st.upload(`${modulo}/${_baseChave(id)}/${versao}/chunk_${i}.json.gz`, await _cbGzipString(json),
             { upsert: true, contentType: 'application/gzip' });
           if (error) throw error;
           await yieldToUI();
@@ -106,7 +111,7 @@ function basePublicar(modulo, importIds, opts = {}) {
         _baseAtiva = true;
         if (antes?.chunks) {
           const velhos = [];
-          for (let i = 0; i < antes.chunks; i++) velhos.push(`${modulo}/${id}/${antes.versao}/chunk_${i}.json.gz`);
+          for (let i = 0; i < antes.chunks; i++) velhos.push(`${modulo}/${_baseChave(id)}/${antes.versao}/chunk_${i}.json.gz`);
           st.remove(velhos).then(({ error: e }) => { if (e) console.warn('[Base] Limpeza de versão antiga:', e); });
         }
       } catch (err) {
@@ -160,7 +165,7 @@ async function _baseBaixar(p) {
   const st = window.supabaseClient.storage.from(BASE_BUCKET);
   const out = [];
   for (let i = 0; i < p.chunks; i++) {
-    const { data, error } = await st.download(`${p.modulo}/${p.import_id}/${p.versao}/chunk_${i}.json.gz`);
+    const { data, error } = await st.download(`${p.modulo}/${_baseChave(p.import_id)}/${p.versao}/chunk_${i}.json.gz`);
     if (error || !data) return null;
     const json = await _cbGunzipBlob(data);
     if (await _cbSha256Hex(json) !== p.hashes[i]) return null;
@@ -219,10 +224,21 @@ async function _baseSyncAgora({ boot = false } = {}) {
 
   const mudaram = [];
   let baixados = 0, falhas = 0;
+  // Quem publica (admin/insumos): importação local que NUNCA chegou ao índice
+  // (nem ativa nem excluída — ex.: a publicação falhou) não é apagada; fica
+  // como pendente e é publicada de novo ao fim deste sync.
+  const conhecidos = new Set(data.map(p => p.import_id));
+  const republicar = {};
   for (const modulo of BASE_MODULOS) {
     const nomeImp = BASE_IMPORT_MODULO[modulo];
     const ativos = new Map(data.filter(p => p.modulo === modulo && !p.excluido).map(p => [p.import_id, { ...p, versao: Number(p.versao) }]));
-    const pend = _basePendentes;
+    const pend = new Set(_basePendentes);
+    if (basePodeEditar()) {
+      const orfaos = new Set();
+      for (const r of state[modulo] || []) if (r.importId && r.fonte !== 'manual' && !conhecidos.has(r.importId)) orfaos.add(r.importId);
+      orfaos.forEach(id => pend.add(id));
+      if (orfaos.size) republicar[modulo] = [...orfaos];
+    }
     const contagem = new Map();
     let sobra = false;
     for (const r of state[modulo] || []) {
@@ -278,6 +294,7 @@ async function _baseSyncAgora({ boot = false } = {}) {
     mudaram.push(modulo);
   }
 
+  Object.entries(republicar).forEach(([modulo, ids]) => basePublicar(modulo, ids));
   if (falhas) toast(`${falhas} pacote(s) da base compartilhada de Entradas/Saídas não puderam ser baixados — nova tentativa na próxima atualização.`, 'error');
   if (!mudaram.length) return;
   // Padronização do PRÓPRIO usuário sobre os registros recebidos (a partir
