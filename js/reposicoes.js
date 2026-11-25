@@ -33,7 +33,7 @@ const RP_MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'j
 
 const RP = {
   iniciado: false, carga: null, erro: '', B: null, fora: null, res: new Map(), pub: new Map(), pubRes: new Map(), negs: new Map(), reposSig: '',
-  meses: [], mes: [], viewAno: 0, mesAnc: '', grupo: 'fornecedor', F: { regs: new Set(), cens: new Set(), mats: new Set() }, fAberto: null, fPend: null, fBusca: '',
+  meses: [], mes: [], viewAno: 0, grupo: 'fornecedor', F: { regs: new Set(), cens: new Set(), mats: new Set() }, fAberto: null, fPend: null, fBusca: '',
   q: '', aba: 'novo', no: { tipo: 'geral' }, un: 't', eixo: 'forn', ab: new Set(), nfAb: new Set(), mot: '', desenhos: [], gen: 0,
 };
 
@@ -139,7 +139,6 @@ async function reposicoesRender() {
     if (!RP.carga) { root.innerHTML = '<div class="empty-state"><i class="ti ti-loader-2"></i><p>Carregando reposições…</p></div>'; RP.carga = _rpCarregar().catch(e => { RP.carga = null; throw e; }); }
     await RP.carga;
     await _rpBase();
-    RP.mes = RP.mes.filter(m => RP.meses.includes(m));
     if (!RP.mes.length && RP.meses.length) RP.mes = [[...RP.meses].reverse().find(m => !_rpAberto(m)) || RP.meses[RP.meses.length - 1]];
     await _rpGarantir(RP.mes);
   } catch (e) {
@@ -260,7 +259,7 @@ function _rpHistDesenhar() { const el = document.getElementById('rp-hist'); if (
 
 /* ───────── barra de período e filtros ───────── */
 function _rpTopo() {
-  const uma = RP.mes.length === 1 ? RP.mes[0] : '', rot = RP.mes.length ? (uma ? _rpMesL(uma) : `${_rpMesC(RP.mes[0])} a ${_rpMesC(RP.mes[RP.mes.length - 1])} (${RP.mes.length} meses)`) : 'Selecionar mês';
+  const uma = RP.mes.length === 1 ? RP.mes[0] : '', rot = RP.mes.length ? (uma ? MESES_NOME_DG[uma.slice(5) - 1] + ' de ' + uma.slice(0, 4) : `${_rpMesC(RP.mes[0])} a ${_rpMesC(RP.mes[RP.mes.length - 1])} (${RP.mes.length} meses)`) : 'Selecionar mês';
   const lbl = document.getElementById('rp-month-label'); if (lbl) lbl.textContent = rot;
   const box = document.getElementById('rp-estado'); if (!box) return;
   let h = '';
@@ -276,12 +275,29 @@ function _rpTopo() {
   } else if (uma && RP.pub.get(uma)) { const p = RP.pub.get(uma); h += `<span class="mo-hint">Calculado pelo ADM · publicado v${p.versao} em ${new Date(p.publicado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}${p.publicado_nome ? ' por ' + _rpE(p.publicado_nome) : ''}</span>`; }
   box.innerHTML = h + (_rpAdm() ? '<button class="btn" data-rp="recalcular" title="Ler a base de novo e recalcular"><i class="ti ti-refresh"></i> <span>Recalcular</span></button>' : '');
 }
+// Grade igual à do Gerencial (_dgRenderMonthGrid). onclick direto, não data-rp:
+// calendar.js barra a propagação dos cliques dentro de .cal-picker-dropdown.
 function _rpMesGrade() {
-  const y = RP.viewAno, tem = new Set(RP.meses), sel = new Set(RP.mes);
-  document.getElementById('rp-month-inner').innerHTML = `<div class="cal-header"><button class="cal-nav-btn" type="button" data-rp="ano" data-v="-1"><i class="ti ti-chevron-left"></i></button><span class="cal-header-center" style="cursor:default">${y}</span><button class="cal-nav-btn" type="button" data-rp="ano" data-v="1"><i class="ti ti-chevron-right"></i></button></div>
-    <div class="cal-month-grid">${RP_MESES.map((n, i) => { const ym = y + '-' + String(i + 1).padStart(2, '0'); return `<button class="cal-grid-item${sel.has(ym) ? ' active' : ''}" type="button" data-rp="mes" data-v="${ym}" ${tem.has(ym) ? '' : 'disabled style="opacity:.35;cursor:default"'}>${n.slice(0, 3)}</button>`; }).join('')}</div>
-    <div class="cu-mes-dica">Clique escolhe o mês · Shift+clique soma um período, mês a mês</div>`;
+  const box = document.getElementById('rp-month-inner');
+  if (!box) return;
+  const y = RP.viewAno, sel = new Set(RP.mes);
+  box.innerHTML = `
+    <div class="cal-header">
+      <button class="cal-nav-btn" onclick="rpNavAno(-1)" type="button"><i class="ti ti-chevron-left"></i></button>
+      <span class="cal-header-center" style="cursor:default">${y}</span>
+      <button class="cal-nav-btn" onclick="rpNavAno(1)" type="button"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div class="cal-month-grid">${MESES_ABREV_DG.map((n, m) => `<button class="cal-grid-item${sel.has(y + '-' + String(m + 1).padStart(2, '0')) ? ' active' : ''}" onclick="rpSelMes(${m}, event)" type="button">${n}</button>`).join('')}</div>`;
 }
+window.rpNavAno = d => { RP.viewAno += d; _rpMesGrade(); };
+// Clique = um mês (fecha e recalcula, como no Gerencial). Shift+clique = do mês atual até ele.
+window.rpSelMes = (m, e) => {
+  const ym = RP.viewAno + '-' + String(m + 1).padStart(2, '0');
+  let l = [ym];
+  if (e?.shiftKey && RP.mes.length) { const [a, z] = [RP.mes[0], ym].sort(); l = RP.meses.filter(x => x >= a && x <= z); if (!l.length) l = [ym]; }
+  _rpFechaMes();
+  _rpIr(l);
+};
 const RP_FILTROS = [{ k: 'regs', label: 'Regional', icon: 'ti-users-group', de: p => p.regional }, { k: 'cens', label: 'Central', icon: 'ti-building-warehouse', de: p => p.central }, { k: 'mats', label: 'Material', icon: 'ti-box', de: p => p.material }];
 function _rpFiltrosHtml() {
   const grupos = [['fornecedor', 'ti-truck', 'Por Fornecedor — fornecedor → itens'], ['regional', 'ti-users-group', 'Por Regional — regional → central → itens'], ['central', 'ti-building-warehouse', 'Por Central — central → itens'], ['material', 'ti-box', 'Por Material — material → itens']];
@@ -553,7 +569,12 @@ function _rpDesenhar() {
   const root = document.getElementById('rp-root');
   if (!root) return;
   _rpTopo();
-  if (!RP.mes.length) { root.innerHTML = `<div class="empty-state"><i class="ti ti-scale"></i><p>${_rpAdm() ? 'Nenhum movimento SAP de agregado na base deste navegador.' : 'O ADM ainda não publicou nenhum mês.'}</p></div>`; return; }
+  // Mês sem dado (ou ainda não publicado): diz por quê em vez de voltar sozinho para outro mês.
+  if (!RP.mes.some(m => _rpDoMes(m).length)) {
+    const per = RP.mes.length ? _rpPer() : '';
+    root.innerHTML = `<div class="empty-state"><i class="ti ti-scale"></i><p>${_rpAdm() ? (RP.meses.length ? `Nenhum movimento SAP nem contagem de agregado em ${per}.` : 'Nenhum movimento SAP de agregado na base deste navegador.') : per ? `O ADM ainda não publicou ${per}.` : 'O ADM ainda não publicou nenhum mês.'}</p></div>`;
+    return;
+  }
   RP.desenhos = [];
   const itens = _rpItens(), f = RP.no.tipo === 'forn' ? _rpPorForn(itens).get(RP.no.forn) : null;
   if (RP.no.tipo === 'forn' && !f) RP.no = { tipo: 'geral' };
@@ -571,15 +592,6 @@ const RP_ACOES = {
   recarregar() { RP.carga = null; reposicoesRender(); },
   async recalcular() { repBaseDescartar(); RP.res.clear(); RP.carga = null; await reposicoesRender(); },
   publicar: _rpPublicar,
-  ano(b) { RP.viewAno += +b.dataset.v; _rpMesGrade(); },
-  mes(b, e) {
-    const ym = b.dataset.v;
-    let l = [ym];
-    if (e.shiftKey && RP.mesAnc) { const [a, z] = [RP.mesAnc, ym].sort(); l = RP.meses.filter(m => m >= a && m <= z); } else RP.mesAnc = ym;
-    RP.mes = l; _rpMesGrade();
-    if (!e.shiftKey) _rpFechaMes();
-    _rpIr(l);
-  },
   grupo(b) { RP.grupo = b.dataset.v; RP.no = { tipo: 'geral' }; _rpDesenhar(); },
   aba(b) { RP.aba = b.dataset.v; RP.mot = ''; _rpDesenhar(); },
   mot(b) { RP.mot = b.dataset.v; RP.aba = 'trav'; _rpDesenhar(); },
