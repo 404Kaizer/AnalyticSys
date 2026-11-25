@@ -194,6 +194,26 @@ function _rpTotais(lista) {
   });
   return t;
 }
+// Caminhões (Hugo, 26/11/2026): a cobrar ÷ peso médio por NF do fornecedor, para
+// cima. Média = peso SAP das NFs dele nos meses escolhidos, em TODAS as centrais
+// (os filtros não mudam a média), só de itens não travados; NF com dois materiais
+// conta como um caminhão.
+function _rpMediaCam(k) {
+  const nfs = new Map();
+  RP.mes.forEach(ym => _rpDoMes(ym).forEach(r => {
+    if (r.estado === 'bloqueado') return;
+    r.partes.find(p => p.k === k)?.nfs.forEach(n => { const c = ym + '|' + n.nf; nfs.set(c, (nfs.get(c) || 0) + n.kg); });
+  }));
+  let kg = 0; nfs.forEach(v => { kg += v; });
+  return nfs.size && kg > 0 ? { kg, n: nfs.size, media: kg / nfs.size } : null;
+}
+// fs: [{ k, kg }] → caminhões somados por fornecedor e a média de peso deles juntos.
+function _rpCaminhoes(fs) {
+  let n = 0, kg = 0, nfs = 0;
+  fs.forEach(f => { const m = _rpMediaCam(f.k); if (!m || !(f.kg > 0)) return; n += Math.ceil(f.kg / m.media); kg += m.kg; nfs += m.n; });
+  return { n, media: nfs ? kg / nfs : 0 };
+}
+const _rpKpiCam = (c, txt) => _rpKpi('N° de caminhões', '', _rpN[0].format(c.n), c.media ? `média de ${_rpT(c.media, 1)} por caminhão` : 'sem NF para calcular a média', txt);
 const _rpAc = (n, i) => n.dados.acordado?.[i.key] ?? i.kg;
 const _rpAcR = (n, i) => { const a = _rpAc(n, i); return a === i.kg ? i.valor : Math.round(a * i.preco / 10) / 100; };
 const _rpNegKg = n => n.congelado.itens.reduce((s, i) => s + i.kg, 0), _rpNegAc = n => n.congelado.itens.reduce((s, i) => s + _rpAc(n, i), 0);
@@ -405,17 +425,51 @@ function _rpGeral(itens) {
   const colC = [...cen].sort((a, b) => porR ? b[1].val - a[1].val : b[1].forn + b[1].ini + b[1].out - a[1].forn - a[1].ini - a[1].out).slice(0, 16).map(([n, o]) => ({ n, segs: porR ? [{ n: 'A cobrar', v: o.val, c: RP_COR.forn }] : [{ n: 'Fornecedores', v: o.forn, c: RP_COR.forn }, { n: 'Estoque inicial', v: o.ini, c: RP_COR.ini }, { n: 'Sem fornecedor e reposição', v: o.out, c: RP_COR.sem }] }));
   const cols = RP.eixo === 'forn' ? colF : colC, motC = new Map();
   itens.forEach(r => { if (r.estado === 'bloqueado') new Set(r.motivos.map(m => m.c)).forEach(c => motC.set(c, (motC.get(c) || 0) + 1)); });
-  const tab = itens.filter(r => r.estado !== 'zero').sort((a, b) => (b.estado === 'desfalque') - (a.estado === 'desfalque') || b.desfalqueKg - a.desfalqueKg), MAX = 150;
+  const tab = itens.filter(r => r.estado !== 'zero');
   return `<div class="mp-cab"><div><div class="mp-migalhas">${_rpMigas()}</div><h2>${gr ? _rpE(no.tipo === 'regional' ? no.reg : no.tipo === 'central' ? no.cen : no.mat) : 'Desfalque de agregados'} · ${_rpPer()}</h2><p class="mo-hint">${_rpPlural(t.nDesf, 'item', 'itens')} com desfalque (central × material) · ${_rpPlural(fs.length, 'fornecedor envolvido', 'fornecedores envolvidos')}${t.sobra ? ` · sobra de ${_rpT(t.sobra)} em outros itens, que não compensa` : ''}</p></div></div>
-  <div class="rp-kpis">${_rpKpi('Desfalque total', '', _rpT(t.desf), '', 'Teórico menos contagem, sem nenhum Y11/Y12')}${_rpKpi('A cobrar dos fornecedores', RP_COR.forn, _rpT(t.forn), _rpR(t.valor), pc(t.forn) + ' do desfalque')}${_rpKpi('Fica com a central', RP_COR.ini, _rpT(t.ini + t.sem + t.repos), pc(t.ini + t.sem + t.repos), `Estoque inicial ${_rpT(t.ini)}${t.sem ? ` · sem fornecedor ${_rpT(t.sem)}` : ''}${t.repos ? ` · reposição ${_rpT(t.repos)}` : ''}`)}${_rpKpi('Recuperado', 'var(--green)', _rpT(rec), `de ${_rpT(ac)} acordadas`, t.forn ? _rpP1(rec / t.forn * 100) + ' do que cabe aos fornecedores' : '')}${_rpKpi('Travados', 'var(--amber)', _rpPlural(t.trav, 'item', 'itens'), t.travKg ? _rpT(t.travKg) + ' em dúvida' : '', 'Fora de todos os totais até corrigir', 'data-rp="aba" data-v="trav"')}</div>
+  <div class="rp-kpis">${_rpKpi('Desfalque total', '', _rpT(t.desf), '', 'Teórico menos contagem, sem nenhum Y11/Y12')}${_rpKpi('A cobrar dos fornecedores', RP_COR.forn, _rpT(t.forn), _rpR(t.valor), pc(t.forn) + ' do desfalque')}${_rpKpi('Fica com a central', RP_COR.ini, _rpT(t.ini + t.sem + t.repos), pc(t.ini + t.sem + t.repos), `Estoque inicial ${_rpT(t.ini)}${t.sem ? ` · sem fornecedor ${_rpT(t.sem)}` : ''}${t.repos ? ` · reposição ${_rpT(t.repos)}` : ''}`)}${_rpKpi('Recuperado', 'var(--green)', _rpT(rec), `de ${_rpT(ac)} acordadas`, t.forn ? _rpP1(rec / t.forn * 100) + ' do que cabe aos fornecedores' : '')}${_rpKpiCam(_rpCaminhoes(fs), 'Por fornecedor, arredondado para cima')}</div>
   <div class="rp-dois"><div class="mp-card"><h4 class="mp-tit">Para quem vai o desfalque</h4>${t.desf ? _rpRosca('Desfalque', [{ n: 'Fornecedores', v: t.forn, c: RP_COR.forn }, { n: 'Estoque inicial', v: t.ini, c: RP_COR.ini }, ...(t.sem ? [{ n: 'Sem fornecedor', v: t.sem, c: RP_COR.sem }] : []), ...(t.repos ? [{ n: 'Saldo de reposição', v: t.repos, c: RP_COR.repos }] : [])], v => _rpT(v, 1), true) : '<p class="mo-hint">Sem desfalque no período.</p>'}</div>
     <div class="mp-card"><h4 class="mp-tit">Mês a mês <span class="mo-hint">${_rpLeg([['Desfalque', 'var(--rp-2)'], ['A cobrar', 'var(--rp-1)'], ['Recuperado', 'var(--rp-3)']])}</span></h4>${_rpGraf(_rpHistFn(), 220, 'rp-hist')}</div></div>
   <div class="mp-card"><h4 class="mp-tit rp-tit">Onde está o desfalque ${RP.eixo === 'cen' && !porR ? _rpLeg([['Fornecedores', RP_COR.forn], ['Estoque inicial', RP_COR.ini], ['Sem fornecedor e reposição', RP_COR.sem]]) : ''}<span class="rp-dir">${_rpSeg([['forn', 'Fornecedor'], ['cen', 'Central']], RP.eixo, 'eixo', 'Eixo')}${_rpSeg([['t', 'Toneladas'], ['r', 'R$']], RP.un, 'un', 'Unidade')}</span></h4>${cols.length ? _rpGraf(_rpColunas(cols, RP.un), 250) : '<p class="mo-hint">Sem desfalque no período.</p>'}</div>
   ${motC.size ? `<div class="mp-card"><h4 class="mp-tit">Por que há itens travados <span class="mo-hint">um item pode ter mais de um motivo</span></h4><div class="mp-chips">${[...motC].sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button class="mp-chip" data-rp="mot" data-v="${c}">${RP_MOT[c] || c} <b>${n}</b></button>`).join('')}</div></div>` : ''}
-  <div class="mp-card"><h4 class="mp-tit">Todos os itens <span class="mo-hint">clique para abrir a conta</span></h4><div class="rp-tw"><table class="rp-t"><thead><tr><th>Central</th><th>Material</th>${RP.mes.length > 1 ? '<th>Mês</th>' : ''}<th class="n">Est. Inicial</th><th class="n">Entradas</th><th class="n">Teórico</th><th class="n">Real</th><th class="n">Desfalque</th><th class="n">% fornec.</th><th class="n">A cobrar</th><th>Situação</th></tr></thead><tbody>${tab.slice(0, MAX).map(r => {
-    const f = r.partes.filter(p => p.tipo === 'forn'), k = f.reduce((s, p) => s + p.cotaKg, 0), b = r.estado === 'bloqueado', nd = b || r.estado === 'sobra';
-    return `<tr class="rp-clk" tabindex="0" data-rp="item" data-k="${_rpE(_rpKey(r))}" data-ym="${r.par.ym}"><td><b>${_rpE(r.par.central)}</b></td><td>${_rpE(r.par.material)}</td>${RP.mes.length > 1 ? `<td>${_rpMesC(r.par.ym)}</td>` : ''}<td class="n">${r.par.estIniKg == null ? '—' : _rpT(r.par.estIniKg)}</td><td class="n">${_rpT(f.reduce((s, p) => s + p.kg, 0))}</td><td class="n">${_rpT(r.teoKg)}</td><td class="n">${r.par.estFimKg == null ? '—' : _rpT(r.par.estFimKg)}</td><td class="n">${b ? '—' : r.estado === 'sobra' ? `<span class="mo-hint">sobra ${_rpT(r.sobraKg)}</span>` : _rpT(r.desfalqueKg)}</td><td class="n">${nd ? '—' : _rpP1(r.desfalqueKg ? k / r.desfalqueKg * 100 : 0)}</td><td class="n">${nd ? '—' : _rpT(k)}</td><td>${b ? _rpSelo('Travado', 'var(--urgente)', 'ti-lock') : r.estado === 'sobra' ? _rpSelo('Sobra', 'var(--text3)') : _rpSelo('Negociável', 'var(--green)', 'ti-check')}</td></tr>`;
-  }).join('')}</tbody></table></div>${tab.length > MAX ? `<p class="mo-hint">+ ${tab.length - MAX} itens: use os filtros ou a lista.</p>` : ''}</div>`;
+  ${_rpTabela(tab)}`;
+}
+
+// Tabela "Todos os itens": funil por coluna (o mesmo motor de filtro das tabelas
+// de Entradas/SAP — colFilterMeta/injectColFilterButtons em ui.js, com fonte e
+// render próprios) e ordenação pelo título, sobre TODOS os itens (não só os 150 da tela).
+const _rpEnt = r => r.partes.filter(p => p.tipo === 'forn').reduce((s, p) => s + p.kg, 0), _rpCob = r => r.partes.filter(p => p.tipo === 'forn').reduce((s, p) => s + p.cotaKg, 0);
+const _rpSit = r => r.estado === 'bloqueado' ? 'Travado' : r.estado === 'sobra' ? 'Sobra' : 'Negociável';
+const _rpNd = r => r.estado === 'bloqueado' || r.estado === 'sobra';
+const _rpTn = kg => _rpN[2].format(kg / 1000);   // tabela: o "t" vai no aviso do título, não em cada célula
+function _rpColunas_() {
+  return [
+    ['cen', 'Central', r => r.par.central, r => `<b>${_rpE(r.par.central)}</b>`],
+    ['mat', 'Material', r => r.par.material, r => _rpE(r.par.material)],
+    ...(RP.mes.length > 1 ? [['mes', 'Mês', r => r.par.ym, r => _rpMesC(r.par.ym), r => _rpMesC(r.par.ym)]] : []),
+    ['ini', 'Est. Inicial', r => r.par.estIniKg, r => r.par.estIniKg == null ? '—' : _rpTn(r.par.estIniKg), 1],
+    ['ent', 'Entradas', _rpEnt, r => _rpTn(_rpEnt(r)), 1],
+    ['teo', 'Teórico', r => r.teoKg, r => _rpTn(r.teoKg), 1],
+    ['real', 'Real', r => r.par.estFimKg, r => r.par.estFimKg == null ? '—' : _rpTn(r.par.estFimKg), 1],
+    ['desf', 'Desfalque', r => r.estado === 'bloqueado' ? null : r.estado === 'sobra' ? -r.sobraKg : r.desfalqueKg, r => r.estado === 'bloqueado' ? '—' : r.estado === 'sobra' ? `<span class="mo-hint">sobra ${_rpTn(r.sobraKg)}</span>` : _rpTn(r.desfalqueKg), 1],
+    ['pct', '% fornec.', r => _rpNd(r) || !r.desfalqueKg ? null : _rpCob(r) / r.desfalqueKg * 100, r => _rpNd(r) ? '—' : _rpP1(r.desfalqueKg ? _rpCob(r) / r.desfalqueKg * 100 : 0), 1],
+    ['cob', 'A cobrar', r => _rpNd(r) ? null : _rpCob(r), r => _rpNd(r) ? '—' : _rpTn(_rpCob(r)), 1],
+    ['sit', 'Situação', _rpSit, r => r.estado === 'bloqueado' ? _rpSelo('Travado', 'var(--urgente)', 'ti-lock') : r.estado === 'sobra' ? _rpSelo('Sobra', 'var(--text3)') : _rpSelo('Negociável', 'var(--green)', 'ti-check')],
+  ].map(([id, rot, v, html, n]) => ({ id, rot, v, html, n: n === 1, txt: typeof n === 'function' ? n : r => html(r).replace(/<[^>]+>/g, '') }));
+}
+function _rpTabela(tab) {
+  const cols = _rpColunas_(), sig = cols.map(c => c.id).join();
+  if (RP.tabSig !== sig) { RP.tabSig = sig; colFilters.reposicoes = {}; }   // colunas mudaram (Mês entra/sai): filtros por índice não valem mais
+  colFilterMeta.reposicoes = { tbodyId: 'rp-tb-itens', fields: cols.map(c => c.txt), fonte: () => RP.tabBase || [], render: () => _rpDesenhar() };
+  RP.tabBase = tab;
+  const vis = tab.filter(r => recordPassesColFilters('reposicoes', r)), MAX = 150, o = RP.ord, c = o && cols.find(x => x.id === o.c);
+  vis.sort(c ? (a, b) => { const x = c.v(a), y = c.v(b); if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1; return (c.n ? x - y : String(x).localeCompare(String(y), 'pt-BR', { numeric: true })) * (o.dir === 'asc' ? 1 : -1); }
+    : (a, b) => (b.estado === 'desfalque') - (a.estado === 'desfalque') || b.desfalqueKg - a.desfalqueKg);
+  const filtro = moduleHasColFilter('reposicoes');
+  return `<div class="mp-card"><h4 class="mp-tit rp-tit">Todos os itens <span class="mo-hint">${filtro ? `${vis.length} de ${tab.length} · ` : ''}em toneladas · clique para abrir a conta</span>${filtro ? '<span class="rp-dir"><button class="btn btn-sm" data-rp="tabLimpa"><i class="ti ti-filter-off"></i> Limpar filtros</button></span>' : ''}</h4>
+    <div class="rp-tw"><table class="rp-t" id="rp-tab-itens"><thead><tr>${cols.map(x => `<th class="${x.n ? 'n ' : ''}${o?.c === x.id ? 'sort-' + o.dir : ''}" data-sort-col="${x.id}" data-rp="ord" data-v="${x.id}" title="Ordenar por ${x.rot}">${x.rot}<i class="mod-sort-icon"></i></th>`).join('')}</tr></thead>
+    <tbody id="rp-tb-itens">${vis.slice(0, MAX).map(r => `<tr class="rp-clk" tabindex="0" data-rp="item" data-k="${_rpE(_rpKey(r))}" data-ym="${r.par.ym}">${cols.map(x => `<td${x.n ? ' class="n"' : ''}>${x.html(r)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}" class="mo-hint" style="text-align:center;padding:18px">Nenhum item com esses filtros.</td></tr>`}</tbody></table></div>
+    ${vis.length > MAX ? `<p class="mo-hint">Mostrando ${MAX} de ${vis.length} itens. Use o funil das colunas ou a lista para chegar aos outros.</p>` : ''}</div>`;
 }
 
 function _rpConta(r, eu) {
@@ -452,7 +506,7 @@ function _rpPainelItem(itens) {
 function _rpForn(f, itens) {
   const um = RP.mes.length === 1 ? RP.mes[0] : '', st = _rpStForn(f.k, RP.mes), base = f.itens.reduce((s, i) => s + i.r.desfalqueKg, 0), ord = [...f.itens].sort((a, b) => b.p.valor - a.p.valor), trav = itens.filter(r => r.estado === 'bloqueado' && r.partes.some(p => p.k === f.k));
   return `<div class="mp-cab"><div style="min-width:0"><div class="mp-migalhas">${_rpMigas()}</div><h2>${_rpE(f.nome)}</h2><p class="mo-hint">Raiz do CNPJ ${f.k.replace(/^(..)(...)(...)$/, '$1.$2.$3')} · ${_rpPer()}</p></div><div class="mp-cab-num">${um ? _rpSelo(RP_ST[st][0], RP_ST[st][1]) : ''}<b>${_rpT(f.kg)}</b><span class="mo-hint mono">${_rpR(f.valor)}</span></div></div>
-  <div class="rp-kpis">${_rpKpi('Cota do fornecedor', RP_COR.forn, _rpT(f.kg), _rpR(f.valor), `${_rpPlural(f.itens.length, 'item', 'itens')} em ${_rpPlural(f.cens.size, 'central', 'centrais')}`)}${_rpKpi('Desfalque nesses itens', '', _rpT(base), _rpP1(f.kg / base * 100) + ' é dele', 'O resto é do estoque inicial e de outras origens')}${_rpKpi('Preço médio', '', 'R$ ' + _rpN[2].format(f.kg ? f.valor / f.kg * 1000 : 0), 'por tonelada', 'Ponderado pela cota, das NFs dele')}${_rpKpi('Sobra no período', '', _rpT(f.sobra), 'não compensa', 'Só para você saber se ele citar')}</div>
+  <div class="rp-kpis">${_rpKpi('Cota do fornecedor', RP_COR.forn, _rpT(f.kg), _rpR(f.valor), `${_rpPlural(f.itens.length, 'item', 'itens')} em ${_rpPlural(f.cens.size, 'central', 'centrais')}`)}${_rpKpi('Desfalque nesses itens', '', _rpT(base), _rpP1(f.kg / base * 100) + ' é dele', 'O resto é do estoque inicial e de outras origens')}${_rpKpi('Preço médio', '', 'R$ ' + _rpN[2].format(f.kg ? f.valor / f.kg * 1000 : 0), 'por tonelada', 'Ponderado pela cota, das NFs dele')}${_rpKpi('Sobra no período', '', _rpT(f.sobra), 'não compensa', 'Só para você saber se ele citar')}${_rpKpiCam(_rpCaminhoes([f]), `Média de ${_rpPlural(_rpMediaCam(f.k)?.n || 0, 'NF', 'NFs')} dele, arredondado para cima`)}</div>
   <div class="rp-dois"><div class="mp-card"><h4 class="mp-tit">Cota por central e material</h4>${_rpGraf(_rpColunas(ord.slice(0, 8).map(({ r, p }) => ({ n: r.par.central + ' ' + r.par.material + (um ? '' : ' ' + _rpMesC(r.par.ym)), segs: [{ n: 'Cota', v: p.cotaKg, c: RP_COR.forn }], on: `data-rp="abreItem" data-v="${_rpE(r.par.ym + _rpKey(r))}"` })), 't'), 220)}</div><div class="mp-card"><h4 class="mp-tit">Mês a mês <span class="mo-hint">${_rpLeg([['Cota', 'var(--rp-1)'], ['Recuperado', 'var(--rp-3)']])}</span></h4>${_rpGraf(_rpHistFn(), 220, 'rp-hist')}</div></div>
   ${um ? _rpNegHtml(f, um) : `<div class="mp-card"><h4 class="mp-tit">Negociação</h4><p class="mo-hint">A negociação é por mês. Abra um mês:</p><div class="mp-chips">${RP.mes.filter(m => _rpFornDe(m, f.k).length).map(m => `<button class="mp-chip" data-rp="fornMes" data-v="${f.k}" data-ym="${m}">${_rpMesL(m)} · ${RP_ST[_rpNeg(f.k, m)?.status || ''][0]}</button>`).join('')}</div></div>`}
   <h4 class="mp-tit">A conta, item por item</h4>${ord.map(({ r }) => _rpItemCard(r, f.k)).join('')}${trav.length ? `<h4 class="mp-tit">Travados deste fornecedor</h4>${trav.map(r => _rpItemCard(r, f.k)).join('')}` : ''}`;
@@ -581,6 +635,8 @@ function _rpDesenhar() {
   const sc = root.querySelector('.mp-lista-corpo')?.scrollTop, ae = document.activeElement, foco = ae?.id, pos = ae?.selectionStart;
   root.innerHTML = `<div class="mp-root">${_rpFiltrosHtml()}<div class="mp">${_rpListaHtml(itens)}<section class="mp-painel">${RP.no.tipo === 'item' ? _rpPainelItem(itens) : f ? _rpForn(f, itens) : _rpGeral(itens)}</section></div></div>`;
   _rpPintar(RP.desenhos);
+  const ti = document.getElementById('rp-tab-itens');
+  if (ti && typeof injectColFilterButtons === 'function') injectColFilterButtons(ti, 'reposicoes');
   const c = root.querySelector('.mp-lista-corpo'); if (c && sc) c.scrollTop = sc;
   if (foco && root.contains(document.getElementById(foco))) { const e = document.getElementById(foco); e.focus({ preventScroll: true }); try { e.setSelectionRange(pos, pos); } catch (_) { /* select/date */ } }
 }
@@ -596,6 +652,14 @@ const RP_ACOES = {
   aba(b) { RP.aba = b.dataset.v; RP.mot = ''; _rpDesenhar(); },
   mot(b) { RP.mot = b.dataset.v; RP.aba = 'trav'; _rpDesenhar(); },
   eixo(b) { RP.eixo = b.dataset.v; _rpDesenhar(); },
+  // 1º clique: texto crescente, número decrescente (maior no topo); 3º clique volta à ordem padrão.
+  ord(b, e) {
+    if (e.target.closest('.cf-btn, .col-resizer')) return;
+    const c = b.dataset.v, num = b.classList.contains('n'), o = RP.ord, ini = num ? 'desc' : 'asc';
+    RP.ord = o?.c !== c ? { c, dir: ini } : o.dir === ini ? { c, dir: ini === 'asc' ? 'desc' : 'asc' } : null;
+    _rpDesenhar();
+  },
+  tabLimpa() { colFilters.reposicoes = {}; _rpDesenhar(); },
   un(b) { RP.un = b.dataset.v; _rpDesenhar(); },
   // Clique no que já está aberto volta um nível, como nas Operações.
   no(b) {
