@@ -508,7 +508,7 @@ function _acAlertaSemVinc(f, g) {
       // Sugestões só com as mães da central da filha (Hugo, 23/11/2026); filha
       // sem central (ou central sem mãe conhecida) vê todas as do fornecedor.
       const daCen = c ? g.maes.filter(m => m.central === c) : [];
-      return `<datalist id="ac-dl-${f.cnpj}-${_acDlId(c)}">${(daCen.length ? daCen : g.maes).map(m => `<option value="${_acE(m.numero)}">${_acE(m.numero)} · ${_acE(m.central || 'sem central')} · ${_acData(m.emissao)} · ${_acT(m.peso)}</option>`).join('')}</datalist>`;
+      return `<datalist id="ac-dl-${f.cnpj}-${_acDlId(c)}">${(daCen.length ? daCen : g.maes).map(m => `<option value="${_acE(m.numero)}">${_acE(m.numero)} · ${_acE(m.central || 'sem central')} · ${_acData(m.emissao)} · ${_acT(m.peso)} · ${_acE(m.materiais.join(', ') || 'sem material')}</option>`).join('')}</datalist>`;
     }).join('')}
   </div>`;
 }
