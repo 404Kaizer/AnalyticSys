@@ -113,15 +113,16 @@ function _acCentrais() {
   const ents = state.entradas || [];
   if (AC.cenIdx && AC.cenIdxRef === ents && AC.cenIdxLen === ents.length) return AC.cenIdx;
   const ch = new Set(AC.nfs.map(n => n.chave)), nfk = new Set(AC.nfs.map(n => n.cnpj_emitente + '|' + n.numero));
-  const porCh = new Map(), porNf = new Map();
+  const porCh = new Map(), porNf = new Map(), mat = new Map();   // mat: chave ou cnpj|nº → materiais padronizados
+  const poeMat = (k, v) => { if (v) (mat.get(k) || mat.set(k, new Set()).get(k)).add(v); };
   for (let i = 0; i < ents.length; i++) {
     const r = ents[i];
     const cen = r.centralDestino || r.centralCompra;
     if (!cen) continue;
-    if (r.chave && ch.has(r.chave)) { porCh.set(r.chave, cen); continue; }
-    if (r.cnpjFornecedor) { const k = r.cnpjFornecedor + '|' + _acNum(r.nf); if (nfk.has(k)) porNf.set(k, cen); }
+    if (r.chave && ch.has(r.chave)) { porCh.set(r.chave, cen); poeMat(r.chave, r.material); continue; }
+    if (r.cnpjFornecedor) { const k = r.cnpjFornecedor + '|' + _acNum(r.nf); if (nfk.has(k)) { porNf.set(k, cen); poeMat(k, r.material); } }
   }
-  AC.cenIdx = { porCh, porNf };
+  AC.cenIdx = { porCh, porNf, mat };
   AC.cenIdxRef = ents; AC.cenIdxLen = ents.length;
   return AC.cenIdx;
 }
@@ -154,8 +155,70 @@ function _acCitacoes(txt) {
   return { chaves, nums, soltos };
 }
 
+// Materiais da nota para comparar mãe × filha: [{ keys, peso }]. Com um material
+// só, o nome padronizado da Entrada da própria nota também vale como chave.
+function _acMats(itens, chavesDe, daEntrada) {
+  const por = new Map();
+  itens.forEach(i => {
+    if (!i.material) return;
+    const x = por.get(i.material) || por.set(i.material, { keys: new Set(chavesDe(i.material)), peso: 0 }).get(i.material);
+    x.peso += Number(i.volume) || 0;
+  });
+  const mats = [...por.values()];
+  if (mats.length === 1 && daEntrada?.size === 1) mats[0].keys.add(normalizeLooseText([...daEntrada][0]));
+  return mats;
+}
+
+/* ───────── recomendação da nota mãe (Hugo, 25/11/2026) ───────── */
+// Para cada filha sem vínculo, da mais antiga para a mais nova: a nota mãe MAIS
+// ANTIGA com saldo para o peso, entre as autorizadas do mesmo fornecedor, central
+// e material, emitidas até o dia da filha. Nenhuma com saldo inteiro → a de maior
+// saldo, com aviso (excede). Cada recomendação já desconta o saldo da seguinte.
+// Em nota mãe com vários materiais o saldo é o do material da filha.
+// Devolve Map chave da filha → { mae, saldo, excede } ou { motivo }.
+const _acMesmoMat = (a, b) => { for (const k of a.keys) if (b.keys.has(k)) return true; return false; };
+function _acRec(g) {
+  if (g.rec) return g.rec;
+  const rec = g.rec = new Map();
+  const dia = ms => new Date(ms).setHours(0, 0, 0, 0);
+  const maes = g.maes.filter(m => m.status === 'autorizada' && m.central && m.mats.length).sort((a, b) => a.emissao - b.emissao);
+  // Saldo por material da nota mãe. Um material só: toda filha vinculada conta.
+  const saldos = new Map(maes.map(m => {
+    const bolsas = m.mats.map(x => ({ keys: x.keys, saldo: m.mats.length === 1 ? m.peso : x.peso }));
+    m.filhas.forEach(f => {
+      if (f.status === 'cancelada') return;
+      if (bolsas.length === 1) { bolsas[0].saldo -= f.peso; return; }
+      f.mats.forEach(x => { const b = bolsas.find(y => _acMesmoMat(x, y)); if (b) b.saldo -= x.peso; });
+    });
+    return [m, bolsas];
+  }));
+  [...g.semVinc].sort((a, b) => a.emissao - b.emissao).forEach(f => {
+    const man = AC.vinc.get(f.chave);
+    if (man) { rec.set(f.chave, { motivo: `vinculada à NF ${man.numero_mae}, que não está no SEFAZ importado` }); return; }
+    if (!f.central) { rec.set(f.chave, { motivo: 'filha sem central nas Entradas' }); return; }
+    if (!f.mats.length || !(f.peso > 0)) { rec.set(f.chave, { motivo: 'filha sem material ou peso' }); return; }
+    const cands = [];
+    for (const m of maes) {
+      if (m.central !== f.central || (m.emissao && f.emissao && dia(m.emissao) > dia(f.emissao))) continue;
+      const usa = f.mats.map(x => [saldos.get(m).find(b => _acMesmoMat(x, b)), x.peso]);
+      if (usa.some(([b]) => !b)) continue;
+      const saldo = Math.max(0, Math.min(...usa.map(([b]) => b.saldo)));
+      const excede = usa.reduce((t, [b, p]) => t + Math.max(0, p - Math.max(0, b.saldo)), 0);
+      cands.push({ mae: m, usa, saldo, excede: excede > 0.001 ? excede : 0 });
+    }
+    if (!cands.length) { rec.set(f.chave, { motivo: 'nenhuma nota mãe autorizada desta central e material até a data da filha' }); return; }
+    const r = cands.find(c => !c.excede) || cands.reduce((a, b) => b.saldo > a.saldo ? b : a);
+    if (!(r.saldo > 0.001)) { rec.set(f.chave, { motivo: 'nenhuma nota mãe com saldo' }); return; }
+    r.usa.forEach(([b, p]) => { b.saldo -= p; });
+    rec.set(f.chave, r);
+  });
+  return rec;
+}
+
 function _acMontar() {
   const idx = _acCentrais();
+  const chaveMat = new Map();   // nome do SEFAZ → chaves de comparação (o nome e o padronizado)
+  const chavesDe = n => chaveMat.get(n) || chaveMat.set(n, [normalizeLooseText(n), normalizeLooseText(normalizarMaterial(n))]).get(n);
   const mk = s => {
     const itens = Array.isArray(s.itens) ? s.itens : [];
     const tipos = itens.map(i => AC.cfop.get(String(i.cfop || '')));
@@ -170,6 +233,7 @@ function _acMontar() {
       peso: itens.reduce((t, i) => t + (Number(i.volume) || 0), 0),
       valor: itens.reduce((t, i) => t + (Number(i.valor_total) || 0), 0),
       materiais: [...new Set(itens.map(i => i.material).filter(Boolean))],
+      mats: _acMats(itens, chavesDe, idx.mat.get(s.chave) || idx.mat.get(s.cnpj_emitente + '|' + s.numero)),
       central: idx.porCh.get(s.chave) || idx.porNf.get(s.cnpj_emitente + '|' + s.numero) || '',
     };
   };
@@ -492,15 +556,27 @@ const _acPill = (txt, cor, ic) => `<span class="ac-pill" style="--c:${cor}">${ic
 const _acChev = aberto => `<i class="ti ti-chevron-down micro-filial-chev" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s;${aberto ? 'transform:rotate(180deg)' : ''}"></i>`;
 
 const _acDlId = c => (c || 'semcentral').replace(/[^A-Za-z0-9]/g, '_');
+const _acNoLote = r => !!(r?.mae && !r.excede);
+function _acRecHtml(s, r) {
+  if (!r?.mae) return `<span class="mo-hint ac-rec-nao">${_acE(r?.motivo || '—')}</span>`;
+  const m = r.mae, tip = `NF ${m.numero} · ${m.central} · ${_acData(m.emissao)} · ${m.materiais.join(', ')} — saldo já descontando as filhas mais antigas recomendadas antes desta`;
+  return `<div class="ac-rec" title="${_acE(tip)}"><div><b class="mono">${_acE(m.numero)}</b><small>${_acData(m.emissao)} · saldo ${_acT(r.saldo)}</small>
+    ${r.excede ? `<small class="ac-exc"><i class="ti ti-alert-triangle"></i> passa ${_acT(r.excede)} do saldo</small>` : ''}</div>
+    <button class="btn btn-sm" onclick="acVincularRecs('${s.cnpj}','${s.chave}')" title="Vincular à recomendada"><i class="ti ti-check"></i></button></div>`;
+}
 // Subaba "Sem vínculo": filhas cujo complementar não cita a nota mãe — vincular à mão.
 function _acAlertaSemVinc(f, g) {
   if (!g.semVinc.length) return '<div class="mp-card"><p class="mo-hint"><i class="ti ti-circle-check" style="color:var(--green)"></i> Todas as notas filhas deste fornecedor estão vinculadas a uma nota mãe.</p></div>';
+  const rec = _acRec(g), lote = g.semVinc.filter(s => _acNoLote(rec.get(s.chave)));
+  const avisos = g.semVinc.filter(s => rec.get(s.chave)?.excede).length;
   return `<div class="mp-card ac-semvinc">
     <h4 class="mp-tit">${g.semVinc.length} nota${g.semVinc.length > 1 ? 's' : ''} filha${g.semVinc.length > 1 ? 's' : ''} sem vínculo <span class="mo-hint">${_acT(g.semVinc.reduce((t, s) => t + s.peso, 0))} · o complementar não cita a nota mãe</span></h4>
-    <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Número</th><th>Emissão</th><th>Central</th><th class="num">Peso</th><th>Complementar</th><th>Vincular à nota mãe</th></tr></thead><tbody>
+    ${lote.length ? `<div class="ac-rec-lote"><button class="btn btn-sm btn-primary" onclick="acVincularRecs('${f.cnpj}')"><i class="ti ti-link"></i> Vincular ${lote.length} recomendada${lote.length > 1 ? 's' : ''}</button><span class="mo-hint">a nota mãe mais antiga com saldo, da mesma central e material${avisos ? ` · ${avisos} com aviso de saldo fica${avisos > 1 ? 'm' : ''} fora do lote` : ''}</span></div>` : ''}
+    <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Número</th><th>Emissão</th><th>Central</th><th>Material</th><th class="num">Peso</th><th>Complementar</th><th>Recomendada</th><th>Vincular à nota mãe</th></tr></thead><tbody>
     ${g.semVinc.map(s => `<tr>
-      <td class="mono">${_acE(s.numero)}</td><td>${_acData(s.emissao)}</td><td>${_acE(s.central || '—')}</td><td class="num mono">${_acT(s.peso)}</td>
+      <td class="mono">${_acE(s.numero)}</td><td>${_acData(s.emissao)}</td><td>${_acE(s.central || '—')}</td><td class="ac-comp ac-comp-mat" title="${_acE(s.materiais.join(', '))}">${_acE(s.materiais.join(', ') || '—')}</td><td class="num mono">${_acT(s.peso)}</td>
       <td class="ac-comp" title="${_acE(s.comp)}">${_acE(s.comp || '—')}</td>
+      <td>${_acRecHtml(s, rec.get(s.chave))}</td>
       <td><div class="ac-vinc"><input class="form-input" id="ac-v-${s.chave}" placeholder="Nº ou chave da mãe" list="ac-dl-${f.cnpj}-${_acDlId(s.central)}" onkeydown="if(event.key==='Enter')acVincular('${s.chave}')"><button class="btn btn-sm" onclick="acVincular('${s.chave}')" title="Vincular"><i class="ti ti-link"></i></button></div></td>
     </tr>`).join('')}
     </tbody></table></div>
@@ -508,7 +584,7 @@ function _acAlertaSemVinc(f, g) {
       // Sugestões só com as mães da central da filha (Hugo, 23/11/2026); filha
       // sem central (ou central sem mãe conhecida) vê todas as do fornecedor.
       const daCen = c ? g.maes.filter(m => m.central === c) : [];
-      return `<datalist id="ac-dl-${f.cnpj}-${_acDlId(c)}">${(daCen.length ? daCen : g.maes).map(m => `<option value="${_acE(m.numero)}">${_acE(m.numero)} · ${_acE(m.central || 'sem central')} · ${_acData(m.emissao)} · ${_acT(m.peso)} · ${_acE(m.materiais.join(', ') || 'sem material')}</option>`).join('')}</datalist>`;
+      return `<datalist id="ac-dl-${f.cnpj}-${_acDlId(c)}">${(daCen.length ? daCen : g.maes).map(m => `<option value="${_acE(m.numero)}">${_acE(m.numero)} · ${_acE(m.central || 'sem central')} · ${_acData(m.emissao)} · ${m.status === 'autorizada' ? 'saldo ' + _acT(m.pendT) : AC_STATUS[m.status][0].toLowerCase()} · ${_acE(m.materiais.join(', ') || 'sem material')}</option>`).join('')}</datalist>`;
     }).join('')}
   </div>`;
 }
@@ -722,6 +798,35 @@ async function acVincular(chaveFilha) {
   acordosRender();
 }
 
+// Aceita a recomendação de uma filha (com chave) ou todas as do fornecedor sem
+// aviso de saldo. Não sobrescreve vínculo que outro usuário tenha feito antes.
+async function acVincularRecs(cnpj, chaveFilha) {
+  const g = AC.porForn.get(cnpj);
+  if (!g || AC.vinculando) return;
+  const rec = _acRec(g);
+  const pares = g.semVinc.map(s => [s, rec.get(s.chave)]).filter(([s, r]) => chaveFilha ? s.chave === chaveFilha && r?.mae : _acNoLote(r));
+  if (!pares.length) return;
+  if (!chaveFilha) {
+    const t = pares.reduce((a, [s]) => a + s.peso, 0), nMaes = new Set(pares.map(([, r]) => r.mae.chave)).size;
+    if (!confirm(`Vincular ${pares.length} nota(s) filha(s) (${_acT(t)}) a ${nMaes} nota(s) mãe recomendada(s)?\n\nPara desfazer, é uma a uma, na lista de filhas da nota mãe.`)) return;
+  } else if (pares[0][1].excede && !confirm(`A filha ${pares[0][0].numero} passa ${_acT(pares[0][1].excede)} do saldo da nota mãe ${pares[0][1].mae.numero}. Vincular mesmo assim?`)) return;
+  AC.vinculando = true;
+  let erro = null, gravadas = 0;
+  try {
+    const linhas = pares.map(([s, r]) => ({ chave_filha: s.chave, chave_mae: r.mae.chave, numero_mae: r.mae.numero, ..._acQuem() }));
+    for (let i = 0; i < linhas.length && !erro; i += 500) {
+      const { error, data } = await window.supabaseClient.from('acordo_vinculos')
+        .upsert(linhas.slice(i, i + 500), { onConflict: 'chave_filha', ignoreDuplicates: true }).select('chave_filha');
+      if (error) erro = error; else gravadas += data.length;
+    }
+    _acSetVinc(await _acFetchAll('acordo_vinculos', '*', 'chave_filha'));
+  } catch (e) { erro = erro || e; }
+  AC.vinculando = false;
+  if (erro) toast(`Falha ao vincular${gravadas ? ` (${gravadas} gravada(s) antes do erro)` : ''}: ` + (erro.message || erro), 'error');
+  else toast(`${gravadas} nota(s) filha(s) vinculada(s)${gravadas < pares.length ? ` · ${pares.length - gravadas} já tinha(m) vínculo` : ''}.`, 'success');
+  acordosRender();
+}
+
 async function acDesvincular(chaveFilha) {
   if (!confirm('Desfazer o vínculo manual desta nota filha? Ela volta para os alertas se o complementar não citar a nota mãe.')) return;
   const { error } = await window.supabaseClient.from('acordo_vinculos').delete().eq('chave_filha', chaveFilha);
@@ -737,10 +842,16 @@ function _acRealtime() {
   const sb = window.supabaseClient;
   if (!sb) return;
   const ativa = () => document.getElementById('page-acordos')?.classList.contains('active');
-  const tabela = (t, ordem, set) => sb.channel('ac_' + t)
-    .on('postgres_changes', { event: '*', schema: 'public', table: t }, async () => {
-      try { set(await _acFetchAll(t, '*', ordem)); if (ativa() && AC.carga) acordosRender(); } catch (e) { console.warn('[Acordos]', t, e); }
+  // Eventos agrupados: o vínculo em lote grava centenas de linhas de uma vez.
+  const tabela = (t, ordem, set) => {
+    let espera = null;
+    sb.channel('ac_' + t).on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
+      clearTimeout(espera);
+      espera = setTimeout(async () => {
+        try { set(await _acFetchAll(t, '*', ordem)); if (ativa() && AC.carga) acordosRender(); } catch (e) { console.warn('[Acordos]', t, e); }
+      }, 400);
     }).subscribe();
+  };
   tabela('acordo_fornecedores', 'cnpj', _acSetForn);
   tabela('acordo_nf_status', 'chave', _acSetStatus);
   tabela('acordo_vinculos', 'chave_filha', _acSetVinc);
@@ -752,6 +863,6 @@ function _acRealtime() {
     }).subscribe();
 }
 
-Object.assign(window, { acordosRender, acSel, acGrp, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acDesvincular });
+Object.assign(window, { acordosRender, acSel, acGrp, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acDesvincular });
 // Lista recolhida: lembrada neste navegador.
 try { AC.listaRecolhida = localStorage.getItem('acordos.listaRecolhida') === '1'; } catch (_) { /* sem storage */ }

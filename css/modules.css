@@ -14419,3 +14419,14 @@ table.ac-tab tr.inativa td { opacity: .55; }
 .ac-comp { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text2); }
 .ac-vinc { display: flex; gap: 4px; } .ac-vinc input { width: 150px; font-size: 12px; padding: 4px 8px; }
 .ac-semvinc .micro-table-wrap { max-height: calc(100vh - 360px); overflow-y: auto; }
+.ac-rec { display: flex; align-items: center; gap: 8px; justify-content: space-between; min-width: 190px; }
+.ac-rec > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ac-rec small { font-size: 11px; color: var(--text2); white-space: nowrap; }
+.ac-rec small.ac-exc { color: var(--red); }
+.ac-rec-nao { font-size: 11.5px; display: block; white-space: normal; min-width: 170px; max-width: 220px; }
+/* A tabela global é de colunas iguais (fixed) e corta o conteúdo: aqui cada coluna tem a largura do seu. */
+.ac-semvinc .micro-table-wrap { overflow-x: auto; }
+.ac-semvinc table.ac-tab { table-layout: auto; }
+.ac-semvinc table.ac-tab td:nth-last-child(-n+2) { overflow: visible; }
+.ac-rec-lote { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ac-comp-mat { max-width: 160px; }
