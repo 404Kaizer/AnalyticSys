@@ -14,7 +14,7 @@
 // COB_PAGINAS_INSUMOS + navigate() em ui.js. O que some na tela é
 // controlado por body.role-insumos (auth.js) + CSS (modules.css).
 
-const COB_PAGINAS_INSUMOS = new Set(['cobrancas', 'importar', 'configuracoes', 'ocorrencias', 'entradas', 'saidas', 'custos', 'acordos']);
+const COB_PAGINAS_INSUMOS = new Set(['cobrancas', 'importar', 'configuracoes', 'ocorrencias', 'entradas', 'saidas', 'custos', 'acordos', 'reposicoes']);
 
 function cobIsInsumos() {
   return window.currentUser?.role === 'insumos';

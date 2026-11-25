@@ -9130,6 +9130,7 @@ const pageRenderers = {
   ocorrencias: () => renderOcorrenciasPage(),
   custos: () => { if (typeof custosRender === 'function') custosRender(); },
   acordos: () => { if (typeof acordosRender === 'function') acordosRender(); },
+  reposicoes: () => { if (typeof reposicoesRender === 'function') reposicoesRender(); },
   admin: () => { if (typeof renderAdminPage === 'function') renderAdminPage(); },
   // Analítico/Inventário não se redesenham ao abrir (o usuário roda por
   // período) — só quando o cadastro mudou desde a última vez que rodaram

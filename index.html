@@ -237,6 +237,14 @@
         </span>
       </button>
 
+      <button class="tab-item" onclick="navigate('reposicoes')" data-page="reposicoes" data-label="Reposições">
+        <span class="tab-icon" style="--tab-color: var(--amber)"><i class="ti ti-scale"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Reposições</span>
+          <span class="tab-sub">desfalque por fornecedor</span>
+        </span>
+      </button>
+
       <div class="tab-group-label">Movimentações</div>
 
       <button class="tab-item" onclick="navigate('entradas')" data-page="entradas" data-label="Entradas (NF)">
@@ -2226,6 +2234,25 @@
           </div>
         </div>
         <div id="ac-root"><div class="empty-state"><p>Carregando…</p></div></div>
+      </div>
+
+      <!-- REPOSIÇÕES — rateio do desfalque de agregados entre fornecedores (ADM + INSUMOS; ver js/reposicoes.js) -->
+      <div class="page" id="page-reposicoes">
+        <div class="analitico-toolbar">
+          <div class="analitico-period" style="align-items:center;gap:10px">
+            <div class="cal-picker-wrap" id="rp-month-wrap">
+              <button class="cal-picker-trigger has-value" id="rp-month-trigger" onclick="rpToggleMes()" type="button" title="Mês do desfalque (Shift+clique soma um período)">
+                <i class="ti ti-calendar-event"></i>
+                <span id="rp-month-label">Selecionar mês</span>
+                <i class="ti ti-chevron-down cal-chev"></i>
+              </button>
+              <div class="cal-picker-dropdown" id="rp-month-dropdown"><div class="cal-picker-inner" id="rp-month-inner"></div></div>
+            </div>
+            <span class="mo-hint" id="rp-status" role="status"></span>
+          </div>
+          <div class="analitico-actions" id="rp-estado"></div>
+        </div>
+        <div id="rp-root"><div class="empty-state"><p>Carregando…</p></div></div>
       </div>
 
       <!-- CUSTOS — mapa de fornecedores, rotas, preços e alertas (ADM + INSUMOS; ver js/custos.js) -->
@@ -6556,6 +6583,8 @@
 <script defer src="js/solicitacoes.js"></script>
 <script defer src="js/custos.js"></script>
 <script defer src="js/acordos.js"></script>
+<script defer src="js/reposicoes-motor.js"></script>
+<script defer src="js/reposicoes.js"></script>
 
 <!-- ═══ MODAL: Nova/Editar Ocorrência ═══ -->
 <div class="modal-overlay" id="oc-modal" role="dialog" aria-modal="true">
