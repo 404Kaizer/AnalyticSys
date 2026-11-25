@@ -40,12 +40,13 @@ const AC = {
   maes: [], filhas: [], porForn: new Map(),
   cenIdx: null, cenIdxRef: null, cenIdxLen: -1,
   sel: '', grp: '', aba: null, paba: 'maes', abertas: new Set(), listaRecolhida: false,
-  fAberto: null, fPend: null, fBusca: '',
+  fAberto: null, fPend: null, fBusca: '', evo: 't', evoNotas: [],
   F: { q: '', regs: new Set(), cens: new Set(), mats: new Set(), grupo: 'fornecedor' },
 };
 
 /* ───────── formatação ───────── */
 const _acE = s => escapeHtml(String(s ?? ''));
+const _acNf1 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const _acNf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const _acNf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 const _acT = v => _acNf2.format(v || 0) + ' t';
@@ -387,6 +388,12 @@ async function acordosRender() {
   if (!root) return;
   if (!AC.iniciado) {
     AC.iniciado = true; _acRealtime();
+    if (typeof _showTip === 'function') {
+      const alvo = e => e.target.closest?.('.ac-ro [data-tip]');
+      root.addEventListener('mouseover', e => { const l = alvo(e); if (l) _showTip(e, decodeURIComponent(l.dataset.tip), '#7b85a0'); });
+      root.addEventListener('mousemove', e => { if (alvo(e)) _moveTip(e); });
+      root.addEventListener('mouseout', e => { if (alvo(e)) _hideTip(); });
+    }
     document.addEventListener('click', e => { if (AC.fAberto && e.target.isConnected && !e.target.closest('#ac-root .mo-fg')) acFFechar(); });
   }
   if (AC.sujo || !AC.carga) {
@@ -416,6 +423,7 @@ function _acDesenhar() {
   const c2 = root.querySelector('.mp-lista-corpo'); if (c2) c2.scrollTop = sc;
   if (foco === 'ac-busca' || foco === 'acf-busca') { const i = document.getElementById(foco); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
   _acFoco();
+  _acEvoDesenhar();
 }
 
 /* ───────── lista (esquerda) ───────── */
@@ -432,7 +440,7 @@ function _acOrdemForn(a, b) {
   return (gb?.maes.length ? 1 : 0) - (ga?.maes.length ? 1 : 0) || (gb?.pendR || 0) - (ga?.pendR || 0)
     || (gb?.semVinc.length || 0) - (ga?.semVinc.length || 0) || String(a.nome).localeCompare(String(b.nome), 'pt-BR');
 }
-// Cor do ícone: vermelho = filhas sem vínculo; âmbar = saldo pendente; verde = em dia; cinza = sem nota mãe.
+// Cor do ícone: vermelho = filhas sem vínculo; âmbar = saldo restante; verde = em dia; cinza = sem nota mãe.
 function _acIco(sv, pend, tem) {
   const [ic, cor] = !tem ? ['ti-minus', 'var(--text3)'] : sv ? ['ti-link-off', 'var(--red)'] : pend > 0 ? ['ti-hourglass', 'var(--amber)'] : ['ti-circle-check', 'var(--green)'];
   return `<i class="ti ${ic} mp-ico" style="color:${cor}" aria-hidden="true"></i>`;
@@ -489,9 +497,127 @@ function _acCab(migalhas, titulo, sub, pendT, pendR) {
   return `<div class="mp-cab"><div style="min-width:0">
       <div class="mp-migalhas">${migalhas.join(' › ')}</div>
       <h2>${titulo}</h2><p class="mo-hint">${sub}</p></div>
-    <div class="mp-cab-num"><b style="color:${pendT > 0 ? 'var(--amber)' : 'var(--text2)'}">${_acT(pendT)}</b><span class="mo-hint mono">${_acR(pendR)} pendente</span></div></div>`;
+    <div class="mp-cab-num"><b style="color:${pendT > 0 ? 'var(--amber)' : 'var(--text2)'}">${_acT(pendT)}</b><span class="mo-hint mono">${_acR(pendR)} restante</span></div></div>`;
 }
 const _acCx = (val, rot, cor) => `<div class="mp-pend-cx"><b${cor ? ` style="color:${cor}"` : ''}>${val}</b><span>${rot}</span></div>`;
+
+/* ───────── gráficos do Resumo (Hugo, 25/11/2026) ───────── */
+// Duas roscas (físico e financeiro: retirado × restante, total no centro) e a
+// evolução mês a mês embaixo. A fatia Retirado é a parte DENTRO do saldo (retirado
+// − excedido), para as fatias fecharem no total; o que passou está no card (_acCardsSaldo).
+const _acRc = v => Math.abs(v) >= 1e6 ? 'R$ ' + _acNf1.format(v / 1e6) + ' mi' : Math.abs(v) >= 1e4 ? 'R$ ' + _acNf0.format(v / 1e3) + ' mil' : 'R$ ' + _acNf0.format(v);
+const _acTc = v => _acNf0.format(v) + ' t';
+const _acTipG = (tit, linhas) => encodeURIComponent(`<b>${tit}</b><div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;margin-top:6px;font-family:var(--mono);font-size:13px">${linhas.map(([r, v]) => `<span style="color:var(--text2)">${r}</span><span style="text-align:right">${v}</span>`).join('')}</div>`);
+
+// Os três números do Resumo. Retirado ACIMA de uma nota mãe não abate o saldo das
+// outras: com excedido, retirado + restante passa do total (dito no card).
+function _acCardsSaldo(aut) {
+  const s = k => aut.reduce((t, m) => t + m[k], 0);
+  const tot = s('peso'), ret = s('retT'), pen = s('pendT'), exc = s('excedido');
+  const pct = v => tot > 0 ? _acNf1.format(v / tot * 100) + '% do peso total' : '';
+  const card = (cls, ic, rot, t, r, sub) => `<div class="ac-kc ${cls}"><div class="ac-kc-rot"><i class="ti ${ic}"></i>${rot}</div><b>${_acT(t)}</b><span class="ac-kc-r">${_acR(r)}</span>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  return `<div class="ac-kcs">
+    ${card('tot', 'ti-stack-2', 'Saldo total', tot, s('valor'), `${_acNf0.format(aut.length)} ${aut.length === 1 ? 'nota mãe autorizada' : 'notas mães autorizadas'}`)}
+    ${card('ret', 'ti-truck-delivery', 'Saldo retirado', ret, s('retR'), pct(Math.max(0, ret - exc)) + (exc > 0.001 ? ` · mais ${_acT(exc)} acima do saldo de alguma nota mãe` : ''))}
+    ${card('pen', 'ti-hourglass', 'Saldo restante', pen, s('pendR'), pct(pen))}</div>`;
+}
+
+function _acGraficos(aut) {
+  AC.evoNotas = aut;
+  const s = k => aut.reduce((t, m) => t + m[k], 0);
+  const excR = aut.reduce((t, m) => t + m.excedido * m.custoUn, 0);
+  const rosca = (tit, fmt, curto, total, ret, pend, exc) => {
+    const R = 82, E = 26, C = 2 * Math.PI * R, dentro = Math.max(0, ret - exc);
+    const p = v => total > 0 ? v / total : 0, pct = v => total > 0 ? _acNf1.format(p(v) * 100) + '%' : '—';
+    const fatias = [['Retirado', dentro, 'ret', ret], ['Restante', pend, 'pen', pend]].filter(x => x[1] > 0 && total > 0);
+    const gap = fatias.length > 1 ? 3 : 0;   // espaço na cor do fundo entre as fatias
+    let pos = 0;
+    const arcos = fatias.map(([r, v, cls, cheio]) => {
+      const L = p(v) * C, d = `<circle class="ac-ro-f ${cls}" r="${R}" cx="110" cy="110" stroke-width="${E}" stroke-dasharray="${Math.max(0.5, L - gap).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-pos - gap / 2).toFixed(2)}" data-tip="${_acTipG(`${tit} · ${r}`, [['Valor', fmt(cheio)], ['Do saldo total', pct(v)]])}"/>`;
+      pos += L;
+      return d;
+    }).join('');
+    const leg = (r, cls, pc) => `<div class="ac-ro-l"><i class="${cls}"></i><span>${r}</span><b>${pc}</b></div>`;
+    return `<div class="ac-ro"><div class="ac-gr-tit">${tit}</div><div class="ac-ro-corpo">
+      <svg viewBox="0 0 220 220" role="img" aria-label="${_acE(`${tit}: saldo total ${fmt(total)}, retirado ${fmt(ret)}, restante ${fmt(pend)}`)}">
+        <circle class="ac-ro-fundo" r="${R}" cx="110" cy="110" stroke-width="${E}"/><g transform="rotate(-90 110 110)">${arcos}</g>
+        <text x="110" y="103" class="ac-ro-rot">Saldo total</text><text x="110" y="126" class="ac-ro-tot">${curto(total)}</text></svg>
+      <div class="ac-ro-leg">${leg('Retirado', 'ret', pct(dentro))}${leg('Restante', 'pen', pct(pend))}</div></div></div>`;
+  };
+  return `<div class="ac-gr-dois">${rosca('Físico', _acT, _acTc, s('peso'), s('retT'), s('pendT'), s('excedido'))}${rosca('Financeiro', _acR, _acRc, s('valor'), s('retR'), s('pendR'), excR)}</div>
+    <div class="ac-ro ac-ev"><div class="ac-gr-tit">Evolução por mês
+      <span class="ac-ev-leg"><span><i class="tot"></i>Saldo total</span><span><i class="ret"></i>Retirado</span><span><i class="pen"></i>Restante</span></span>
+      <span class="mp-modo" role="group" aria-label="Unidade da evolução">${[['t', 'Físico'], ['r', 'Financeiro']].map(([k, r]) => `<button data-evo="${k}" class="${AC.evo === k ? 'on' : ''}" aria-pressed="${AC.evo === k}" onclick="acEvo('${k}')">${r}</button>`).join('')}</span></div>
+      <div id="ac-evo"></div></div>`;
+}
+
+// Saldo total, retirado e restante ACUMULADOS no fim de cada mês; o último mês
+// bate com as roscas. Nota mãe entra no mês da emissão; a filha, no mês dela.
+// ponytail: no máximo 36 meses na tela (o acumulado anterior entra no 1º).
+function _acEvolucao(aut, modo) {
+  const mes = ms => { const d = new Date(ms); return d.getFullYear() * 12 + d.getMonth(); };
+  let ini = Infinity, fim = -Infinity;
+  const ve = ms => { if (ms > 0) { const k = mes(ms); if (k < ini) ini = k; if (k > fim) fim = k; } };
+  aut.forEach(m => { ve(m.emissao); m.filhas.forEach(f => { if (f.status !== 'cancelada') ve(f.emissao); }); });
+  if (ini > fim) return [];
+  ini = Math.max(ini, fim - 35);
+  const n = fim - ini + 1, idx = ms => Math.max(0, (ms > 0 ? mes(ms) : ini) - ini);
+  const out = Array.from({ length: n }, (_, i) => ({ mes: ini + i, tot: 0, ret: 0, pen: 0 }));
+  aut.forEach(m => {
+    const u = modo === 'r' ? m.custoUn : 1, por = new Float64Array(n);
+    m.filhas.forEach(f => { if (f.status !== 'cancelada') por[idx(f.emissao)] += f.peso; });
+    let ret = 0;
+    for (let i = 0, e = idx(m.emissao); i < n; i++) {
+      ret += por[i];
+      out[i].ret += ret * u;
+      if (i >= e) { out[i].tot += modo === 'r' ? m.valor : m.peso; out[i].pen += Math.max(0, m.peso - ret) * u; }
+    }
+  });
+  return out;
+}
+
+// Desenhada depois do HTML, na largura real do painel (texto sem esticar).
+function _acEvoDesenhar() {
+  const el = document.getElementById('ac-evo');
+  if (!el) return;
+  const pts = _acEvolucao(AC.evoNotas || [], AC.evo), fmt = AC.evo === 'r' ? _acR : _acT, curto = AC.evo === 'r' ? _acRc : _acTc;
+  if (!pts.length) { el.innerHTML = '<p class="mo-hint">Sem notas mães para mostrar.</p>'; return; }
+  const W = Math.max(320, Math.round(el.clientWidth)), H = 250, P = { l: 74, r: 16, t: 14, b: 26 }, n = pts.length;
+  const max = Math.max(...pts.flatMap(p => [p.tot, p.ret, p.pen])) || 1;
+  const bruto = max / 4, mag = 10 ** Math.floor(Math.log10(bruto)), passo = [1, 2, 2.5, 5, 10].map(k => k * mag).find(k => k >= bruto);
+  const topo = passo * Math.ceil(max / passo - 1e-9), larg = (W - P.l - P.r) / n;
+  const x = i => P.l + larg * (i + 0.5), y = v => P.t + (1 - v / topo) * (H - P.t - P.b);
+  const nome = k => ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][k % 12] + '/' + String(Math.floor(k / 12)).slice(2);
+  const eixo = v => AC.evo === 'r' ? (topo >= 1e6 ? 'R$ ' + new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(v / 1e6) + ' mi' : 'R$ ' + _acNf0.format(v)) : _acNf0.format(v) + ' t';
+  let grade = '';
+  for (let v = 0; v <= topo + passo / 2; v += passo) grade += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${P.l - 8}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${eixo(v)}</text>`;
+  const cada = Math.ceil(n / Math.max(1, Math.floor((W - P.l - P.r) / 56)));
+  const rotX = pts.map((p, i) => (n - 1 - i) % cada ? '' : `<text x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${nome(p.mes)}</text>`).join('');
+  const linha = k => n > 1 ? `<path class="ac-ev-ln ${k}" d="${pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(p[k]).toFixed(1)).join('')}"/>` : '';
+  const pontos = (p, i) => ['tot', 'ret', 'pen'].map(k => `<circle class="${k}" cx="${x(i).toFixed(1)}" cy="${y(p[k]).toFixed(1)}" r="4.5"/>`).join('');
+  const fim = pts[n - 1];
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${_acE(`Evolução até ${nome(fim.mes)}: saldo total ${curto(fim.tot)}, retirado ${curto(fim.ret)}, restante ${curto(fim.pen)}`)}">
+    <g class="ac-ev-gr">${grade}${rotX}</g>${linha('tot')}${linha('ret')}${linha('pen')}
+    <g class="ac-ev-fim">${pontos(fim, n - 1)}</g>
+    ${pts.map((p, i) => `<g class="ac-ev-c" data-tip="${_acTipG(nome(p.mes) + ' · acumulado', [['Saldo total', fmt(p.tot)], ['Retirado', fmt(p.ret)], ['Restante', fmt(p.pen)]])}"><rect x="${(x(i) - larg / 2).toFixed(1)}" y="${P.t}" width="${larg.toFixed(1)}" height="${H - P.t - P.b}"/><line x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${P.t}" y2="${H - P.b}"/>${pontos(p, i)}</g>`).join('')}
+  </svg>`;
+}
+function acEvo(k) {
+  AC.evo = k;
+  document.querySelectorAll('#ac-root [data-evo]').forEach(b => { b.classList.toggle('on', b.dataset.evo === k); b.setAttribute('aria-pressed', b.dataset.evo === k); });
+  _acEvoDesenhar();
+}
+let _acEvoT = null;
+window.addEventListener('resize', () => { clearTimeout(_acEvoT); _acEvoT = setTimeout(_acEvoDesenhar, 150); });
+
+// Números secundários, em texto: notas fora da conta e o ritmo das filhas.
+function _acResumoTxt(aut, maes, g) {
+  const fora = maes.length - aut.length, partes = [];
+  if (fora) partes.push(`${_acNf0.format(fora)} nota${fora === 1 ? '' : 's'} mãe${fora === 1 ? '' : 's'} não autorizada${fora === 1 ? '' : 's'} fora da conta`);
+  if (g?.pesoMedio) partes.push(`filha de ${_acT(g.pesoMedio)} em média`);
+  if (g?.intervalo > 0) partes.push(g.intervalo >= 1 ? `uma a cada ${_acNf1.format(g.intervalo)} dias` : `${_acNf1.format(1 / g.intervalo)} por dia`);
+  return partes.join(' · ') || 'notas mães autorizadas';
+}
 
 function _acPainelHtml() {
   const f = AC.forn.get(AC.sel);
@@ -511,14 +637,11 @@ function _acPainelHtml() {
   const semV = forns.map(x => [x, AC.porForn.get(x.cnpj)?.semVinc.length || 0]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 8);
   return _acCab(mig, _acE(AC.grp || 'Acordos · ' + rot), `${forns.length} fornecedor${forns.length === 1 ? '' : 'es'} nesta aba · ${AC.maes.length} notas mães e ${AC.filhas.length} filhas no SEFAZ importado`, soma('pendT'), soma('pendR'))
     + (AC.cfop.size ? '' : '<div class="mp-card"><p class="mo-hint">Nenhum CFOP marcado como nota mãe/filha (Configurações → CFOP → Acordo).</p></div>')
-    + `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">notas mães autorizadas</span></h4><div class="mp-pend">
-        ${_acCx(_acNf0.format(aut.length), `notas mães (${maes.length} no total)`)}${_acCx(_acT(soma('pendT')), 'saldo pendente', 'var(--amber)')}
-        ${_acCx(_acR(soma('pendR')), 'pendente em R$', 'var(--amber)')}${_acCx(_acT(soma('retT')), 'retirado', 'var(--teal)')}
-        ${_acCx(_acNf0.format(sv), 'filhas sem vínculo', sv ? 'var(--red)' : '')}</div></div>
+    + `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(aut, maes)}</span></h4>${_acCardsSaldo(aut)}${_acGraficos(aut)}</div>
     <div class="mp-dois">
-      <div class="mp-card"><h4 class="mp-tit">O que mais pesa <span class="mo-hint">saldo pendente</span></h4>${top.length ? top.map(([x, g]) => `<button class="mp-rank" style="grid-template-columns:minmax(0,1fr) 90px 110px" onclick="acSel('${x.cnpj}')">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_acE(x.nome)}</span><span class="mp-rank-bar"><i style="width:${g.pendR / maxR * 100}%;background:var(--amber)"></i></span><span class="mono" style="text-align:right">${_acT(g.pendT)}</span></button>`).join('') : '<p class="mo-hint">Nenhum saldo pendente.</p>'}</div>
-      <div class="mp-card"><h4 class="mp-tit">Filhas sem vínculo <span class="mo-hint">vincular à mão</span></h4>${semV.length ? semV.map(([x, n]) => `<button class="mp-lin" onclick="acSel('${x.cnpj}')"><i class="ti ti-link-off" style="color:var(--red)"></i><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_acE(x.nome)}</span><b class="mono">${n}</b></button>`).join('') : '<p class="mo-hint">Todas as filhas estão vinculadas.</p>'}</div>
+      <div class="mp-card"><h4 class="mp-tit">O que mais pesa <span class="mo-hint">saldo restante em R$</span></h4>${top.length ? top.map(([x, g]) => `<button class="mp-rank" style="grid-template-columns:minmax(0,1fr) 90px 150px" onclick="acSel('${x.cnpj}')">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_acE(x.nome)}</span><span class="mp-rank-bar"><i style="width:${g.pendR / maxR * 100}%;background:var(--amber)"></i></span><span class="mono" style="text-align:right">${_acR(g.pendR)}<small class="mo-hint" style="display:block">${_acT(g.pendT)}</small></span></button>`).join('') : '<p class="mo-hint">Nenhum saldo restante.</p>'}</div>
+      <div class="mp-card"><h4 class="mp-tit">Filhas sem vínculo <span class="mo-hint">${sv ? _acNf0.format(sv) + ' no total' : ''}</span></h4>${semV.length ? semV.map(([x, n]) => `<button class="mp-lin" onclick="acSel('${x.cnpj}')"><i class="ti ti-link-off" style="color:var(--red)"></i><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_acE(x.nome)}</span><b class="mono">${n}</b></button>`).join('') : '<p class="mo-hint">Todas as filhas estão vinculadas.</p>'}</div>
     </div>`;
 }
 
@@ -539,11 +662,7 @@ function _acPainelForn(f) {
       ? `Escolha a modalidade acima.${g.maes.length ? ` Há <b>${g.maes.length}</b> nota${g.maes.length > 1 ? 's' : ''} mãe deste fornecedor no SEFAZ — escolha <b>Nota mãe</b> para ver o saldo.` : ''}`
       : `A tela de <b>${_acE(AC_MODALIDADES[f.modalidade])}</b> ainda não foi feita — por enquanto só Nota mãe.`}</p></div>`;
   } else {
-    corpo = `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">notas mães autorizadas</span></h4><div class="mp-pend">
-        ${_acCx(_acNf0.format(aut.length), `notas mães (${maes.length} no total)`)}${_acCx(_acT(soma('pendT')), 'saldo pendente · ' + _acR(soma('pendR')), 'var(--amber)')}
-        ${_acCx(_acT(soma('retT')), 'retirado · ' + _acR(soma('retR')), 'var(--teal)')}
-        ${_acCx(g.pesoMedio ? _acT(g.pesoMedio) : '—', 'peso médio das filhas')}
-        ${_acCx(g.intervalo != null ? _acNf2.format(g.intervalo) + ' d' : '—', 'entre uma filha e outra')}</div></div>
+    corpo = `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(aut, maes, g)}</span></h4>${_acCardsSaldo(aut)}${_acGraficos(aut)}</div>
       <div class="mp-subabas ac-subabas" role="tablist">${[['maes', 'ti-file-dollar', 'Notas mães', maes.length, ''], ['semvinc', 'ti-link-off', 'Sem vínculo', g.semVinc.length, g.semVinc.length ? 'var(--red)' : '']].map(([k, ic, rot, n, cor]) =>
         `<button class="mo-aba${AC.paba === k ? ' on' : ''}" role="tab" aria-selected="${AC.paba === k}" onclick="acPaba('${k}')"><i class="ti ${ic}"${cor ? ` style="color:${cor}"` : ''}></i>${rot} <b${cor ? ` style="color:${cor}"` : ''}>${n}</b></button>`).join('')}</div>
       <div class="ac-maes">${AC.paba === 'semvinc' ? _acAlertaSemVinc(f, g) : _acCardsMaes(maes)}</div>`;
@@ -601,7 +720,7 @@ function _acCardsMaes(maes) {
         <div class="micro-filial-header" onclick="acToggle(this.closest('.micro-filial-header-wrap'))">
           <div class="micro-filial-name"><i class="ti ti-file-dollar"></i> NF ${_acE(m.numero)}<span class="ac-mcard-sub">${_acE(m.central || 'sem central')} · ${_acData(m.emissao)}</span></div>
           <div class="micro-filial-summary">${stHtml}
-            ${_acPill('Pendente: ' + _acT(m.pendT), m.pendT > 0 ? 'var(--amber)' : 'var(--text3)', 'ti-hourglass')}
+            ${_acPill('Restante: ' + _acT(m.pendT), m.pendT > 0 ? 'var(--amber)' : 'var(--text3)', 'ti-hourglass')}
             ${_acPill('Retirado ' + _acNf0.format(m.pct * 100) + '%', 'var(--teal)', 'ti-truck-delivery')}
             ${m.excedido ? _acPill('Excedido ' + _acT(m.excedido), 'var(--red)', 'ti-alert-triangle') : ''}
             <span class="summary-sep"></span>
@@ -635,14 +754,14 @@ function _acRelatorio(m) {
       <div class="micro-section-title"><i class="ti ti-report-analytics"></i> Saldo da nota mãe</div>
       <div class="mp-pend ac-pend6">
         ${_acCx(_acT(m.retT), 'retirado · ' + _acR(m.retR), 'var(--teal)')}
-        ${_acCx(_acT(m.pendT), 'pendente · ' + _acR(m.pendR), 'var(--amber)')}
+        ${_acCx(_acT(m.pendT), 'restante · ' + _acR(m.pendR), 'var(--amber)')}
         ${_acCx(_acNf0.format(m.nRet), `NFs retiradas de ${_acT(m.peso)}`)}
         ${_acCx(m.nfsRest == null ? '—' : _acNf0.format(m.nfsRest), 'NFs até acabar (peso médio)')}
         ${_acCx(tempo, tempoSub, 'var(--purple)')}
         ${_acCx(m.pesoMedio ? _acT(m.pesoMedio) : '—', 'peso médio das filhas do fornecedor')}
       </div>
       <div class="ac-prog"><div class="ac-prog-bar"><i style="width:${m.pct * 100}%"></i></div>
-        <div class="ac-prog-leg"><span><b class="ac-dot teal"></b>Retirado ${_acNf0.format(m.pct * 100)}%</span><span><b class="ac-dot amber"></b>Pendente ${_acNf0.format((1 - m.pct) * 100)}%</span>
+        <div class="ac-prog-leg"><span><b class="ac-dot teal"></b>Retirado ${_acNf0.format(m.pct * 100)}%</span><span><b class="ac-dot amber"></b>Restante ${_acNf0.format((1 - m.pct) * 100)}%</span>
         ${m.excedido ? `<span class="ac-exc"><i class="ti ti-alert-triangle"></i> Retirado ${_acT(m.excedido)} acima da nota mãe</span>` : ''}</div></div>
       ${_acCurva(m)}
     </div>
@@ -660,7 +779,7 @@ function _acRelatorio(m) {
     ${m.filhas.length ? `<div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Nota filha</th><th>Emissão</th><th>Central</th><th class="num">Peso</th><th class="num">Saldo depois</th><th>Vínculo</th><th>Chave de acesso</th><th></th></tr></thead><tbody>${filhas}</tbody></table></div>` : ''}`;
 }
 
-// Curva do saldo pendente (degrau a cada filha) + projeção tracejada até zerar.
+// Curva do saldo restante (degrau a cada filha) + projeção tracejada até zerar.
 function _acCurva(m) {
   const fs = m.filhas.filter(f => f.status !== 'cancelada');
   if (!fs.length || !(m.peso > 0)) return '';
@@ -675,8 +794,8 @@ function _acCurva(m) {
   const ult = fs[fs.length - 1].emissao;
   const proj = m.previsao && s > 0 ? `<path d="M${x(ult)},${y(s)} L${x(m.previsao)},${y(0)}" class="ac-proj"/>` : '';
   const ticks = [0, 0.5, 1].map(k => `<text x="${P.l - 6}" y="${y(yMax * k) + 3}" text-anchor="end">${_acNf0.format(yMax * k)} t</text><line x1="${P.l}" x2="${W - P.r}" y1="${y(yMax * k)}" y2="${y(yMax * k)}"/>`).join('');
-  return `<div class="ac-curva"><div class="ac-curva-tit">Saldo pendente ao longo do tempo</div>
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Saldo pendente da nota mãe">
+  return `<div class="ac-curva"><div class="ac-curva-tit">Saldo restante ao longo do tempo</div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Saldo restante da nota mãe">
       <g class="ac-grid">${ticks}</g>
       <path d="${d}" class="ac-linha"/>${proj}
       <text x="${P.l}" y="${H - 6}">${_acData(t0)}</text><text x="${W - P.r}" y="${H - 6}" text-anchor="end">${_acData(tFim)}${m.previsao ? ' (previsão)' : ''}</text>
@@ -710,6 +829,7 @@ function acLista() {
     AC.listaAnim = false;
     const atual = document.querySelector('#ac-root .mp-lista');
     if (atual) { atual.outerHTML = _acListaHtml(); document.querySelector('#ac-root .mp-lista').classList.add('entrando'); }
+    _acEvoDesenhar();   // a largura do painel mudou
   }, MP_LISTA_ANIM_MS);
 }
 function acRecarregar() { AC.carga = null; AC.sujo = true; acordosRender(); }
@@ -863,6 +983,6 @@ function _acRealtime() {
     }).subscribe();
 }
 
-Object.assign(window, { acordosRender, acSel, acGrp, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acDesvincular });
+Object.assign(window, { acordosRender, acSel, acGrp, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acDesvincular });
 // Lista recolhida: lembrada neste navegador.
 try { AC.listaRecolhida = localStorage.getItem('acordos.listaRecolhida') === '1'; } catch (_) { /* sem storage */ }
