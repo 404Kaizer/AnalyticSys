@@ -615,10 +615,26 @@ function acAba(k) { AC.aba = k; AC.sel = ''; AC.grp = ''; _acDesenhar(); }
 function acPaba(k) { AC.paba = k; _acDesenhar(); }
 let _acBuscaT = null;
 function acBusca(q) { AC.F.q = q; clearTimeout(_acBuscaT); _acBuscaT = setTimeout(_acDesenhar, 250); }
+// Recolhe/expande com a animação do Mural (muralPainelLista): a largura da
+// lista que já está na tela transita (CSS .mp-anim) e o conteúdo novo entra com
+// fade (.entrando). Só a lista é trocada: o painel (e o que estiver digitado
+// nele) fica como está.
 function acLista() {
+  if (AC.listaAnim) return;
   AC.listaRecolhida = !AC.listaRecolhida;
   try { localStorage.setItem('acordos.listaRecolhida', AC.listaRecolhida ? '1' : '0'); } catch (_) { /* sem storage */ }
-  _acDesenhar();
+  const lista = document.querySelector('#ac-root .mp-lista');
+  if (!lista || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return _acDesenhar();
+  AC.listaAnim = true;
+  // Congela a largura do conteúdo para ele não refluir enquanto a lista muda.
+  [...lista.children].forEach(c => { c.style.width = c.offsetWidth + 'px'; });
+  lista.classList.add('mp-anim');
+  lista.classList.toggle('recolhida', AC.listaRecolhida);
+  setTimeout(() => {
+    AC.listaAnim = false;
+    const atual = document.querySelector('#ac-root .mp-lista');
+    if (atual) { atual.outerHTML = _acListaHtml(); document.querySelector('#ac-root .mp-lista').classList.add('entrando'); }
+  }, MP_LISTA_ANIM_MS);
 }
 function acRecarregar() { AC.carga = null; AC.sujo = true; acordosRender(); }
 
