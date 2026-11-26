@@ -11,10 +11,14 @@ create table if not exists public.custos_rotas (
   geometria     text not null,            -- polyline do OSRM (precisão 5)
   o_lat double precision, o_lng double precision,   -- fornecedor usado no cálculo
   d_lat double precision, d_lng double precision,   -- central usada no cálculo
+  pedagios      jsonb,                    -- ids OSM das praças de pedágio no trajeto, em ordem
   atualizado_por uuid default auth.uid(),
   atualizado_em  timestamptz not null default now(),
   primary key (fornecedor, central)
 );
+
+-- Para quem já rodou a versão sem pedágios:
+alter table public.custos_rotas add column if not exists pedagios jsonb;
 
 alter table public.custos_rotas enable row level security;
 

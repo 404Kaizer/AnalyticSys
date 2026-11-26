@@ -14644,5 +14644,12 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --
 .cu-legend .lyr label .cu-leg-sel { margin-left: auto; font: inherit; font-size: 11px; background: var(--mp-chip, var(--bg3)); color: var(--mp-txt, var(--text)); border: 1px solid var(--mp-card-borda, var(--border2)); border-radius: 6px; padding: 1px 4px; }
 #cu-map .st:not(.has) { pointer-events: none; } /* só estados com central são clicáveis e têm tooltip */
 /* Estados e municípios pintados no <canvas> (os <path> ficam no SVG só para eventos/estilo, com o grupo transparente). */
-#cu-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#cu-canvas { position: absolute; left: -25%; top: -25%; width: 150%; height: 150%; pointer-events: none; will-change: transform; }
 #cu-map { position: relative; }
+/* Os paths de estados/municípios não são pintados no SVG (o canvas pinta): visibility:hidden tira da
+   renderização (opacity 0 ainda custava ~16 ms/quadro no zoom); pointer-events:fill mantém clique e :hover. */
+#cu-map .st, #cu-map .mn { visibility: hidden; }
+#cu-map .st.has, #cu-map .mn.hasc { pointer-events: fill; }
+/* Praças de pedágio nas rotas (OpenStreetMap). */
+#page-custos { --mp-ped: #e2b93b; }
+#cu-map .pt-ped { fill: var(--mp-ped); cursor: default; }
