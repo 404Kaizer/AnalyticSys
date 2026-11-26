@@ -14644,7 +14644,7 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --
 .cu-legend .lyr label .cu-leg-sel { margin-left: auto; font: inherit; font-size: 11px; background: var(--mp-chip, var(--bg3)); color: var(--mp-txt, var(--text)); border: 1px solid var(--mp-card-borda, var(--border2)); border-radius: 6px; padding: 1px 4px; }
 #cu-map .st:not(.has) { pointer-events: none; } /* só estados com central são clicáveis e têm tooltip */
 /* Estados e municípios pintados no <canvas> (os <path> ficam no SVG só para eventos/estilo, com o grupo transparente). */
-#cu-canvas { position: absolute; left: -25%; top: -25%; width: 150%; height: 150%; pointer-events: none; will-change: transform; }
+#cu-canvas { position: absolute; left: -15%; top: -15%; width: 130%; height: 130%; pointer-events: none; will-change: transform; }
 #cu-map { position: relative; }
 /* Os paths de estados/municípios não são pintados no SVG (o canvas pinta): visibility:hidden tira da
    renderização (opacity 0 ainda custava ~16 ms/quadro no zoom); pointer-events:fill mantém clique e :hover. */
@@ -14653,3 +14653,48 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --
 /* Praças de pedágio nas rotas (OpenStreetMap). */
 #page-custos { --mp-ped: #e2b93b; }
 #cu-map .pt-ped { fill: var(--mp-ped); cursor: default; }
+/* Criador de rotas (aba Trajeto da rota). */
+.cu-cen { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: var(--bg2); }
+.cu-cen.of { border-color: var(--green); }
+.cu-cen-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.cu-cen-num { display: flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--mono); font-size: 12px; color: var(--text); margin-bottom: 4px; }
+.cu-cen-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cu-tr-nome { display: flex; flex-direction: column; gap: 2px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); }
+.cu-tr-status { margin-top: 8px; font-size: 12px; }
+.cu-tr-in { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cu-tr-in input { flex: 1; min-width: 0; }
+.cu-tr-in em { font-style: normal; font-size: 11px; color: var(--text3); text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.cu-tr-tar { width: 84px; text-align: right; padding: 3px 6px; }
+.cu-tr-off td { opacity: .5; }
+.cu-tr-outro { display: grid; grid-template-columns: 1fr 90px 100px auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+.cu-tr-tot td { border-top: 1px solid var(--border); }
+.cu-tr-salvar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.cu-lnk { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
+#cu-map.editando { cursor: crosshair; }
+#cu-map.editando .rt, #cu-map.editando .rthit { stroke-opacity: .2; pointer-events: none; }
+#cu-map .ed-rt { fill: none; stroke: var(--mp-foco); stroke-width: calc(var(--sw) * 4px); stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+#cu-map .pt-wp { fill: #fff; stroke: var(--mp-foco); cursor: grab; }
+#cu-map .ed-g .pt-ped { cursor: pointer; }
+#cu-map .ed-g .pt-ped.fora { fill: var(--mp-forn-off); }
+.cu-tr-dica { font-size: 11px; color: var(--text3); margin-top: 6px; }
+/* Central aberta: as outras centrais da mesma regional ficam esmaecidas (Hugo, 27/11). */
+#cu-map .mn.hasc.irma { fill: var(--mp-mun-fora); }
+#cu-map .mn.hasc.irma:hover { fill: var(--mp-foco-mun); }
+#cu-map .pt-cen.irma { fill: var(--mp-cen-fora); }
+#cu-map .lbl.dir.irma { fill: var(--mp-txt2); fill-opacity: .6; }
+/* Contornos dos municípios como no mapa de referência (Hugo, 27/11): linha fina no mesmo tom do
+   preenchimento, em todos os municípios desenhados; nada de preto entre vizinhos. */
+#cu-map .mn.temc, #cu-map .mn.hasc { stroke: var(--mp-mun-borda); stroke-width: calc(var(--sw) * 1px); stroke-opacity: .85; }
+#cu-map .mn.foco { stroke: var(--mp-foco); stroke-width: calc(var(--sw) * 1px); stroke-opacity: 1; }
+#cu-map .mn.temc.fora, #cu-map .mn.hasc.irma { stroke: var(--mp-mun-borda); stroke-opacity: .45; }
+#cu-map .mn.sel { stroke: var(--mp-foco); stroke-width: calc(var(--sw) * 1.6px); }
+#cu-map .mn.viz { stroke-width: calc(var(--sw) * 1px); }
+/* Foco no mesmo tom do mapa, só mais vivo (o ciano destoava — Hugo, 27/11). */
+#page-custos { --mp-foco: #ffc24a; --mp-foco-fundo: rgba(255,170,30,.34); --mp-foco-mun: #d38a10; }
+body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --mp-foco: #e07800; --mp-foco-fundo: rgba(240,140,0,.30); --mp-foco-mun: #f5a623; }
+#cu-mapwrap .cu-zoom button.on { color: #2a1a04; }
+body[data-theme="light"] #cu-mapwrap .cu-zoom button.on, body[data-theme="sand"] #cu-mapwrap .cu-zoom button.on { color: #fff; }
+/* Comparador: fornecedor sem entrega no período (preço da última NF). */
+.cu-card.velho { border-style: dashed; background: transparent; }
+.cu-card.velho .pr { color: var(--text2); }
+.cu-velho-al { font-size: 11px; color: var(--amber, #e0a020); display: flex; gap: 4px; align-items: center; line-height: 1.25; }

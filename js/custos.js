@@ -36,6 +36,7 @@ const CU = {
   // uf/reg/cen = onde o mapa está (navegação); regs/cens/mats/forns = filtros (vários itens).
   // mat/forn = o único material/fornecedor marcado (ou ''), derivado em _cuSync.
   rotas: new Map(), rotaFila: [], rotaTentou: new Set(), rotaRodando: false,
+  cenarios: [], cenPar: new Map(), cenOf: new Map(), tarifas: new Map(), ed: null,
   F: { uf: '', reg: '', cen: '', mat: '', forn: '', div: false, regs: new Set(), cens: new Set(), mats: new Set(), forns: new Set() },
   L: { selos: false, cor: true, calor: false, esp: 'gasto', raio: 0 }, // esp: espessura da rota (gasto | frete por km); raio: km em volta da central (0 = desligado) // selos de alerta saíram do mapa (26/11): alertas ficam na gaveta e no tooltip
   sel: null, tab: 'nfs', pmat: null, cmpMat: null,
@@ -85,7 +86,9 @@ function _cuScript(url) {
 function _cuRewind(fc) {
   // As malhas do IBGE vêm com anel no sentido que o d3 lê como "o globo
   // menos o polígono" — inverte o que tiver área maior que meio globo.
-  const fix = poly => { if (d3.geoArea({ type: 'Polygon', coordinates: poly }) > 2 * Math.PI) poly.forEach(r => r.reverse()); };
+  // Área plana com sinal do anel externo (lng/lat): positiva = anti-horário → inverte. Igual ao teste com
+  // d3.geoArea em 1.666 polígonos (MG, RJ, SP, Brasil), sem a conta esférica cara.
+  const fix = poly => { const r = poly[0]; let a = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] - r[i][0]) * (r[j][1] + r[i][1]); if (a > 0) poly.forEach(x => x.reverse()); };
   (fc.features || [fc]).forEach(f => { const g = f.geometry || f; if (g.type === 'Polygon') fix(g.coordinates); else if (g.type === 'MultiPolygon') g.coordinates.forEach(fix); });
   return fc;
 }
@@ -120,7 +123,7 @@ function _cuGarantirBase() {
   CU.base = (async () => {
     await _cuScript(CU_D3_URL);
     const sb = !!window.supabaseClient;
-    const [br, filiais, geo, coms, forns, fretes, rotas] = await Promise.all([
+    const [br, filiais, geo, coms, forns, fretes, rotas, cenarios, tarifas] = await Promise.all([
       _cuMalha(CU_IBGE + 'paises/BR?' + CU_GEOJSON + '&intrarregiao=UF').then(g => { if (!g) throw new Error('malha do IBGE indisponível'); return g; }),
       sb ? _cuFetchAll('filiais', 'origem, alias, cnpj, regional, uf', 'alias').catch(() => []) : [],
       sb ? _cuFetchAll('custos_geo', '*', 'cnpj').catch(e => { console.warn('[Custos] custos_geo:', e); return []; }) : [],
@@ -128,13 +131,15 @@ function _cuGarantirBase() {
       sb ? _cuFetchAll('cob_fornecedores', 'nome, cnpj', 'cnpj').catch(() => []) : [],
       sb ? _cuFetchAll('custos_frete', '*', 'created_at').catch(e => { console.warn('[Custos] custos_frete (rodou o SQL 20261119_custos_frete?):', e); return []; }) : [],
       sb ? _cuFetchAll('custos_rotas', '*', 'central').catch(e => { console.warn('[Custos] custos_rotas (rodou o SQL 20261126_custos_rotas?):', e); return []; }) : [],
+      sb ? _cuFetchAll('custos_cenarios', '*', 'created_at').catch(e => { console.warn('[Custos] custos_cenarios (rodou o SQL 20261127_custos_cenarios?):', e); return []; }) : [],
+      sb ? _cuFetchAll('custos_pedagio_tarifas', '*', 'praca').catch(e => { console.warn('[Custos] custos_pedagio_tarifas:', e); return []; }) : [],
     ]);
     CU.br = _cuRewind(br);
     _cuMontarCentrais([...(state.filiais || []), ...filiais]);
     geo.forEach(g => CU.geo.set(g.cnpj, g));
     _cuSetComs(coms);
     _cuSetFrete(fretes);
-    _cuSetRotas(rotas);
+    _cuSetRotas(rotas); _cuCenSet(cenarios); _cuTarSet(tarifas);
     forns.forEach(f => { const c = String(f.cnpj || '').replace(/\D/g, ''); if (c.length === 14) { CU.cnpjPorNome.set(_cuNomeNorm(f.nome), c); CU.fornCad.set(c, f.nome || c); } });
     _cuMapaInit();
     if (sb) {
@@ -144,6 +149,10 @@ function _cuGarantirBase() {
         .subscribe();
       window.supabaseClient.channel('custos_frete')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'custos_frete' }, () => _cuRecarregarFrete())
+        .subscribe();
+      window.supabaseClient.channel('custos_cenarios')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'custos_cenarios' }, () => _cuCenRecarregar())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'custos_pedagio_tarifas' }, () => _cuTarRecarregar())
         .subscribe();
     }
   })().catch(e => { CU.base = null; throw e; });
@@ -197,7 +206,7 @@ async function _cuCalcular(ents) {
   const diaCache = new Map(), kgUnCache = new Map(), fkPorNome = new Map(), pares = new Map(), lista = [], nfFr = new Map();
   CU.unMat = new Map(); CU.catMat = new Map(); CU.nomeForn = new Map(); CU.fornMats = new Map(); CU.cenComCompra = new Set();
   for (let i = 0; i < N; i++) {
-    if ((i & 0xfff) === 0 && performance.now() - pausa > 50) { _cuStatus(`Calculando ${Math.round(i / N * 70)}%`); await _cuEspera(0); pausa = performance.now(); }
+    if ((i & 0xfff) === 0 && performance.now() - pausa > 16) { _cuStatus(`Calculando ${Math.round(i / N * 70)}%`); await _cuEspera(0); pausa = performance.now(); }
     const r = ents[i];
     const cen = r.centralDestino || r.centralCompra, mat = r.material;
     if (!cen || cen === '—' || !mat) continue;
@@ -242,7 +251,7 @@ async function _cuCalcular(ents) {
   const meses = new Set(); let total = 0;
   const nfDe = i => { const v = ents[i].nf; return v && v !== '—' ? String(v) : ''; };
   for (let k = 0; k < lista.length; k++) {
-    if (performance.now() - pausa > 50) { _cuStatus(`Calculando ${70 + Math.round(k / lista.length * 30)}%`); await _cuEspera(0); pausa = performance.now(); }
+    if (performance.now() - pausa > 16) { _cuStatus(`Calculando ${70 + Math.round(k / lista.length * 30)}%`); await _cuEspera(0); pausa = performance.now(); }
     const p = lista[k], rows = p.rows, n = rows.length;
     rows.sort((a, b) => dRow[a] - dRow[b] || (nfDe(a) < nfDe(b) ? -1 : nfDe(a) > nfDe(b) ? 1 : a - b));
     const un = CU.unMat.get(p.mat), f = un === 'kg' ? 1 : 1000, dec = un === 'kg' ? 1e4 : 100;
@@ -312,24 +321,27 @@ function _cuMes(ym) {
   for (const p of CU.pares) {
     const D = p.D; let l = 0, h = p.n;
     while (l < h) { const mid = (l + h) >> 1; if (D[mid] < lo) l = mid + 1; else h = mid; }
-    for (let k = l; k < p.n && D[k] <= hi; k++) {
-      const al = p.AL[k], r = ents[p.RI[k]], tr = p.TR[k], qtd = p.Q[k], pr = p.PR[k];
-      const o = { forn: p.forn, mat: p.mat, cen: p.cen, nf: r.nf && r.nf !== '—' ? String(r.nf) : 's/ nº', d: D[k], ym, qtd, tot: p.T[k], pr,
-        alerta: al === 1 ? 'acima' : al === 2 ? 'abaixo' : al === 3 ? 'novo' : null, isDiv: al > 0, dif: 0, transf: tr >= 0, compra: tr >= 0 ? ents[tr].centralCompra : '' };
-      if (p.BS[k]) { o.min = p.MN[k]; o.max = p.MX[k]; o.base = p.BS[k]; if (al === 1) o.dif = (pr - o.max) * qtd; else if (al === 2) o.dif = (pr - o.min) * qtd; }
-      const frT = p.FR ? p.FR[k] : 0;
-      if (frT > 0) {
-        o.fr = frT; o.frUn = Math.round(frT / qtd * p.dec) / p.dec;
-        if (p.CBS[k]) { o.cMin = p.CMN[k]; o.cMax = p.CMX[k]; o.cBase = p.CBS[k]; }
-        const ac = p.ACL[k]; if (ac) { o.alertaCte = ac === 1 ? 'acima' : 'abaixo'; o.cteDif = (o.frUn - (ac === 1 ? o.cMax : o.cMin)) * qtd; }
-      }
-      _cuAplicaFrete(o);
-      a.push(o);
-    }
+    for (let k = l; k < p.n && D[k] <= hi; k++) a.push(_cuNfObj(p, k, ym));
   }
   CU.mesCache.set(ym, a);
   if (CU.mesCache.size > Math.max(8, (CU.mesesSel || []).length + 6)) CU.mesCache.delete(CU.mesCache.keys().next().value);
   return a;
+}
+// Uma NF (índice k do par) como objeto, com frete aplicado.
+function _cuNfObj(p, k, ym) {
+  const ents = CU.ents, D = p.D;
+  const al = p.AL[k], r = ents[p.RI[k]], tr = p.TR[k], qtd = p.Q[k], pr = p.PR[k];
+  const o = { forn: p.forn, mat: p.mat, cen: p.cen, nf: r.nf && r.nf !== '—' ? String(r.nf) : 's/ nº', d: D[k], ym, qtd, tot: p.T[k], pr,
+    alerta: al === 1 ? 'acima' : al === 2 ? 'abaixo' : al === 3 ? 'novo' : null, isDiv: al > 0, dif: 0, transf: tr >= 0, compra: tr >= 0 ? ents[tr].centralCompra : '' };
+  if (p.BS[k]) { o.min = p.MN[k]; o.max = p.MX[k]; o.base = p.BS[k]; if (al === 1) o.dif = (pr - o.max) * qtd; else if (al === 2) o.dif = (pr - o.min) * qtd; }
+  const frT = p.FR ? p.FR[k] : 0;
+  if (frT > 0) {
+    o.fr = frT; o.frUn = Math.round(frT / qtd * p.dec) / p.dec;
+    if (p.CBS[k]) { o.cMin = p.CMN[k]; o.cMax = p.CMX[k]; o.cBase = p.CBS[k]; }
+    const ac = p.ACL[k]; if (ac) { o.alertaCte = ac === 1 ? 'acima' : 'abaixo'; o.cteDif = (o.frUn - (ac === 1 ? o.cMax : o.cMin)) * qtd; }
+  }
+  _cuAplicaFrete(o);
+  return o;
 }
 
 /* ───────── recortes ───────── */
@@ -458,6 +470,8 @@ function _cuPedagios() {
 function _cuSetRotas(rows) { rows.forEach(r => CU.rotas.set(_cuRotaK(r.central, r.fornecedor), r)); }
 // Rota guardada só vale se foi calculada com as mesmas coordenadas (folga de ~1 km).
 function _cuRota(cen, fk) {
+  // Cenário oficial do criador de rotas tem prioridade sobre a rota automática.
+  const of = CU.cenOf.get(_cuRotaK(cen, fk)); if (of) return of;
   const r = CU.rotas.get(_cuRotaK(cen, fk)); if (!r) return null;
   const o = _cuLL(fk), d = _cuLL(CU.cen.get(cen)?.cnpj); if (!o || !d) return null;
   const perto = (lat, lng, p) => lat != null && Math.abs(lat - p[1]) < .01 && Math.abs(lng - p[0]) < .01;
@@ -500,7 +514,7 @@ async function _cuRotasRodar() {
     const row = { fornecedor: f, central: c, km: Math.round(rt.distance / 100) / 10, minutos: Math.round(rt.duration / 60), geometria: rt.geometry, o_lat: o[1], o_lng: o[0], d_lat: d[1], d_lng: d[0], pedagios: CU.pedOk ? [...ped] : null };
     CU.rotas.set(_cuRotaK(c, f), { ...row }); mudou++;
     if (window.supabaseClient) window.supabaseClient.from('custos_rotas').upsert(row, { onConflict: 'fornecedor,central' }).then(({ error }) => { if (error) console.warn('[Custos] custos_rotas (rodou o SQL 20261126_custos_rotas?):', error.message); });
-    if (mudou % 3 === 0) _cuDesenhar(); // redesenha em lotes enquanto chegam
+    if (mudou % 3 === 0) _cuDesenharLogo(); // redesenha em lotes enquanto chegam
   }
   CU.rotaRodando = false;
   if (mudou) { _cuDesenhar(); if (CU.tab !== 'frete') _cuPainel(); } // km do painel passam a ser os da estrada
@@ -522,6 +536,7 @@ function _cuCvLista() {
   [_cuGr.st, _cuGr.mun].forEach(g => {
     if (getComputedStyle(g.node()).display === 'none') return;
     g.node().querySelectorAll('path').forEach(el => {
+      if (el.style.display === 'none') return; // sem getComputedStyle nos ~850 municípios escondidos
       const d = el.getAttribute('d'); if (!d) return;
       const cs = getComputedStyle(el); if (cs.display === 'none') return; // visibility é sempre hidden (ver CSS)
       let c = CV.p2.get(el); if (!c || c.d !== d) CV.p2.set(el, c = { d, p: new Path2D(d) });
@@ -533,13 +548,14 @@ function _cuCvLista() {
 }
 function _cuCvDesenha() {
   const cv = CV.el; if (!cv || !_cuSvg) return;
-  const dpr = devicePixelRatio || 1, W = Math.round(cv.clientWidth * dpr), H = Math.round(cv.clientHeight * dpr);
+  // Durante o zoom repinta a cada quadro em 1× (4× menos pixels em telas 2×); nítido de novo ao soltar.
+  const dpr = CV.gesto ? 1 : Math.min(devicePixelRatio || 1, 2), W = Math.round(cv.clientWidth * dpr), H = Math.round(cv.clientHeight * dpr);
   if (!W || !H) return;
   if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
   if (!CV.lista) CV.lista = _cuCvLista();
   const ctx = cv.getContext('2d'), t = d3.zoomTransform(_cuSvg.node()), mx = -cv.offsetLeft, my = -cv.offsetTop;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H);
-  // O canvas tem margem de 25% em volta da tela (CSS): o arrasto não mostra borda vazia antes de repintar.
+  // O canvas tem margem de 15% em volta da tela (CSS): o arrasto não mostra borda vazia antes de repintar.
   ctx.setTransform(dpr * t.k, 0, 0, dpr * t.k, dpr * (t.x + mx), dpr * (t.y + my)); ctx.lineJoin = 'round';
   CV.t0 = t; CV.m = [mx, my]; cv.style.transformOrigin = `${mx}px ${my}px`; cv.style.transform = '';
   for (const o of CV.lista) {
@@ -548,13 +564,22 @@ function _cuCvDesenha() {
   }
   ctx.globalAlpha = 1;
 }
-// Durante o gesto (roda/arrasto) não repinta: move/escala o bitmap por CSS (só composição, ~0 ms).
-// Repinta nítido no fim do gesto, ou antes se a escala passar de 2× ou o arrasto sair da margem.
+// Arrasto: não repinta, move o bitmap por CSS (só composição, ~0 ms); repinta se sair da margem.
+// Zoom: repinta a cada quadro (ver abaixo).
 function _cuCvMove(t) {
   const cv = CV.el, t0 = CV.t0; if (!cv || !CV.gesto || !t0) return _cuCvAgenda();
-  const s = t.k / t0.k, dx = t.x - t0.x * s, dy = t.y - t0.y * s, [mx, my] = CV.m, W = CU.W, H = CU.H;
-  if (s > 2 || s < .5 || -mx * s + dx > 0 || -my * s + dy > 0 || (W + mx) * s + dx < W || (H + my) * s + dy < H) return _cuCvAgenda();
+  // Zoom repinta a cada quadro (linhas com espessura constante; escalar o bitmap engrossava tudo e
+  // "encolhia" ao soltar). Só o arrasto puro move o bitmap por CSS.
+  if (Math.abs(t.k / t0.k - 1) > 1e-9) return _cuCvAgenda();
+  const s = 1, dx = t.x - t0.x, dy = t.y - t0.y, [mx, my] = CV.m, W = CU.W, H = CU.H;
+  if ( -mx * s + dx > 0 || -my * s + dy > 0 || (W + mx) * s + dx < W || (H + my) * s + dy < H) return _cuCvAgenda();
   cv.style.transform = `translate(${dx}px,${dy}px) scale(${s})`;
+}
+// Redesenho pedido por tarefas de segundo plano (endereços, rotas, malhas): no máximo 1 a cada 600 ms e
+// nunca durante zoom/arrasto (fica para o fim do gesto). Era o que travava o mapa "até tudo carregar".
+function _cuDesenharLogo() {
+  if (CU._redT) return;
+  CU._redT = setTimeout(() => { CU._redT = 0; if (CV.gesto) { CU._redPend = true; return; } if (document.getElementById('page-custos')?.classList.contains('active')) _cuDesenhar(); }, 600);
 }
 function _cuCvInit() {
   CV.el = document.getElementById('cu-canvas'); if (!CV.el) return;
@@ -575,8 +600,17 @@ function _cuMapaInit() {
   // 3 casas decimais no espaço projetado (0–1000): caminhos bem menores, sem perda visível até o zoom de município.
   CU.path = d3.geoPath(CU.proj); if (CU.path.digits) CU.path.digits(3);
   _cuSvg = d3.select('#cu-map'); _cuG = _cuSvg.append('g');
-  ['st', 'mun', 'stl', 'agg', 'raio', 'rt', 'hit', 'pd', 'f', 'c', 'b', 'l', 'rg'].forEach(k => _cuGr[k] = _cuG.append('g'));
+  ['st', 'mun', 'stl', 'agg', 'raio', 'rt', 'hit', 'pd', 'f', 'c', 'b', 'l', 'rg', 'ed'].forEach(k => _cuGr[k] = _cuG.append('g'));
+  _cuGr.ed.attr('class', 'ed-g');
   _cuCvInit();
+  // Criador de rotas: com o editor aberto, clique no mapa inclui ponto de passagem (captura: antes de
+  // estados/centrais navegarem). O clique depois de um arrasto o d3-zoom já descarta.
+  _cuSvg.node().addEventListener('click', ev => {
+    if (!CU.ed || ev.defaultPrevented || ev.target.closest?.('.ed-g')) return;
+    ev.stopPropagation(); ev.preventDefault();
+    const p = d3.zoomTransform(_cuSvg.node()).invert(d3.pointer(ev, _cuSvg.node())), ll = CU.proj.invert(p);
+    if (ll) _cuEdInserir(ll);
+  }, true);
   // Fluidez: o transform do grupo muda a cada evento (barato); a reescala de marcadores, rótulos e rotas
   // roda no máximo uma vez por quadro (requestAnimationFrame), não a cada evento de roda/arrasto.
   _cuZoom = d3.zoom().scaleExtent([.6, 800])
@@ -584,8 +618,8 @@ function _cuMapaInit() {
     .wheelDelta(e => -e.deltaY * (e.deltaMode === 1 ? .05 : e.deltaMode ? 1 : .003))
     .translateExtent([[-700, -700], [1700, 1700]])
     .on('start', () => { CV.gesto = true; _cuSvg.classed('movendo', true); })
-    .on('end', () => { CV.gesto = false; _cuCvAgenda(); _cuSvg.classed('movendo', false); _cuSvg.style('--sw', String(1 / CU.K)); _cuNavSalvar(); }) // largura das linhas: 1x no fim, não a cada quadro
-    .on('zoom', e => { _cuG.attr('transform', e.transform); _cuCvMove(e.transform); if (Math.abs(e.transform.k - CU.K) > 1e-6) { CU.K = e.transform.k; if (!CU._raf) CU._raf = requestAnimationFrame(() => { CU._raf = 0; _cuRescale(); }); } });
+    .on('end', () => { CV.gesto = false; _cuCvAgenda(); if (CU._redPend) { CU._redPend = false; _cuDesenharLogo(); } _cuSvg.classed('movendo', false); _cuSvg.style('--sw', String(1 / CU.K)); _cuNavSalvar(); }) // largura das linhas: 1x no fim, não a cada quadro
+    .on('zoom', e => { _cuG.attr('transform', e.transform); _cuCvMove(e.transform); if (Math.abs(e.transform.k - CU.K) > 1e-6) { CU.K = e.transform.k; if (!CU._raf) CU._raf = requestAnimationFrame(() => { CU._raf = 0; _cuSvg.style('--sw', String(1 / CU.K)); _cuRescale(); }); } });
   // Duplo clique no FUNDO aproxima 2× onde clicou (nos estados/pontos o clique já navega).
   _cuSvg.call(_cuZoom).on('dblclick.zoom', null).on('dblclick', e => { if (e.target !== _cuSvg.node()) return; e.preventDefault(); _cuSvg.transition().duration(300).call(_cuZoom.scaleBy, 2, d3.pointer(e)); });
   // Troca de tema com a aba aberta: as cores calculadas no desenho (tom dos estados, rotas) vêm das variáveis --mp-*.
@@ -615,11 +649,12 @@ function _cuCarregarMun(uf) {
   // ponytail: malha municipal só em memória (cache HTTP do navegador cobre o resto); persistir no IndexedDB se a API do IBGE ficar lenta.
   _cuMalha(CU_IBGE + 'estados/' + cod + '?' + CU_GEOJSON + '&intrarregiao=municipio').then(g => {
     if (!g) return;
-    CU.mun[uf] = { fc: _cuRewind(g), sel: _cuGr.mun.append('g').selectAll('path').data(g.features).join('path').attr('class', 'mn').attr('d', CU.path)
+    CU.mun[uf] = { fc: _cuRewind(g), sel: _cuGr.mun.append('g').selectAll('path').data(g.features).join('path').attr('class', 'mn').style('display', 'none')
       // Eventos ligados uma vez; o mapa feição→centrais da regional atual fica em CU._munCen (_cuDesenhar).
       .on('mousemove', (e, f) => { const rg = CU._munReg?.get(f); if (rg) { const r = CU._regInfo?.get(rg); _cuTip(e, `<b>${_cuE(rg)}</b><br><span class="mono">${r ? _cuBrlc(r.s.g) + ' · ' + r.n + ' centra' + (r.n > 1 ? 'is' : 'l') + (r.s.d ? ' · ' + r.s.d + ' alertas' : '') : 'sem NF no período'}<br>clique para abrir a regional</span>`); return; } const cs = CU._munCen?.get(f); if (cs) _cuTip(e, cs.map(c => `<b>${_cuE(c.nome)}</b>`).join('<br>') + `<br><span class="mono">${cs.length > 1 ? 'clique para aproximar' : 'clique para abrir a central'}</span>`); })
       .on('mouseenter', (e, f) => _cuRealcaMun(f)).on('mouseleave', () => { _cuTipOff(); _cuRealceOff(); })
       .on('click', (e, f) => { const rg = CU._munReg?.get(f); if (rg) { _cuTipOff(); CU.F.reg = rg; CU.sel = { t: 'reg', reg: rg }; _cuUpdate(true); return; } const cs = CU._munCen?.get(f); if (!cs) return; _cuTipOff(); if (cs.length === 1) _cuAbreCentral(cs[0]); else _cuFit(CU.path.bounds(f)); }) };
+    CU.mun[uf].el = new Map(); CU.mun[uf].sel.each(function (f) { CU.mun[uf].el.set(f, this); });
     _cuDesenhar(); if (CU.F.cen) _cuFit(_cuBounds());
   }).catch(() => {}).finally(() => { CU.munCarregando[uf] = false; });
 }
@@ -638,8 +673,8 @@ function _cuMunMaxPedir(feats) {
   Promise.all([um(), um(), um(), um()]).then(() => {
     CU.munMaxRodando = false; CU._vizK = null;
     const resto = CU.munMaxFila.splice(0); if (resto.length) { resto.forEach(f => { f._maxPedido = false; }); _cuMunMaxPedir(resto); }
-    Object.values(CU.mun).forEach(m => m.sel.filter(f => f._max && !f._maxD).attr('d', f => { f._maxD = true; return CU.path(f); }));
-    _cuDesenhar();
+    Object.values(CU.mun).forEach(m => m.el?.forEach((el, f) => { if (f._max && !f._maxD && el._d) { f._maxD = true; el.setAttribute('d', CU.path(f)); } }));
+    _cuDesenharLogo();
   });
 }
 // Contorno MÁXIMO do estado em foco (30–80 KB cada), para casar com os municípios na máxima.
@@ -742,7 +777,7 @@ function _cuRealca({ cens = new Set(), forns = new Set(), rota = null }) {
   _cuSvg.classed('esmaece', true);
   _cuGr.c.selectAll('circle.pt').classed('ativo', c => cs.has(c.alias));
   _cuGr.f.selectAll('circle.pt').classed('ativo', fk => fs.has(fk));
-  _cuGr.mun.selectAll('path.mn').classed('ativo', f => muns.has(f));
+  d3.selectAll(CU._munEls || []).classed('ativo', f => muns.has(f));
   _cuGr.rt.selectAll('path').classed('ativo', rtOn);
   _cuGr.l.selectAll('text').classed('ativo', d => d.forn && d.cen ? rtOn({ c: d.cen, f: d.forn }) : d.cen ? cs.has(d.cen) : d.forn ? fs.has(d.forn) : false);
 }
@@ -790,21 +825,25 @@ function _cuDesenhar() {
   const munSel = F.cen ? _cuMunDoPonto(_cuUfCen(CU.cen.get(F.cen) || {}), _cuLL(CU.cen.get(F.cen)?.cnpj)) : null;
   const comCentral = L.calor && ufFoco ? new Map() : null;
   if (comCentral) [...CU.cen.values()].filter(c => _cuUfCen(c) === ufFoco && _cuLL(c.cnpj)).forEach(c => { const mm = _cuMunDoPonto(ufFoco, _cuLL(c.cnpj)); if (mm) (comCentral.get(mm) || comCentral.set(mm, []).get(mm)).push(c.alias); });
-  const munVis = [];
+  const munVis = [], munEls = [];
   Object.entries(CU.mun).forEach(([uf, m]) => {
     const ativo = uf === ufFoco || ufsReg.has(uf);
     const temC = new Set();
     if (uf === ufFoco) [...CU.cen.values()].forEach(c => { if (_cuUfCen(c) === uf) { const mm = _cuMunDoPonto(uf, _cuLL(c.cnpj)); if (mm) { temC.add(mm); if (!temReg.has(mm)) temReg.set(mm, c.regional); } } });
-    // UF fora de foco: esconde uma vez só (reescrever ~850 municípios de MG a cada desenho custava ~30 ms).
-    if (!ativo) { if (!m._off) { m.sel.style('display', 'none'); m._off = true; } return; }
-    m._off = false;
-    m.sel.style('display', f => (temC.has(f) || munCen.has(f) || f === munSel) ? (munVis.push(f), null) : 'none');
+    // Só os municípios visíveis (os com central) são tocados: mexer nos ~850 de MG a cada desenho/realce
+    // forçava o navegador a recalcular o estilo de todos. O contorno ('d') é gerado na 1ª vez que aparece.
+    const vis = new Set(); if (ativo) m.fc.features.forEach(f => { if (temC.has(f) || munCen.has(f) || f === munSel) vis.add(f); });
+    (m.shown || []).forEach(f => { if (!vis.has(f)) m.el.get(f).style.display = 'none'; });
+    vis.forEach(f => { const el = m.el.get(f); if (!el._d) { el.setAttribute('d', CU.path(f)); el._d = 1; } el.style.display = ''; munVis.push(f); munEls.push(el); });
+    m.shown = vis;
+    if (!ativo) return;
     // Contorno só onde dois municípios com central se encostam (separa os vizinhos; isolados ficam lisos).
-    const viz = ativo ? _cuVizinhos([...new Set([...temC, ...munCen.keys(), munSel].filter(Boolean))]) : new Set();
-    m.sel.attr('class', f => 'mn' + (viz.has(f) ? ' viz' : '') + (munCen.has(f) ? ' foco hasc' : temC.has(f) ? (naRegional ? ' temc fora' : ' temc' + (CU._munReg ? ' hasc' : '')) : '') + (f === munSel ? ' sel' : ''))
+    const viz = _cuVizinhos([...new Set([...temC, ...munCen.keys(), munSel].filter(Boolean))]);
+    d3.selectAll([...vis].map(f => m.el.get(f))).attr('class', f => 'mn' + (viz.has(f) ? ' viz' : '') + (munCen.has(f) ? ' foco hasc' + (F.cen && f !== munSel ? ' irma' : '') : temC.has(f) ? (naRegional ? ' temc fora' : ' temc' + (CU._munReg ? ' hasc' : '')) : '') + (f === munSel ? ' sel' : ''))
       .style('stroke', null)
       .style('fill', f => { if (!comCentral || f === munSel) return null; const al = comCentral.get(f); if (!al) return null; const a = arr.filter(n => al.includes(n.cen)); return a.length ? _cuHeat(_cuIdx(a, ref)) : null; });
   });
+  CU._munEls = munEls; // realce (hover) toca só estes
   _cuMunMaxPedir(munVis); _cuUfMaxPedir([ufFoco, ...ufsReg]);
   // rotas: só no nível da central, ou as do fornecedor em foco
   const base = nivel === 'cen' ? arr.filter(n => n.cen === F.cen) : fornFoco ? arr.filter(n => fornFoco.has(n.forn)) : [];
@@ -879,13 +918,15 @@ function _cuDesenhar() {
     // Com uma central aberta o recorte fica só nela: as outras da regional não viram "sem NF" (cinza) por isso.
     const a = _cuAgg(porCen[c.alias] || []); c._g = a.g; c._nd = a.d; c._sem = !porCen[c.alias] && nivel !== 'cen'; c._xy = cenPos.get(c.alias);
     c._foco = naRegional && c.regional === F.reg; c._fora = naRegional && !c._foco;
+    // Central aberta: as outras da mesma regional esmaecem (continuam clicáveis para trocar).
+    c._irma = c._foco && !!F.cen && c.alias !== F.cen;
   });
   const gmax = d3.max(cs, c => c._g) || 1;
   cs.forEach(c => { c._rr = cenSel(c) ? 7 : c._fora ? 3.5 : L.calor && !c._sem ? 4 + 5 * Math.sqrt(c._g / gmax) : 5; });
   // Desenha as apagadas primeiro (ficam por baixo das centrais da regional em foco).
   const csOrd = [...cs.filter(c => c._fora), ...cs.filter(c => !c._fora)];
   _cuPontos(_cuGr.c.selectAll('circle.pt').data(csOrd, c => c.alias), 'cen')
-    .attr('class', c => 'pt pt-cen' + (c._sem ? ' off' : '') + (c._foco ? ' foco' : '') + (c._fora ? ' fora' : '') + (cenSel(c) ? ' sel' : ''))
+    .attr('class', c => 'pt pt-cen' + (c._sem ? ' off' : '') + (c._foco ? ' foco' : '') + (c._irma ? ' irma' : '') + (c._fora ? ' fora' : '') + (cenSel(c) ? ' sel' : ''))
     .each(function (c) { this._xy = c._xy; this._r = c._rr; })
     .on('mousemove', (e, c) => _cuTip(e, `<b>${_cuE(_cuSigla(c))}</b> · ${_cuE(c.nome)}<br><span class="mono">${_cuE(c.regional)}<br>${c._sem ? 'sem NF no período e filtros' : _cuBrlc(c._g)}${c._nd ? ` · ${c._nd} alerta${c._nd > 1 ? 's' : ''} de preço` : ''}<br>${nivel === 'uf' ? 'clique para abrir a regional' : 'clique para abrir a central'} · Ctrl+clique compara</span>`))
     .on('mouseenter', (e, c) => _cuRealca({ cens: new Set([c.alias]) })).on('mouseleave', () => { _cuTipOff(); _cuRealceOff(); })
@@ -908,11 +949,13 @@ function _cuDesenhar() {
   }).filter(Boolean);
   const lb = [
     ...kmRotas,
-    // Sigla da central à direita do ponto (nas apagadas, só no tooltip).
-    ...cs.filter(c => !c._fora).map(c => ({ id: 'c' + c.alias, cen: c.alias, x: c._xy[0], y: c._xy[1], t: _cuSigla(c), cls: 'lbl dir' + (c._foco ? ' foco' : ''), dx: c._rr + 4, dy: 4 })),
+    // Sigla fixa só da central aberta/selecionada; as demais aparecem no tooltip ao passar o mouse
+    // (mapa menos poluído — Hugo, 27/11).
+    ...cs.filter(c => !c._fora && cenSel(c)).map(c => ({ id: 'c' + c.alias, cen: c.alias, x: c._xy[0], y: c._xy[1], t: _cuSigla(c), cls: 'lbl dir' + (c._foco ? ' foco' : '') + (c._irma ? ' irma' : ''), dx: c._rr + 4, dy: 4 })),
     ...fl.filter(fk => ativos.has(fk) || fornFoco?.has(fk)).map(fk => { const p = _cuXY(fk); return { id: 'f' + fk, forn: fk, x: p[0], y: p[1], t: _cuNomeF(fk), cls: 'lbl f' + (ativos.has(fk) ? '' : ' off'), dy: -10 }; }),
   ];
   _cuGr.l.selectAll('text').data(lb, d => d.id).join('text').attr('class', d => d.cls).text(d => d.t);
+  _cuEdDesenhar();
   _cuRescale();
 }
 function _cuRescale() {
@@ -922,7 +965,7 @@ function _cuRescale() {
   _cuGr.rt.selectAll('path').style('stroke-width', l => l.w / k).style('stroke-dasharray', CU.L.cor ? `${6 / k} ${5 / k}` : `${4 / k} ${3 / k}`);
   _cuGr.hit.selectAll('path').style('stroke-width', 10 / k);
   // Pontos com tamanho fixo na tela (o zoom só muda a posição).
-  [_cuGr.c, _cuGr.f, _cuGr.pd].forEach(g => g.selectAll('circle.pt').each(function () { this.setAttribute('cx', this._xy[0]); this.setAttribute('cy', this._xy[1]); this.setAttribute('r', (this._r || 5) / k); this.style.strokeWidth = (1.6 / k) + 'px'; }));
+  [_cuGr.c, _cuGr.f, _cuGr.pd, _cuGr.ed].forEach(g => g.selectAll('circle.pt').each(function () { this.setAttribute('cx', this._xy[0]); this.setAttribute('cy', this._xy[1]); this.setAttribute('r', (this._r || 5) / k); this.style.strokeWidth = (1.6 / k) + 'px'; }));
   _cuGr.b.selectAll('g').each(function (x) { const o = (x._rr || 6) * .72 + 3, cx = x._xy[0] + o / k, cy = x._xy[1] - o / k; d3.select(this).select('circle').attr('cx', cx).attr('cy', cy).attr('r', (x._nd > 99 ? 9 : 7) / k).style('stroke-width', 1.2 / k); d3.select(this).select('text').attr('x', cx).attr('y', cy).style('font-size', ((x._nd > 99 ? 7.5 : 8.5) / k) + 'px'); });
   _cuGr.stl.selectAll('text').style('font-size', (14 / k) + 'px').style('display', k > 2.6 ? 'none' : null);
   _cuGr.l.selectAll('text').style('font-size', (11.5 / k) + 'px').attr('x', d => d.x + (d.dx || 0) / k).attr('y', d => d.y + d.dy / k).style('stroke-width', 3.5 / k);
@@ -1277,6 +1320,269 @@ function _cuSemLocal(arr) {
   const motivo = fk => !/^\d{14}$/.test(fk) ? 'sem CNPJ' : CU.geo.get(fk)?.precisao === 'falhou' ? 'endereço não encontrado' : 'buscando';
   return `<div class="cu-sec"><h3>Fora do mapa (sem localização)</h3><div class="cu-note">${cens.length ? `<b>Centrais:</b> ${cens.map(c => _cuE(c.nome) + (c.cnpj ? '' : ' (sem CNPJ no cadastro)')).join(', ')}<br>` : ''}${forns.length ? `<b>Fornecedores:</b> ${forns.slice(0, 40).map(fk => _cuE(_cuNomeF(fk)) + ` (${motivo(fk)})`).join(', ')}${forns.length > 40 ? ` e mais ${forns.length - 40}` : ''}<br>Sem CNPJ: reimporte as Entradas com a coluna CNPJ FORNECEDOR ou cadastre o fornecedor nas Cobranças.` : ''}</div></div>`;
 }
+/* ───────── criador de rotas (cenários de trajeto) ─────────
+   O analista monta o trajeto de um par fornecedor → central: parte da rota automática (OSRM) e acrescenta
+   pontos de passagem no mapa (clique adiciona, arrastar move, duplo clique remove); escolhe as praças que
+   o motorista paga e informa caminhão, combustível, outros custos e frete contratado. Vários cenários por
+   par (custos_cenarios); o OFICIAL substitui a rota automática no mapa, nos km e nos pedágios.
+   Tarifa por eixo fica na praça (custos_pedagio_tarifas) e vale para todos os cenários. */
+const CU_CEN_PADRAO = { eixos: 6, carga: 32, consumo: 2.2, diesel: 6.2, volta: false, outros: [], frete: { v: null, tipo: 't' } };
+function _cuCenSet(rows) {
+  CU.cenarios = rows; CU.cenPar = new Map(); CU.cenOf = new Map();
+  rows.slice().sort((a, b) => (b.oficial - a.oficial) || (b.updated_at || '').localeCompare(a.updated_at || '')).forEach(r => {
+    const k = _cuRotaK(r.central, r.fornecedor);
+    (CU.cenPar.get(k) || CU.cenPar.set(k, []).get(k)).push(r);
+    if (r.oficial) { const fora = new Set(r.pedagios_fora || []); CU.cenOf.set(k, { ...r, pedagios: (r.pedagios || []).filter(id => !fora.has(id)), _cenario: true }); }
+  });
+}
+function _cuTarSet(rows) { CU.tarifas = new Map(rows.map(r => [Number(r.praca), r])); }
+async function _cuCenRecarregar() {
+  try { _cuCenSet(await _cuFetchAll('custos_cenarios', '*', 'created_at')); } catch (e) { console.warn('[Custos] custos_cenarios:', e); return; }
+  _cuCenAtualizarTela();
+}
+async function _cuTarRecarregar() {
+  try { _cuTarSet(await _cuFetchAll('custos_pedagio_tarifas', '*', 'praca')); } catch (e) { console.warn('[Custos] custos_pedagio_tarifas:', e); return; }
+  if (CU.ed) _cuEdParcial(); else _cuCenAtualizarTela();
+}
+// Com o editor aberto não refaz o painel (perderia o que está sendo digitado): só o mapa.
+function _cuCenAtualizarTela() {
+  if (!document.getElementById('page-custos')?.classList.contains('active') || !CU.pares) return;
+  if (CU.ed) _cuDesenhar(); else _cuUpdate(false);
+}
+// Custos de um cenário (por viagem e por unidade do material).
+function _cuCenCusto(c, mat) {
+  const p = { ...CU_CEN_PADRAO, ...(c.params || {}) }, fora = c.fora || new Set(c.pedagios_fora || []), mult = p.volta ? 2 : 1;
+  const pagas = (c.pedagios || []).filter(id => !fora.has(id));
+  let ped = 0, semTar = 0;
+  pagas.forEach(id => { const t = CU.tarifas?.get(Number(id)); if (t) ped += Number(t.tarifa_eixo) * (p.eixos || 0); else semTar++; });
+  ped *= mult;
+  const comb = p.consumo > 0 ? c.km * mult / p.consumo * (p.diesel || 0) : 0;
+  const outros = (p.outros || []).reduce((s, o) => s + (Number(o.v) || 0) * (o.tipo === 'km' ? c.km * mult : 1), 0);
+  const total = ped + comb + outros, unid = (p.carga || 0) * (mat && _cuU(mat) === 'kg' ? 1000 : 1);
+  const fv = p.frete?.v != null && p.frete.v !== '' ? Number(p.frete.v) : null;
+  const freteViagem = fv == null ? null : p.frete.tipo === 't' ? fv * (p.carga || 0) : fv;
+  return { p, pagas, semTar, ped, comb, outros, total, unid, porU: unid ? total / unid : null, freteViagem, fretePorU: freteViagem != null && unid ? freteViagem / unid : null };
+}
+const _cuMatDaRota = arr => { const g = _cuGroup(arr, 'mat'); return Object.keys(g).sort((x, y) => _cuAgg(g[y]).g - _cuAgg(g[x]).g); };
+
+// ── painel: lista de cenários ou editor ──
+function _cuTrajetoPainel(s) {
+  const k = _cuRotaK(s.cen, s.forn);
+  if (CU.ed && CU.ed.k === k) return _cuEdHtml(s);
+  const arr = _cuEscopoNfs(), mats = _cuMatDaRota(arr), m = mats.includes(CU.trMat) ? CU.trMat : mats[0];
+  const auto = CU.rotas.get(k), cens = CU.cenPar?.get(k) || [];
+  const card = r => {
+    const c = _cuCenCusto(r, m), u = m ? _cuU(m) : 't';
+    return `<div class="cu-cen${r.oficial ? ' of' : ''}"><div class="cu-cen-top"><b>${_cuE(r.nome)}</b>${r.oficial ? '<span class="cu-pill ok">oficial</span>' : ''}</div>
+      <div class="cu-cen-num"><span>${_cuNf0.format(r.km)} km</span><span>${c.pagas.length} pedágio${c.pagas.length === 1 ? '' : 's'}</span><span>${_cuBrl(c.total)}/viagem</span>${c.porU != null ? `<span>${m ? _cuP(m, c.porU) : _cuBrl(c.porU) + '/' + u}</span>` : ''}</div>
+      <div class="cu-semloc">${_cuE(r.autor_nome || '')} · ${(r.updated_at || r.created_at || '').slice(0, 10).split('-').reverse().join('/')}${c.semTar ? ` · <span style="color:var(--mp-medio)">${c.semTar} praça${c.semTar > 1 ? 's' : ''} sem tarifa</span>` : ''}</div>
+      <div class="cu-cen-act"><button type="button" class="cu-btn" data-cen-ed="${r.id}">Editar</button><button type="button" class="cu-btn" data-cen-of="${r.id}">${r.oficial ? 'Deixar de ser oficial' : 'Tornar oficial'}</button><button type="button" class="cu-btn" data-cen-del="${r.id}" title="Excluir cenário">Excluir</button></div></div>`;
+  };
+  return `<div class="cu-note">Monte o trajeto que o motorista faz: pontos de passagem, praças pagas e custos da viagem. O cenário <b>oficial</b> passa a valer no mapa (km e pedágios) no lugar da rota automática.</div>
+    ${mats.length > 1 ? `<div class="cu-sec"><h3>Material da carga</h3><select class="form-select" id="cu-tr-mat">${mats.map(x => `<option value="${_cuE(x)}"${x === m ? ' selected' : ''}>${_cuE(x)}</option>`).join('')}</select></div>` : ''}
+    <div class="cu-sec"><h3>Rota automática</h3><div class="cu-cen"><div class="cu-cen-num">${auto ? `<span>${_cuNf0.format(auto.km)} km</span><span>${_cuPedTxt(auto)}</span><span>${_cuNf0.format(auto.minutos || 0)} min</span>` : '<span>ainda não calculada</span>'}</div>
+      <div class="cu-cen-act"><button type="button" class="cu-btn cu-pri" id="cu-tr-novo">Novo cenário a partir dela</button></div></div></div>
+    <div class="cu-sec"><h3>Cenários (${cens.length})</h3>${cens.length ? cens.map(card).join('') : '<div class="cu-note">Nenhum cenário ainda.</div>'}</div>`;
+}
+function _cuTrajetoLigar(el, s) {
+  const $ = id => el.querySelector('#' + id);
+  if (CU.ed) return _cuEdLigar(el, s);
+  if ($('cu-tr-mat')) $('cu-tr-mat').onchange = e => { CU.trMat = e.target.value; _cuPainel(); };
+  if ($('cu-tr-novo')) $('cu-tr-novo').onclick = () => _cuEdAbrir(s, null);
+  el.querySelectorAll('[data-cen-ed]').forEach(b => b.onclick = () => _cuEdAbrir(s, CU.cenarios.find(r => r.id === b.dataset.cenEd)));
+  el.querySelectorAll('[data-cen-of]').forEach(b => b.onclick = async () => { const r = CU.cenarios.find(x => x.id === b.dataset.cenOf); if (r) await _cuCenOficial(r, !r.oficial); });
+  el.querySelectorAll('[data-cen-del]').forEach(b => b.onclick = async () => {
+    const r = CU.cenarios.find(x => x.id === b.dataset.cenDel); if (!r || !confirm(`Excluir o cenário "${r.nome}"?`)) return;
+    const { error } = await window.supabaseClient.from('custos_cenarios').delete().eq('id', r.id);
+    if (error) { toast('Não foi possível excluir: ' + error.message, 'error'); return; }
+    toast('Cenário excluído.'); await _cuCenRecarregar();
+  });
+}
+// Oficial: no máximo um por par (índice único no banco): desmarca os outros antes.
+async function _cuCenOficial(r, sim) {
+  const sb = window.supabaseClient;
+  if (sim) for (const o of (CU.cenPar.get(_cuRotaK(r.central, r.fornecedor)) || []).filter(x => x.oficial && x.id !== r.id)) {
+    const { error } = await sb.from('custos_cenarios').update({ oficial: false }).eq('id', o.id); if (error) { toast('Não foi possível trocar o oficial: ' + error.message, 'error'); return false; }
+  }
+  const { error } = await sb.from('custos_cenarios').update({ oficial: sim, updated_at: new Date().toISOString() }).eq('id', r.id);
+  if (error) { toast('Não foi possível marcar como oficial: ' + error.message, 'error'); return false; }
+  toast(sim ? 'Cenário oficial: o mapa passa a usar este trajeto.' : 'O mapa volta a usar a rota automática.');
+  await _cuCenRecarregar(); return true;
+}
+
+// ── editor ──
+function _cuEdAbrir(s, r) {
+  const k = _cuRotaK(s.cen, s.forn), auto = CU.rotas.get(k);
+  let pdr = CU_CEN_PADRAO; try { pdr = { ...CU_CEN_PADRAO, ...JSON.parse(localStorage.getItem('custos.cenParams') || '{}') }; } catch (_) { /* sem storage */ }
+  const base = r || auto;
+  CU.ed = { k, id: r?.id || null, cen: s.cen, forn: s.forn, nome: r?.nome || '', oficial: !!r?.oficial || !(CU.cenPar?.get(k) || []).length,
+    pontos: (r?.pontos || []).map(p => p.slice()), geometria: base?.geometria || null, km: base?.km || 0, minutos: base?.minutos || 0,
+    pedagios: (base?.pedagios || []).slice(), fora: new Set(r?.pedagios_fora || []), params: JSON.parse(JSON.stringify(r?.params ? { ...CU_CEN_PADRAO, ...r.params } : { ...pdr, outros: [], frete: { v: null, tipo: 't' } })) };
+  CU.tab = 'trajeto'; _cuSvg.classed('editando', true);
+  if (!CU.ed.geometria) _cuEdRota(); else { _cuPainel(); _cuDesenhar(); }
+}
+function _cuEdFechar() { CU.ed = null; if (_cuSvg) _cuSvg.classed('editando', false); _cuPainel(); _cuDesenhar(); }
+function _cuEdHtml(s) {
+  const e = CU.ed, arr = _cuEscopoNfs(), mats = _cuMatDaRota(arr), m = mats.includes(CU.trMat) ? CU.trMat : mats[0], p = e.params;
+  const num = (id, v, step, rot, un) => `<label>${rot}<span class="cu-tr-in"><input class="form-input" id="${id}" type="number" min="0" step="${step}" value="${v ?? ''}" inputmode="decimal">${un ? `<em>${un}</em>` : ''}</span></label>`;
+  return `<div class="cu-note"><b>Editando trajeto.</b> Clique no mapa para incluir um ponto de passagem · arraste para mover · duplo clique remove. Clique numa praça no mapa para marcar se o motorista paga.</div>
+    <div class="cu-sec"><label class="cu-tr-nome">Nome do cenário<input class="form-input" id="cu-ed-nome" value="${_cuE(e.nome)}" placeholder="ex.: via Dutra, carreta 6 eixos"></label>
+      <div class="cu-tr-status" id="cu-ed-status"></div></div>
+    <div class="cu-sec"><h3>Praças no trajeto</h3><div id="cu-ed-pracas"></div></div>
+    <div class="cu-sec"><h3>Caminhão e combustível</h3><div class="cu-fr-form">
+      ${num('cu-ed-eixos', p.eixos, 1, 'Eixos', '')}${num('cu-ed-carga', p.carga, 0.1, 'Carga por viagem', 't')}
+      ${num('cu-ed-consumo', p.consumo, 0.1, 'Consumo', 'km/l')}${num('cu-ed-diesel', p.diesel, 0.01, 'Diesel', 'R$/l')}
+      <label class="larga cu-tog"><input type="checkbox" id="cu-ed-volta"${p.volta ? ' checked' : ''}> Contar a volta (dobra combustível, pedágios e custos por km)</label></div></div>
+    <div class="cu-sec"><h3>Outros custos da viagem</h3><div id="cu-ed-outros"></div><button type="button" class="cu-btn" id="cu-ed-outro-add">+ Adicionar custo</button></div>
+    <div class="cu-sec"><h3>Frete contratado</h3><div class="cu-fr-form">${num('cu-ed-frete', p.frete?.v, 0.01, 'Valor', 'R$')}
+      <label>Cobrado por<select class="form-select" id="cu-ed-frete-tipo"><option value="t"${p.frete?.tipo !== 'viagem' ? ' selected' : ''}>tonelada</option><option value="viagem"${p.frete?.tipo === 'viagem' ? ' selected' : ''}>viagem</option></select></label></div></div>
+    ${mats.length > 1 ? `<div class="cu-sec"><h3>Material da carga</h3><select class="form-select" id="cu-tr-mat">${mats.map(x => `<option value="${_cuE(x)}"${x === m ? ' selected' : ''}>${_cuE(x)}</option>`).join('')}</select></div>` : ''}
+    <div class="cu-sec"><h3>Custo até o destino</h3><div id="cu-ed-res"></div></div>
+    <div class="cu-sec cu-tr-salvar"><label class="cu-tog"><input type="checkbox" id="cu-ed-oficial"${e.oficial ? ' checked' : ''}> Oficial (vale no mapa)</label>
+      <div class="cu-mact"><button type="button" class="cu-btn" id="cu-ed-cancel">Cancelar</button><button type="button" class="cu-btn cu-pri" id="cu-ed-salvar">Salvar cenário</button></div></div>`;
+}
+function _cuEdLigar(el, s) {
+  const e = CU.ed, $ = id => el.querySelector('#' + id), p = e.params;
+  const lerNum = id => { const v = $(id).value; return v === '' ? null : Number(v); };
+  const muda = () => {
+    p.eixos = lerNum('cu-ed-eixos') || 0; p.carga = lerNum('cu-ed-carga') || 0; p.consumo = lerNum('cu-ed-consumo') || 0; p.diesel = lerNum('cu-ed-diesel') || 0;
+    p.volta = $('cu-ed-volta').checked; p.frete = { v: lerNum('cu-ed-frete'), tipo: $('cu-ed-frete-tipo').value };
+    _cuEdParcial();
+  };
+  ['cu-ed-eixos', 'cu-ed-carga', 'cu-ed-consumo', 'cu-ed-diesel', 'cu-ed-frete'].forEach(id => $(id).oninput = muda);
+  $('cu-ed-volta').onchange = muda; $('cu-ed-frete-tipo').onchange = muda;
+  $('cu-ed-nome').oninput = ev => { e.nome = ev.target.value; };
+  $('cu-ed-oficial').onchange = ev => { e.oficial = ev.target.checked; };
+  if ($('cu-tr-mat')) $('cu-tr-mat').onchange = ev => { CU.trMat = ev.target.value; _cuEdParcial(); };
+  $('cu-ed-outro-add').onclick = () => { p.outros.push({ d: '', v: null, tipo: 'viagem' }); _cuEdOutros(); };
+  $('cu-ed-cancel').onclick = _cuEdFechar;
+  $('cu-ed-salvar').onclick = _cuEdSalvar;
+  _cuEdOutros(); _cuEdParcial();
+}
+// Linhas livres de custo: descrição, valor, por viagem ou por km.
+function _cuEdOutros() {
+  const box = document.getElementById('cu-ed-outros'); if (!box) return;
+  const p = CU.ed.params;
+  box.innerHTML = p.outros.map((o, i) => `<div class="cu-tr-outro" data-i="${i}"><input class="form-input" data-f="d" value="${_cuE(o.d || '')}" placeholder="motorista, balsa, manutenção…"><input class="form-input" data-f="v" type="number" min="0" step="0.01" value="${o.v ?? ''}" placeholder="R$"><select class="form-select" data-f="tipo"><option value="viagem"${o.tipo !== 'km' ? ' selected' : ''}>por viagem</option><option value="km"${o.tipo === 'km' ? ' selected' : ''}>por km</option></select><button type="button" class="cu-x" data-f="rm" title="Remover">×</button></div>`).join('');
+  box.querySelectorAll('.cu-tr-outro').forEach(row => {
+    const o = p.outros[+row.dataset.i];
+    row.querySelector('[data-f="d"]').oninput = ev => { o.d = ev.target.value; };
+    row.querySelector('[data-f="v"]').oninput = ev => { o.v = ev.target.value === '' ? null : Number(ev.target.value); _cuEdParcial(); };
+    row.querySelector('[data-f="tipo"]').onchange = ev => { o.tipo = ev.target.value; _cuEdParcial(); };
+    row.querySelector('[data-f="rm"]').onclick = () => { p.outros.splice(+row.dataset.i, 1); _cuEdOutros(); _cuEdParcial(); };
+  });
+}
+// Atualiza só status, praças e resultado (os campos digitados ficam como estão).
+function _cuEdParcial() {
+  const e = CU.ed; if (!e) return;
+  const st = document.getElementById('cu-ed-status'), pr = document.getElementById('cu-ed-pracas'), rs = document.getElementById('cu-ed-res');
+  if (!st || !pr || !rs) return;
+  const arr = _cuEscopoNfs(), mats = _cuMatDaRota(arr), m = mats.includes(CU.trMat) ? CU.trMat : mats[0], u = m ? _cuU(m) : 't';
+  st.innerHTML = e.calc ? '<span class="cu-semloc">Calculando o trajeto…</span>' : e.erro ? `<span style="color:var(--mp-ruim)">${_cuE(e.erro)}</span>`
+    : `<b>${_cuNf1.format(e.km)} km</b> · ${_cuNf0.format(e.minutos)} min · ${e.pontos.length} ponto${e.pontos.length === 1 ? '' : 's'} de passagem${e.pontos.length ? ' · <button type="button" class="cu-lnk" id="cu-ed-limpa">limpar pontos</button>' : ''}`;
+  const lp = document.getElementById('cu-ed-limpa'); if (lp) lp.onclick = () => { e.pontos = []; _cuEdRota(); };
+  const eixos = e.params.eixos || 0;
+  pr.innerHTML = e.pedagios.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Paga</th><th>Praça</th><th class="n">R$/eixo</th><th class="n">× ${eixos} eixos</th></tr></thead><tbody>${e.pedagios.map(id => {
+    const pc = CU.ped?.get(id), t = CU.tarifas?.get(Number(id)), paga = !e.fora.has(id);
+    return `<tr class="${paga ? '' : 'cu-tr-off'}"><td><input type="checkbox" data-pg="${id}"${paga ? ' checked' : ''}></td><td>${_cuE(pc ? [pc.op, pc.nome].filter(Boolean).join(' · ') || 'Praça sem nome' : 'Praça ' + id)}</td>
+      <td class="n"><input class="form-input cu-tr-tar" data-tar="${id}" type="number" min="0" step="0.01" value="${t ? t.tarifa_eixo : ''}" placeholder="—"></td><td class="n">${t && paga ? _cuBrl(t.tarifa_eixo * eixos) : '–'}</td></tr>`;
+  }).join('')}</tbody></table></div><div class="cu-tr-dica">A tarifa por eixo fica salva na praça e vale para todos os cenários.</div>` : '<div class="cu-note">Nenhuma praça de pedágio neste trajeto.</div>';
+  pr.querySelectorAll('[data-pg]').forEach(c => c.onchange = () => { const id = Number(c.dataset.pg); c.checked ? e.fora.delete(id) : e.fora.add(id); _cuEdParcial(); _cuEdDesenhar(); });
+  pr.querySelectorAll('[data-tar]').forEach(i => i.onchange = () => _cuTarSalvar(Number(i.dataset.tar), i.value));
+  const c = _cuCenCusto({ km: e.km, pedagios: e.pedagios, fora: e.fora, params: e.params }, m);
+  const am = arr.filter(n => n.mat === m), ag = _cuAgg(am), preco = ag.q ? ag.pm : null, freteNf = ag.q && ag.ge > ag.g ? ag.fu : null;
+  const lin = (r, v, x = '') => `<tr${x ? ` class="${x}"` : ''}><td>${r}</td><td class="n">${v}</td></tr>`;
+  const pu = v => v == null ? '–' : m ? _cuP(m, v) : _cuBrl(v) + '/' + u;
+  rs.innerHTML = `<table><tbody>
+    ${lin(`Pedágios (${c.pagas.length} praça${c.pagas.length === 1 ? '' : 's'}${c.p.volta ? ', ida e volta' : ''})${c.semTar ? ` <span style="color:var(--mp-medio)">· ${c.semTar} sem tarifa</span>` : ''}`, _cuBrl(c.ped))}
+    ${lin(`Combustível (${_cuNf0.format(e.km * (c.p.volta ? 2 : 1))} km ÷ ${_cuNf1.format(c.p.consumo || 0)} km/l × ${_cuBrl(c.p.diesel || 0)})`, _cuBrl(c.comb))}
+    ${c.p.outros.length ? lin('Outros custos', _cuBrl(c.outros)) : ''}
+    ${lin('<b>Total por viagem</b>', `<b>${_cuBrl(c.total)}</b>`, 'cu-tr-tot')}
+    ${lin(`Transporte por ${u} (carga de ${_cuNf1.format(c.p.carga || 0)} t)`, pu(c.porU))}
+    ${lin('Preço do material na NF (média da rota)', pu(preco))}
+    ${lin('<b>Custo final entregue</b>', `<b>${preco != null && c.porU != null ? pu(preco + c.porU) : '–'}</b>`, 'cu-tr-tot')}
+    ${c.fretePorU != null ? lin(`Frete contratado (${_cuBrl(c.freteViagem)}/viagem)`, `${pu(c.fretePorU)} <span class="${c.porU != null && c.fretePorU > c.porU ? 'cu-worse' : 'cu-best'}">${c.porU ? _cuPct(c.fretePorU / c.porU - 1) + ' vs calculado' : ''}</span>`) : ''}
+    ${freteNf != null ? lin('Frete real das NFs/CTe (média)', `${pu(freteNf)} <span class="${c.porU != null && freteNf > c.porU ? 'cu-worse' : 'cu-best'}">${c.porU ? _cuPct(freteNf / c.porU - 1) + ' vs calculado' : ''}</span>`) : ''}
+  </tbody></table>`;
+}
+async function _cuTarSalvar(id, v) {
+  if (v === '' || !(Number(v) >= 0)) return;
+  const row = { praca: id, tarifa_eixo: Math.round(Number(v) * 100) / 100, autor_nome: typeof _ocNomeAtor === 'function' ? _ocNomeAtor() : (window.currentUser?.name || null), atualizado_em: new Date().toISOString() };
+  CU.tarifas.set(id, row); _cuEdParcial();
+  const { error } = await window.supabaseClient.from('custos_pedagio_tarifas').upsert(row, { onConflict: 'praca' });
+  if (error) toast('Não foi possível salvar a tarifa: ' + error.message, 'error');
+}
+// Recalcula o trajeto no OSRM passando pelos pontos (aguarda 350 ms sem mudanças; só a última resposta vale).
+function _cuEdRota() {
+  const e = CU.ed; if (!e) return;
+  e.calc = true; e.erro = ''; _cuEdParcial();
+  clearTimeout(CU._edT);
+  CU._edT = setTimeout(async () => {
+    const o = _cuLL(e.forn), d = _cuLL(CU.cen.get(e.cen)?.cnpj), req = (CU._edReq || 0) + 1; CU._edReq = req;
+    if (!o || !d) { e.calc = false; e.erro = 'Fornecedor ou central sem localização.'; _cuEdParcial(); return; }
+    await _cuPedagios();
+    const pts = [o, ...e.pontos, d].map(p => p[0].toFixed(5) + ',' + p[1].toFixed(5)).join(';');
+    const j = await fetch(`${CU_OSRM}${pts}?overview=simplified&geometries=polyline&annotations=nodes`).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (CU.ed !== e || CU._edReq !== req) return;
+    e.calc = false;
+    const rt = j?.code === 'Ok' && j.routes?.[0];
+    if (!rt) { e.erro = j ? 'Sem caminho por estrada passando por esses pontos.' : 'Serviço de rotas fora do ar. Tente de novo em instantes.'; _cuEdParcial(); return; }
+    const ped = new Set(); rt.legs.forEach(lg => (lg.annotation?.nodes || []).forEach(id => { if (CU.ped?.has(id)) ped.add(id); }));
+    Object.assign(e, { geometria: rt.geometry, km: Math.round(rt.distance / 100) / 10, minutos: Math.round(rt.duration / 60), pedagios: [...ped] });
+    e._geo = null; _cuEdParcial(); _cuEdDesenhar();
+  }, 350);
+}
+async function _cuEdSalvar() {
+  const e = CU.ed; if (!e || e.calc) return;
+  if (!e.nome.trim()) { toast('Dê um nome ao cenário.', 'error'); document.getElementById('cu-ed-nome')?.focus(); return; }
+  if (!e.geometria) { toast('O trajeto ainda não foi calculado.', 'error'); return; }
+  const sb = window.supabaseClient, agora = new Date().toISOString();
+  const row = { fornecedor: e.forn, central: e.cen, nome: e.nome.trim(), oficial: false, pontos: e.pontos, geometria: e.geometria, km: e.km, minutos: e.minutos,
+    pedagios: e.pedagios, pedagios_fora: [...e.fora].filter(id => e.pedagios.includes(id)), params: e.params,
+    autor_nome: typeof _ocNomeAtor === 'function' ? _ocNomeAtor() : (window.currentUser?.name || null), updated_at: agora };
+  let id = e.id, error;
+  if (id) ({ error } = await sb.from('custos_cenarios').update(row).eq('id', id));
+  else { id = crypto.randomUUID(); ({ error } = await sb.from('custos_cenarios').insert({ ...row, id })); }
+  if (error) { toast('Não foi possível salvar o cenário: ' + error.message, 'error'); return; }
+  try { const { outros, frete, ...pp } = e.params; localStorage.setItem('custos.cenParams', JSON.stringify(pp)); } catch (_) { /* sem storage */ }
+  const salvo = { ...row, id };
+  if (e.oficial) await _cuCenOficial(salvo, true); else { toast('Cenário salvo.'); await _cuCenRecarregar(); }
+  CU.ed = null; if (_cuSvg) _cuSvg.classed('editando', false); _cuUpdate(false);
+}
+// Inclui o ponto no trecho em que ele menos desvia (origem → pontos → destino).
+function _cuEdInserir(ll) {
+  const e = CU.ed, P = [_cuLL(e.forn), ...e.pontos, _cuLL(CU.cen.get(e.cen)?.cnpj)].map(p => CU.proj(p)), q = CU.proj(ll), dd = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  let best = 0, bv = Infinity;
+  for (let i = 0; i < P.length - 1; i++) { const v = dd(P[i], q) + dd(q, P[i + 1]) - dd(P[i], P[i + 1]); if (v < bv) { bv = v; best = i; } }
+  e.pontos.splice(best, 0, [+ll[0].toFixed(5), +ll[1].toFixed(5)]);
+  _cuEdDesenhar(); _cuEdRota();
+}
+// Desenho do editor: trajeto em edição, pontos de passagem (arrastáveis) e praças (clique alterna "paga").
+function _cuEdDesenhar() {
+  if (!_cuGr.ed) return;
+  const e = CU.ed;
+  _cuGr.pd.style('display', e ? 'none' : null);
+  if (!e) { _cuGr.ed.selectAll('*').remove(); return; }
+  if (e.geometria && !e._geo) e._geo = _cuRotaGeo({ geometria: e.geometria });
+  const a = _cuXY(e.forn), b = _cuXY(CU.cen.get(e.cen)?.cnpj);
+  _cuGr.ed.selectAll('path.ed-rt').data(e._geo && a && b ? [e._geo] : []).join('path').attr('class', 'ed-rt').attr('d', g => `M${a}L${g._d}L${b}`);
+  _cuPontos(_cuGr.ed.selectAll('circle.pt-ped').data(e.pedagios.map(id => CU.ped?.get(id)).filter(Boolean), p => p.id), 'ped')
+    .attr('class', p => 'pt pt-ped' + (e.fora.has(p.id) ? ' fora' : ''))
+    .each(function (p) { this._xy = CU.proj(p.ll); this._r = 4.5; })
+    .on('click', (ev, p) => { ev.stopPropagation(); e.fora.has(p.id) ? e.fora.delete(p.id) : e.fora.add(p.id); _cuEdParcial(); _cuEdDesenhar(); })
+    .on('mousemove', (ev, p) => { const t = CU.tarifas?.get(Number(p.id)); _cuTip(ev, `<b>${_cuE([p.op, p.nome].filter(Boolean).join(' · ') || 'Praça de pedágio')}</b><br><span class="mono">${t ? _cuBrl(t.tarifa_eixo) + '/eixo' : 'sem tarifa'} · ${e.fora.has(p.id) ? 'não paga' : 'paga'} · clique alterna</span>`); })
+    .on('mouseleave', _cuTipOff);
+  _cuPontos(_cuGr.ed.selectAll('circle.pt-wp').data(e.pontos), 'wp')
+    .each(function (p) { this._xy = CU.proj(p); this._r = 6; })
+    .on('dblclick', (ev, p) => { ev.stopPropagation(); ev.preventDefault(); e.pontos.splice(e.pontos.indexOf(p), 1); _cuEdDesenhar(); _cuEdRota(); })
+    .on('mousemove', ev => _cuTip(ev, 'Ponto de passagem<br><span class="mono">arraste para mover · duplo clique remove</span>')).on('mouseleave', _cuTipOff)
+    .call(d3.drag()
+      .subject(function () { return { x: this._xy[0], y: this._xy[1] }; })
+      .on('drag', function (ev, p) { const ll = CU.proj.invert([ev.x, ev.y]); p[0] = +ll[0].toFixed(5); p[1] = +ll[1].toFixed(5); this._xy = [ev.x, ev.y]; this.setAttribute('cx', ev.x); this.setAttribute('cy', ev.y); _cuTipOff(); })
+      .on('end', () => _cuEdRota()));
+  _cuRescale();
+}
+
 /* ───────── comparar duas centrais (Ctrl+clique) ───────── */
 function _cuComparaAdd(c) {
   _cuTipOff();
@@ -1315,6 +1621,8 @@ function _cuComparaHtml(s) {
 function _cuPainel() {
   const el = document.getElementById('cu-panel'), main = document.getElementById('cu-main'), s = CU.sel;
   el.classList.toggle('open', !!s); main.classList.toggle('popen', !!s);
+  // Editor de trajeto só vive com a própria rota selecionada.
+  if (CU.ed && !(s?.t === 'rota' && _cuRotaK(s.cen, s.forn) === CU.ed.k)) { CU.ed = null; _cuSvg?.classed('editando', false); _cuEdDesenhar(); }
   if (!s) { el.innerHTML = ''; CU.cmpCen = []; return; }
   if (s.t === 'cmp') { el.innerHTML = _cuComparaHtml(s); el.querySelector('#cu-px').onclick = () => { CU.sel = null; CU.cmpCen = []; _cuUpdate(false); }; return; }
   CU.cmpCen = [];
@@ -1331,9 +1639,12 @@ function _cuPainel() {
   const mats = [...a.mats].sort((x, y) => gMat.get(y) - gMat.get(x));
   const tabs = [['resumo', 'Resumo'], ['forn', 'Fornecedores'], ['precos', 'Preços'], ['nfs', 'Alertas', a.d + a.dc]];
   if (s.t === 'forn' || s.t === 'rota') tabs.push(['frete', 'Frete']);
+  if (s.t === 'rota') tabs.push(['trajeto', 'Trajeto']);
+  if (CU.tab === 'trajeto' && s.t !== 'rota') CU.tab = 'resumo';
   if (CU.tab === 'frete' && s.t !== 'forn' && s.t !== 'rota') CU.tab = 'resumo';
   let body = '';
   if (CU.tab === 'frete') body = _cuFretePainel(s);
+  else if (CU.tab === 'trajeto') body = _cuTrajetoPainel(s);
   else if (!arr.length) body = s.t === 'forn' ? '<div class="cu-note">Fornecedor sem compra no período e filtros. Fica no mapa em cinza para servir de alternativa na comparação.</div>' : '<div class="cu-note">Nenhuma NF com os filtros atuais.</div>';
   else if (CU.tab === 'resumo') {
     if (s.t === 'br' || s.t === 'uf' || s.t === 'reg') {
@@ -1396,6 +1707,7 @@ function _cuPainel() {
   el.querySelectorAll('[data-pmat]').forEach(b => b.onclick = () => { CU.pmat = b.dataset.pmat; _cuPainel(); });
   el.querySelectorAll('[data-al]').forEach(b => b.onclick = () => { CU.alTipo = b.dataset.al; _cuPainel(); });
   if (CU.tab === 'frete') _cuFreteLigar(el, s);
+  if (CU.tab === 'trajeto') _cuTrajetoLigar(el, s);
   el.querySelectorAll('.cu-bar').forEach(b => b.onclick = () => {
     const k = b.dataset.k, act = b.dataset.act;
     if (act === 'reg') { const c = [...CU.cen.values()].find(x => x.regional === k); Object.assign(CU.F, { reg: k, cen: '', uf: c ? _cuUfCen(c) : '' }); CU.sel = { t: 'reg', reg: k }; _cuUpdate(true); }
@@ -1409,10 +1721,12 @@ function _cuPainel() {
 
 /* ───────── comparador ───────── */
 // Opções do seletor de material do comparador: agrupadas por categoria, com nº de fornecedores no recorte.
-function _cuOpcoesMat(mats, atual, arr) {
+function _cuOpcoesMat(mats, atual, arr, pares = []) {
   const nf = new Map(); arr.forEach(n => { let s = nf.get(n.mat); if (!s) nf.set(n.mat, s = new Set()); s.add(n.forn); });
+  // Fornecedores do escopo sem NF no período (entram no comparador com o preço antigo).
+  const nv = new Map(); pares.forEach(p => { if (nf.get(p.mat)?.has(p.forn)) return; let s = nv.get(p.mat); if (!s) nv.set(p.mat, s = new Set()); s.add(p.forn); });
   const grupos = _cuGroup(mats, m => CU.catMat?.get(m) || 'Outros');
-  return Object.keys(grupos).sort().map(g => `<optgroup label="${_cuE(g)}">${grupos[g].map(m => `<option value="${_cuE(m)}"${m === atual ? ' selected' : ''}>${_cuE(m)} (${nf.get(m)?.size || 0} forn.)</option>`).join('')}</optgroup>`).join('');
+  return Object.keys(grupos).sort().map(g => `<optgroup label="${_cuE(g)}">${grupos[g].map(m => `<option value="${_cuE(m)}"${m === atual ? ' selected' : ''}>${_cuE(m)} (${nf.get(m)?.size || 0} forn.${nv.get(m)?.size ? ` + ${nv.get(m).size} sem entrega` : ''})</option>`).join('')}</optgroup>`).join('');
 }
 function _cuStrip() {
   const el = document.getElementById('cu-strip');
@@ -1421,7 +1735,11 @@ function _cuStrip() {
   const alterna = () => { CU.cmpAberto = !CU.cmpAberto; try { localStorage.setItem('custos.comparador', CU.cmpAberto ? '1' : '0'); } catch (_) { /* sem storage */ } _cuStrip(); requestAnimationFrame(() => { _cuMedir(); _cuFit(_cuBounds(), 0); }); };
   el.classList.toggle('fechado', !CU.cmpAberto);
   if (!CU.cmpAberto) { el.innerHTML = `<button type="button" class="cu-cmp-tg"><i class="ti ti-chevron-up"></i> Comparador de fornecedores · ${_cuE(_cuEscopoNome(_cuEscopo()))}</button>`; el.querySelector('.cu-cmp-tg').onclick = alterna; return; }
-  const arr = _cuNfsF(), mats = [...new Set(arr.map(n => n.mat))].sort();
+  const arr = _cuNfsF(), F = CU.F;
+  // Central/regional escolhida: entram também os pares que já existiram ali, mesmo sem NF no período.
+  const noEscopo = p => F.cen ? p.cen === F.cen : F.reg ? CU.cen.get(p.cen)?.regional === F.reg : false;
+  const paresEsc = (CU.pares || []).filter(noEscopo);
+  const mats = [...new Set([...arr.map(n => n.mat), ...paresEsc.map(p => p.mat)])].sort();
   if (!CU.cmpMat || !mats.includes(CU.cmpMat)) CU.cmpMat = CU.F.mat || mats[0];
   const m = CU.cmpMat, am = arr.filter(n => n.mat === m), esc = _cuEscopo();
   // Série de 6 meses de todos os fornecedores numa passada por mês (não uma por fornecedor).
@@ -1433,10 +1751,22 @@ function _cuStrip() {
   } });
   const serie = f => (ser.get(f) || []).map(p => ({ x: p.x, y: p.q ? p.g / p.q : null }));
   const rows = Object.entries(_cuGroup(am, 'forn')).map(([f, v]) => ({ f, s: _cuAgg(v), ser: serie(f) })).sort((x, y) => x.s.pe - y.s.pe); // custo entregue (NF + frete)
-  const best = rows[0]?.s.pe, tq = _cuAgg(am).q;
+  // Sem entrega no período: última NF do fornecedor (até o fim do período) neste escopo, para comparar.
+  const fimYm = Math.max(...(CU.mesesSel.length ? CU.mesesSel : [CU.mes])), lim = fimYm * 100 + 99, ativos = new Set(rows.map(r => r.f)), velhos = new Map();
+  paresEsc.forEach(p => {
+    if (p.mat !== m || ativos.has(p.forn) || (F.forns.size && !F.forns.has(p.forn))) return;
+    let l = 0, h = p.n; while (l < h) { const mid = (l + h) >> 1; if (p.D[mid] <= lim) l = mid + 1; else h = mid; }
+    if (!l) return; // só entregou depois do período
+    const k = l - 1, d = p.D[k], ym = Math.floor(d / 100), v = velhos.get(p.forn);
+    if (!v || d > v.d) velhos.set(p.forn, { d, ym, o: _cuNfObj(p, k, ym) });
+  });
+  const mesesEntre = (a, b) => (Math.floor(b / 100) - Math.floor(a / 100)) * 12 + (b % 100) - (a % 100);
+  const rowsV = [...velhos].map(([f, v]) => ({ f, s: _cuAgg([v.o]), ser: serie(f), velho: true, ym: v.ym, meses: mesesEntre(v.ym, fimYm) })).sort((x, y) => x.s.pe - y.s.pe);
+  const best = rows[0]?.s.pe ?? rowsV[0]?.s.pe, tq = _cuAgg(am).q;
+  const mesTxt = ym => String(ym % 100).padStart(2, '0') + '/' + Math.floor(ym / 100);
   const spark = ser => { const p = ser.filter(q => q.y != null); if (p.length < 2) return '<svg viewBox="0 0 186 22" width="100%" height="22"></svg>'; const x = d3.scaleLinear().domain([0, 5]).range([2, 184]), ex = d3.extent(p, q => q.y), y = d3.scaleLinear().domain(ex[0] === ex[1] ? [ex[0] * .98, ex[1] * 1.02] : ex).range([20, 3]); return `<svg viewBox="0 0 186 22" width="100%" height="22"><path d="${d3.line().x(q => x(q.x)).y(q => y(q.y))(p)}" style="fill:none;stroke:var(--amber);stroke-width:1.5"/></svg>`; };
-  el.innerHTML = `<div class="sh"><button type="button" class="cu-cmp-tg" title="Recolher o comparador"><i class="ti ti-chevron-down"></i></button><b>Comparador · ${_cuE(_cuEscopoNome(esc))}</b><label class="cu-cmp-sel">Material <select class="form-select" id="cu-cmp-mat">${_cuOpcoesMat(mats, m, arr)}</select></label></div>
-    <div class="cu-cards">${rows.map((r, i) => `<div class="cu-card" data-cf="${_cuE(r.f)}"><span class="nm" title="${_cuE(_cuNomeF(r.f))}">${_cuE(_cuNomeF(r.f))}</span><span class="pr" title="Custo entregue = NF + frete">R$ ${_cuPn(m, r.s.pe)}<span style="font-size:11px;color:var(--text3)">/${_cuU(m)} entregue</span></span><span class="sub"><span>NF ${_cuPn(m, r.s.pm)} + frete ${_cuPn(m, r.s.fu)}</span></span><span class="sub"><span class="${i ? 'cu-worse' : 'cu-best'}">${i ? _cuPct(r.s.pe / best - 1) : 'melhor custo'}</span><span>${_cuNf0.format(r.s.q / tq * 100)}% do vol.</span></span>${spark(r.ser)}<span class="sub"><span class="${r.s.d ? 'cu-worse' : ''}">${r.s.d ? r.s.d + ' alerta' + (r.s.d > 1 ? 's' : '') : 'sem alerta'}</span>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`)}</span></div>`).join('') || '<div class="cu-note">Sem NFs no período.</div>'}</div>`;
+  el.innerHTML = `<div class="sh"><button type="button" class="cu-cmp-tg" title="Recolher o comparador"><i class="ti ti-chevron-down"></i></button><b>Comparador · ${_cuE(_cuEscopoNome(esc))}</b><label class="cu-cmp-sel">Material <select class="form-select" id="cu-cmp-mat">${_cuOpcoesMat(mats, m, arr, paresEsc)}</select></label></div>
+    <div class="cu-cards">${[...rows, ...rowsV].map((r, i) => r.velho ? `<div class="cu-card velho" data-cf="${_cuE(r.f)}"><span class="nm" title="${_cuE(_cuNomeF(r.f))}">${_cuE(_cuNomeF(r.f))}</span><span class="pr" title="Custo entregue da última NF (${mesTxt(r.ym)})">R$ ${_cuPn(m, r.s.pe)}<span style="font-size:11px;color:var(--text3)">/${_cuU(m)} entregue</span></span><span class="sub"><span>NF ${_cuPn(m, r.s.pm)} + frete ${_cuPn(m, r.s.fu)}</span></span><span class="sub"><span class="${best && r.s.pe < best ? 'cu-best' : 'cu-worse'}">${best ? _cuPct(r.s.pe / best - 1) + ' vs melhor' : ''}</span><span>sem entrega no período</span></span><span class="cu-velho-al" title="Preço da última NF, de ${mesTxt(r.ym)}: pode estar desatualizado"><i class="ti ti-clock-exclamation"></i> Não entrega há ${r.meses} ${r.meses === 1 ? 'mês' : 'meses'} · preço de ${mesTxt(r.ym)}</span><span class="sub"><span></span>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`)}</span></div>` : `<div class="cu-card" data-cf="${_cuE(r.f)}"><span class="nm" title="${_cuE(_cuNomeF(r.f))}">${_cuE(_cuNomeF(r.f))}</span><span class="pr" title="Custo entregue = NF + frete">R$ ${_cuPn(m, r.s.pe)}<span style="font-size:11px;color:var(--text3)">/${_cuU(m)} entregue</span></span><span class="sub"><span>NF ${_cuPn(m, r.s.pm)} + frete ${_cuPn(m, r.s.fu)}</span></span><span class="sub"><span class="${i ? 'cu-worse' : 'cu-best'}">${i ? _cuPct(r.s.pe / best - 1) : 'melhor custo'}</span><span>${_cuNf0.format(r.s.q / tq * 100)}% do vol.</span></span>${spark(r.ser)}<span class="sub"><span class="${r.s.d ? 'cu-worse' : ''}">${r.s.d ? r.s.d + ' alerta' + (r.s.d > 1 ? 's' : '') : 'sem alerta'}</span>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`)}</span></div>`).join('') || '<div class="cu-note">Sem NFs no período.</div>'}</div>`;
   el.querySelector('#cu-cmp-mat').onchange = e => { CU.cmpMat = e.target.value; _cuStrip(); };
   el.querySelector('.cu-cmp-tg').onclick = alterna;
   el.querySelectorAll('[data-cf]').forEach(b => b.onclick = () => { CU.sel = { t: 'forn', id: b.dataset.cf }; CU.tab = 'forn'; _cuUpdate(false); });
@@ -1495,7 +1825,7 @@ async function _cuGeocodificar() {
       CU.geo.set(a.cnpj, row);
       const { error } = await window.supabaseClient.from('custos_geo').upsert(row, { onConflict: 'cnpj' });
       if (error) console.warn('[Custos] custos_geo:', error.message);
-      if (feitos % 5 === 0 && document.getElementById('page-custos')?.classList.contains('active')) _cuDesenhar();
+      if (feitos % 5 === 0) _cuDesenharLogo();
       await _cuEspera(300); // ritmo da BrasilAPI (mesmo de preencherUfFiliais)
     }
     if (alvos.length) _cuUpdate(false);
