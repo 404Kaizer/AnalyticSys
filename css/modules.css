@@ -14617,3 +14617,38 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --
 #cu-map .mn.temc.fora { fill: var(--mp-mun-fora); stroke: none; pointer-events: none; }
 #cu-map .lbl.dir { text-anchor: start; font-weight: 700; }
 #cu-map .lbl.dir.foco { fill: var(--mp-txt); }
+
+/* 26/11: sem contornos nos municípios (só o preenchimento). */
+#cu-map .mn.temc, #cu-map .mn.hasc, #cu-map .mn.foco, #cu-map .mn.sel { stroke: none; }
+/* ...exceto onde dois municípios com central se encostam: linha fina na cor do fundo, separando-os. */
+#cu-map .mn.viz { stroke: var(--mp-mar); stroke-width: calc(var(--sw) * 1.2px); }
+
+/* Triangulação das centrais da regional (26/11): triângulos levemente preenchidos + arestas. */
+#cu-map .tri { fill: var(--mp-foco); fill-opacity: .1; stroke: none; pointer-events: none; }
+#cu-map .lig { stroke-opacity: .38; }
+/* Realce no hover: o resto esmaece (fill/stroke-opacity: sem criar camadas, barato). */
+#cu-map.esmaece .pt:not(.ativo) { fill-opacity: .22; stroke-opacity: .22; }
+#cu-map.esmaece .lbl:not(.ativo) { fill-opacity: .2; stroke-opacity: .2; }
+#cu-map.esmaece .mn.temc:not(.ativo), #cu-map.esmaece .mn.foco:not(.ativo), #cu-map.esmaece .mn.hasc:not(.ativo) { fill-opacity: .3; }
+#cu-map.esmaece .lig:not(.ativo) { stroke-opacity: .08; }
+#cu-map.esmaece .tri { fill-opacity: .04; }
+#cu-map.esmaece .rt:not(.ativo) { stroke-opacity: .12; }
+#cu-map.esmaece .pt.ativo { stroke: var(--mp-txt); }
+
+/* Comparador (26/11): material num seletor agrupado por categoria (a fila de 13 botões quebrava em
+   duas linhas) e faixa com altura pelo conteúdo — a altura fixa cortava nome e gráfico dos cards. */
+.cu-strip { height: auto; max-height: 48%; }
+.cu-strip .sh { padding: 8px 12px; gap: 12px; }
+.cu-cards { flex: none; padding: 2px 12px 12px; align-items: stretch; }
+.cu-card { gap: 4px; }
+.cu-cmp-sel { display: inline-flex; align-items: center; gap: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); }
+.cu-cmp-sel .form-select { width: auto; min-width: 220px; max-width: 340px; font-size: 12px; padding: 5px 10px; text-transform: none; letter-spacing: 0; }
+
+/* Raio de atendimento (26/11) e seletores da legenda. */
+#cu-map .raio { fill: var(--mp-foco); fill-opacity: .06; stroke: var(--mp-foco); stroke-opacity: .7; stroke-width: calc(var(--sw) * 1.5px); stroke-dasharray: calc(var(--sw) * 6px) calc(var(--sw) * 4px); pointer-events: none; }
+#cu-map .pt.raio { stroke: var(--mp-foco); }
+.cu-legend .lyr label .cu-leg-sel { margin-left: auto; font: inherit; font-size: 11px; background: var(--mp-chip, var(--bg3)); color: var(--mp-txt, var(--text)); border: 1px solid var(--mp-card-borda, var(--border2)); border-radius: 6px; padding: 1px 4px; }
+#cu-map .st:not(.has) { pointer-events: none; } /* só estados com central são clicáveis e têm tooltip */
+/* Estados e municípios pintados no <canvas> (os <path> ficam no SVG só para eventos/estilo, com o grupo transparente). */
+#cu-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#cu-map { position: relative; }
