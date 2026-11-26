@@ -59,8 +59,7 @@ function repIndexar(nfs) {
     vistas.add(dup);
     new Set([n.compra, n.destino]).forEach(c => {
       if (!c) return;
-      const k = c + '|' + n.material + '|' + repNumNf(n.nf);
-      (porNum.get(k) || porNum.set(k, []).get(k)).push(n);
+      [c + '|' + n.material + '|' + repNumNf(n.nf), c + '|*|' + repNumNf(n.nf)].forEach(k => (porNum.get(k) || porNum.set(k, []).get(k)).push(n));
     });
   });
   return porNum;
@@ -78,7 +77,14 @@ function _rpPorNf(par) {
 }
 function _rpCands(par, num, rows, porNum) {
   const ts = rows.find(m => m.kg > 0)?.ts ?? rows[0].ts;
-  return (porNum.get(par.central + '|' + par.material + '|' + num) || []).filter(n => !n.ts || !ts || Math.abs(n.ts - ts) <= REP_JANELA);
+  const perto = k => (porNum.get(k) || []).filter(n => !n.ts || !ts || Math.abs(n.ts - ts) <= REP_JANELA);
+  const c = perto(par.central + '|' + par.material + '|' + num);
+  if (c.length) return c;
+  // O MATERIAL DO SAP MANDA (Hugo, 26/11/2026): NF da mesma central lançada nas Entradas
+  // com outro material ainda diz de quem é; a entrada fica no material do SAP.
+  const o = perto(par.central + '|*|' + num);
+  if (o.length) o.outroMat = [...new Set(o.map(n => n.material))].join(', ');
+  return o;
 }
 
 // Contexto do mês: NFs lançadas na central de compra com destino em OUTRA
@@ -135,7 +141,8 @@ function repCalcular(par, ctx) {
   fam.forEach(g => { if (g > 0n) outrasG += g; else saidasG += g; });
   const forn = new Map(), doForn = n => { const k = repRaiz(n.cnpj); return forn.get(k) || forn.set(k, { tipo: 'forn', k, nome: n.fornecedor, g: 0n, nfs: [] }).get(k); };
   const soma = (a, f) => a.reduce((s, n) => s + (f(n) || 0), 0);
-  let reposG = 0n, passagemG = 0n;
+  let reposG = 0n, passagemG = 0n, r_outro = null;
+  const r_outroMat = new Set();
   const nfsRepos = [];
   for (const [num, o] of _rpPorNf(par)) {
     if (o.g === 0n) continue;                                                  // NF estornada inteira
@@ -150,6 +157,7 @@ function repCalcular(par, ctx) {
     const pesoNf = cands.some(n => n.kg == null) ? null : soma(cands, n => n.kg), pos = o.rows.filter(m => m.kg > 0);
     if (pesoNf && pos.length > 1 && new Set(pos.map(m => m.kg)).size === 1 && _rpKg(o.g) > pesoNf * 1.5) trava('dup', `NF ${num} parece lançada ${pos.length} vezes no SAP`);
     const reg = { nf: num, dt: pos[0]?.dt || '', kg: _rpKg(o.g), pesoNf, um: cands[0].um, qtd: soma(cands, n => n.qtd), valor: soma(cands, n => n.valor) };
+    if (cands.outroMat) { reg.outroMat = cands.outroMat; (r_outro || (r_outro = [])).push(num); r_outroMat.add(cands.outroMat); }
     if (o.rows.some(m => m.kg < 0)) reg.est = 1;
     if (ctx.ehRepos([...raizes][0], num, par.central, par.material)) { reposG += o.g; nfsRepos.push(reg); continue; }   // reposição = saldo
     const fora = cands.filter(n => n.destino && n.destino !== par.central), dests = new Set(fora.map(n => n.destino));
@@ -158,6 +166,7 @@ function repCalcular(par, ctx) {
     const f = doForn(cands[0]);
     f.g += o.g; f.nfs.push(reg);
   }
+  if (r_outro) avisos.push(`${r_outro.length > 1 ? 'NFs' : 'NF'} ${r_outro.slice(0, 6).join(', ')}${r_outro.length > 6 ? ` e mais ${r_outro.length - 6}` : ''} ${r_outro.length > 1 ? 'estão' : 'está'} nas Entradas como ${[...r_outroMat].join(', ')}; vale o material do SAP (${par.material}). A NF só identificou o fornecedor.`);
   // NF lançada em outra central com destino aqui: chega como 861.
   let chegouG = 0n;
   (ctx.chegam.get(par.central + '|' + par.material) || []).forEach(x => {
@@ -342,7 +351,10 @@ function repParesDoMes(B, ym, hoje = new Date()) {
   return out;
 }
 
-// Por que a NF do SAP não foi achada: olha as Entradas inteiras pelo número.
+// Por que a NF do SAP não foi achada: procura o mesmo número nas Entradas.
+// O número da NF se repete entre fornecedores, então diz SEMPRE de quem é a nota
+// achada (x.forns) — e o item travado passa a aparecer também sob esse fornecedor.
+// x.quem / x.fim montam o texto; a tela junta as NFs com o mesmo motivo.
 function repExplicarSemForn(res) {
   const alvo = new Map();
   res.forEach(r => r.motivos.forEach(x => { if (x.c === 'sem_forn') (alvo.get(x.nf) || alvo.set(x.nf, []).get(x.nf)).push({ r, x }); }));
@@ -352,17 +364,29 @@ function repExplicarSemForn(res) {
     const n = repNumNf(e.nf);
     if (alvo.has(n)) (achou.get(n) || achou.set(n, []).get(n)).push(e);
   }
-  alvo.forEach((lista, n) => lista.forEach(({ r, x }) => {
-    const perto = (achou.get(n) || []).filter(e => { const t = parseDateTs(e.dtDescarga && e.dtDescarga !== '—' ? e.dtDescarga : e.dtEmissao), [a, m] = r.par.ym.split('-').map(Number); return t && Math.abs(t - new Date(a, m - 1, 15).getTime()) <= REP_JANELA + 15 * 86400000; });
+  const lista = a => { const u = [...new Set(a)]; return u.slice(0, 2).join(', ') + (u.length > 2 ? ` e mais ${u.length - 2}` : ''); };
+  const donos = es => { const m = new Map(); es.forEach(e => { const k = repRaiz(e.cnpjFornecedor); if (!m.has(k)) m.set(k, e.fornecedor || 'fornecedor sem nome'); }); return m; };
+  const aplicar = (x, c, es, fim) => {
+    const d = donos(es);
+    x.c = c; x.fim = fim;
+    x.forns = [...d].filter(([k]) => k.length === 8).map(([k, nome]) => ({ k, nome }));
+    x.quem = d.size === 1 ? [...d.values()][0] : `${d.size} fornecedores diferentes (${lista(d.values())})`;
+    x.t = `NF ${x.nf} de ${x.quem} está ${fim}`;
+  };
+  alvo.forEach((l, n) => l.forEach(({ r, x }) => {
+    const [a, m] = r.par.ym.split('-').map(Number), meio = new Date(a, m - 1, 15).getTime();
+    const perto = (achou.get(n) || []).filter(e => { const t = parseDateTs(e.dtDescarga && e.dtDescarga !== '—' ? e.dtDescarga : e.dtEmissao); return t && Math.abs(t - meio) <= REP_JANELA + 15 * 86400000; });
     const aqui = perto.filter(e => e.centralCompra === r.par.central || e.centralDestino === r.par.central);
-    if (aqui.length) { x.c = 'outro_mat'; x.t = `NF ${n} está nas Entradas com outro material: ${[...new Set(aqui.map(e => e.material))].slice(0, 2).join(', ')}`; }
-    else if (perto.some(e => e.material === r.par.material)) { x.c = 'outra_cen'; x.t = `NF ${n} está nas Entradas em outra central: ${[...new Set(perto.filter(e => e.material === r.par.material).map(e => e.centralDestino || e.centralCompra))].slice(0, 2).join(', ')}`; }
+    const fora = perto.filter(e => e.material === r.par.material);
+    if (aqui.length) aplicar(x, 'outro_mat', aqui, `nas Entradas como ${lista(aqui.map(e => e.material))}, e o SAP lançou em ${r.par.material}`);
+    else if (fora.length) aplicar(x, 'outra_cen', fora, `nas Entradas em outra central (${lista(fora.map(e => e.centralDestino || e.centralCompra))})`);
   }));
 }
 
 // Mês inteiro: pares → motor. ehRepos vem das negociações.
 function repCalcularMes(B, ym, ehRepos) {
-  const pares = repParesDoMes(B, ym), ctx = repPreparar(pares, B.porNum, ehRepos);
+  const pares = repParesDoMes(B, ym);
+  const ctx = repPreparar(pares, B.porNum, ehRepos);
   const res = pares.map(p => repCalcular(p, ctx));
   repExplicarSemForn(res);
   return res;

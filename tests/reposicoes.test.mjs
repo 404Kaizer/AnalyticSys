@@ -1,4 +1,4 @@
-// Prova do motor da aba Reposições (js/reposicoes-motor.js): 34 casos resolvidos à
+// Prova do motor da aba Reposições (js/reposicoes-motor.js): 36 casos resolvidos à
 // mão em reposicoes-casos.js. Rode com: node tests/reposicoes.test.mjs
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

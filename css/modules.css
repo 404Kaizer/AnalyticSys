@@ -14548,3 +14548,51 @@ button.rp-kpi { cursor: pointer; } button.rp-kpi:hover { border-color: var(--bor
 .rp-campos .form-input, .rp-campos .form-select { width: 100%; min-width: 0; } #rp-root .rp-num { width: 110px; text-align: right; padding: 5px 8px; font-family: var(--mono); }
 .rp-sec { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 6px; display: flex; flex-direction: column; gap: 10px; }
 .rp-progl { display: flex; gap: 12px; align-items: center; font-size: 13.5px; } .rp-prog { flex: 1; height: 12px; border-radius: 6px; background: var(--bg4); overflow: hidden; } .rp-prog i { display: block; height: 100%; background: var(--green); }
+
+/* Ficha do fornecedor (acordos.js _acFicha): faixa de cima com endereço e três
+   números; embaixo, três listas com as que mais aparecem. */
+.ac-fi-topo { display: grid; grid-template-columns: minmax(260px, 2fr) repeat(3, minmax(130px, 1fr)); border: 1px solid var(--border); border-radius: 10px; background: var(--bg3); }
+.ac-fi-topo > div { padding: 14px 18px; min-width: 0; }
+.ac-fi-topo > div + div { border-left: 1px solid var(--border); }
+.ac-fi-end { display: flex; gap: 12px; align-items: flex-start; }
+.ac-fi-end > .ti { font-size: 20px; color: var(--accent); margin-top: 1px; }
+.ac-fi-end b { display: block; font-size: 14.5px; font-weight: 600; color: var(--text); }
+.ac-fi-end small { display: block; font-size: 12.5px; color: var(--text2); margin-top: 3px; line-height: 1.45; }
+.ac-fi-n { display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.ac-fi-n > b { font-size: 22px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.ac-fi-n:last-child > b { font-size: 15px; }
+.ac-fi-n > span { font-size: 12.5px; color: var(--text2); }
+.ac-fi-n em { font-style: normal; color: var(--red); }
+.ac-fi-seta { color: var(--text3); font-weight: 400; }
+.ac-fi-listas { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 28px; margin-top: 16px; }
+.ac-fi-l { min-width: 0; }
+.ac-fi-lt { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--text); padding-bottom: 7px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.ac-fi-lt .ti { font-size: 16px; color: var(--text2); }
+.ac-fi-lt b { margin-left: auto; font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text2); }
+.ac-fi-li { position: relative; display: flex; align-items: baseline; gap: 10px; padding: 6px 0 9px; font-size: 13px; }
+.ac-fi-li span { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-fi-li b { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--text2); }
+.ac-fi-li i { position: absolute; left: 0; bottom: 3px; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.ac-fi-resto { font-size: 12.5px; color: var(--text2); padding-top: 4px; cursor: help; }
+.ac-gira { display: inline-block; animation: ac-gira 1s linear infinite; }
+@keyframes ac-gira { to { transform: rotate(360deg); } }
+@media (max-width: 1100px) {
+  .ac-fi-topo { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ac-fi-end { grid-column: 1 / -1; border-bottom: 1px solid var(--border); }
+  .ac-fi-topo > .ac-fi-n:nth-child(2) { border-left: 0; }
+}
+@media (max-width: 560px) {
+  .ac-fi-topo { grid-template-columns: 1fr; }
+  .ac-fi-topo > div + div { border-left: 0; border-top: 1px solid var(--border); }
+  .ac-fi-end { border-bottom: 0; }
+}
+/* Ficha do fornecedor (Reposições) */
+.rp-dados { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 12px 20px; }
+.rp-dados > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rp-dados > .rp-largo { grid-column: span 2; }
+.rp-dados span { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); }
+.rp-dados b { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.rp-dados b small { font-weight: 400; color: var(--text2); }
+@media (max-width: 640px) { .rp-dados > .rp-largo { grid-column: auto; } }
+/* Selo das linhas da lista de Acordos: o mesmo da prioridade nas Operações, sem o balão. */
+.mp-prio.ac-selo { cursor: inherit; }

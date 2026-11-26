@@ -89,6 +89,12 @@ const REP_PROVA = [
   { n: 34, t: 'Zeros e dígito do SAP no número da NF', por: 'SAP traz "0000001-7"; a NF é "1". Mesmo resultado do caso 1.',
     par: pvPar(200, 360, [pvM('101', 500, '0000001-7'), pvM('101', 300, '000002-1'), pvM('201', -600)]), nfs: [pvNf(PV_A, 1, 500), pvNf(PV_B, '2/1', 300)],
     esp: { estado: 'desfalque', desfalque: 40000, A: 20000, B: 12000, ini: 8000 } },
+  { n: 35, t: 'Material do SAP manda (SAP em Brita 1, NF em Areia)', por: 'Igual ao caso 1, mas a NF 2 de B (300 t, lançada no SAP em Brita 1) está nas Entradas como Areia. A NF só diz que é de B; a entrada fica na Brita 1. Mesmo resultado do caso 1: A 20, B 12, estoque inicial 8.',
+    par: pvPar(200, 360, [pvM('101', 500, 1), pvM('101', 300, 2), pvM('201', -600)]), nfs: [pvNf(PV_A, 1, 500), pvNf(PV_B, 2, 300, { material: 'AREIA' })],
+    esp: { estado: 'desfalque', desfalque: 40000, A: 20000, B: 12000, ini: 8000 } },
+  { n: 36, t: 'Outro material em dois fornecedores trava', por: 'A NF 2 não está na Brita 1; com esse número na central há uma de B em Areia e uma de C em Brita 0. Não dá para saber de quem é.',
+    par: pvPar(200, 360, [pvM('101', 500, 1), pvM('101', 300, 2), pvM('201', -600)]), nfs: [pvNf(PV_A, 1, 500), pvNf(PV_B, 2, 300, { material: 'AREIA' }), pvNf(PV_C, 2, 300, { material: 'BRITA 0' })],
+    esp: { estado: 'bloqueado' } },
 ];
 
 function repProvaRodar() {
@@ -96,7 +102,8 @@ function repProvaRodar() {
     : k === 'valorA' ? (r.partes.find(p => p.k === '11111111')?.valor ?? 0) : (r.partes.find(p => p.k === ({ A: '11111111', B: '22222222', C: '33333333' }[k] || k))?.cotaKg ?? 0);
   return REP_PROVA.map(c => {
     const nfs = c.nfs.map(n => ({ ...n, kg: n.um === 'TO' ? n.qtd * 1000 : c.semFator ? null : n.qtd * 1400 })), pares = [c.par, ...(c.outros || []), ...(c.soma || [])];
-    const ctx = repPreparar(pares, repIndexar(nfs), (raiz, nf) => (c.repos || []).includes(nf));
+    const idx = repIndexar(nfs);
+    const ctx = repPreparar(pares, idx, (raiz, nf) => (c.repos || []).includes(nf));
     const r = repCalcular(c.par, ctx), mais = (c.soma || []).map(p => repCalcular(p, ctx));
     const obt = Object.fromEntries(Object.keys(c.esp).map(k => [k, 'ABC'.includes(k) ? [r, ...mais].reduce((s, x) => s + (x.estado === 'desfalque' ? alvo(x, k) : 0), 0) : alvo(r, k)]));
     const soma = r.partes.reduce((s, p) => s + p.cotaKg, 0);

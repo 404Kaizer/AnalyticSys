@@ -40,8 +40,9 @@ const AC = {
   maes: [], filhas: [], porForn: new Map(),
   cenIdx: null, cenIdxRef: null, cenIdxLen: -1,
   sel: '', grp: '', aba: null, paba: 'maes', abertas: new Set(), listaRecolhida: false,
+  geo: new Map(), geoBuscando: new Set(), geoErro: new Map(),   // ficha do fornecedor: endereço do CNPJ (custos_geo)
   fAberto: null, fPend: null, fBusca: '', evo: 't', evoNotas: [],
-  F: { q: '', regs: new Set(), cens: new Set(), mats: new Set(), grupo: 'fornecedor' },
+  F: { q: '', regs: new Set(), cens: new Set(), mats: new Set(), grupo: 'regional' },
 };
 
 /* ───────── formatação ───────── */
@@ -90,7 +91,7 @@ async function _acCarregar() {
   // Uma consulta por CFOP (contains no jsonb dos itens); a NF com item de mãe e de filha conta como mãe.
   const porChave = new Map();
   const lotes = await Promise.all([...AC.cfop.keys()].map(cfop =>
-    _acFetchAll('cob_sefaz', 'chave, cnpj_emitente, nome, numero, serie, emissao, status, itens', 'chave', q => q.contains('itens', JSON.stringify([{ cfop }])))));   // string: array vira literal de array do Postgres, não JSON
+    _acFetchAll('cob_sefaz', 'chave, cnpj_emitente, nome, numero, serie, emissao, status, itens, municipio, uf, transportador', 'chave', q => q.contains('itens', JSON.stringify([{ cfop }])))));   // string: array vira literal de array do Postgres, não JSON
   lotes.flat().forEach(s => porChave.set(s.chave, s));
   AC.nfs = [...porChave.values()];
   AC.cenIdx = null;
@@ -235,6 +236,7 @@ function _acMontar() {
       valor: itens.reduce((t, i) => t + (Number(i.valor_total) || 0), 0),
       materiais: [...new Set(itens.map(i => i.material).filter(Boolean))],
       mats: _acMats(itens, chavesDe, idx.mat.get(s.chave) || idx.mat.get(s.cnpj_emitente + '|' + s.numero)),
+      municipio: s.municipio || '', uf: s.uf || '', transp: s.transportador || '',
       central: idx.porCh.get(s.chave) || idx.porNf.get(s.cnpj_emitente + '|' + s.numero) || '',
     };
   };
@@ -440,45 +442,81 @@ function _acOrdemForn(a, b) {
   return (gb?.maes.length ? 1 : 0) - (ga?.maes.length ? 1 : 0) || (gb?.pendR || 0) - (ga?.pendR || 0)
     || (gb?.semVinc.length || 0) - (ga?.semVinc.length || 0) || String(a.nome).localeCompare(String(b.nome), 'pt-BR');
 }
-// Cor do ícone: vermelho = filhas sem vínculo; âmbar = saldo restante; verde = em dia; cinza = sem nota mãe.
-function _acIco(sv, pend, tem) {
-  const [ic, cor] = !tem ? ['ti-minus', 'var(--text3)'] : sv ? ['ti-link-off', 'var(--red)'] : pend > 0 ? ['ti-hourglass', 'var(--amber)'] : ['ti-circle-check', 'var(--green)'];
-  return `<i class="ti ${ic} mp-ico" style="color:${cor}" aria-hidden="true"></i>`;
+// Lista no padrão das Operações (mural-painel.js, Hugo 26/11/2026): Regional →
+// Central → fornecedor em blocos que abrem; cada linha com ícone de situação,
+// subtítulo, saldo restante à direita e um selo embaixo. Os números de cada linha
+// são do recorte dela (o fornecedor dentro de uma central mostra só as notas dali).
+const _acNoRecorte = (n, rec) => !rec || rec(n);
+function _acSit(maes, sv) {
+  const aut = maes.filter(m => m.status === 'autorizada');
+  const tot = aut.reduce((t, m) => t + m.peso, 0), pen = aut.reduce((t, m) => t + m.pendT, 0), penR = aut.reduce((t, m) => t + m.pendR, 0);
+  const [ic, cor] = !maes.length && !sv ? ['ti-minus', 'var(--text3)'] : sv ? ['ti-link-off', 'var(--red)'] : pen > 0.001 ? ['ti-hourglass', 'var(--amber)'] : ['ti-circle-check', 'var(--green)'];
+  const selo = sv ? [`${_acNf0.format(sv)} sem vínculo`, '#f43f5e'] : pen > 0.001 ? [`Restante ${_acNf0.format(tot ? pen / tot * 100 : 0)}%`, '#f59e0b'] : maes.length ? ['Zerado', '#10b981'] : null;
+  return { pen, penR, ico: `<i class="ti ${ic} mp-ico" style="color:${cor}" aria-hidden="true"></i>`, selo: selo ? `<span class="mp-prio ac-selo" style="--c:${selo[1]}">${selo[0]}</span>` : '' };
 }
-function _acLinhaForn(f, recuo) {
-  const g = AC.porForn.get(f.cnpj), maes = _acMaesDe(f.cnpj), sv = g?.semVinc.length || 0;
-  const sub = [_acCnpjFmt(f.cnpj), maes.length ? `${maes.length} nota${maes.length > 1 ? 's' : ''} mãe` : ''].filter(Boolean).join(' · ');
-  const sel = AC.sel === f.cnpj;
+function _acLinhaForn(f, recuo, rec) {
+  const g = AC.porForn.get(f.cnpj);
+  const maes = _acMaesDe(f.cnpj).filter(m => _acNoRecorte(m, rec)), sv = (g?.semVinc || []).filter(s => _acNoRecorte(s, rec)).length;
+  const s = _acSit(maes, sv), sel = AC.sel === f.cnpj;
+  const sub = maes.length ? `${_acNf0.format(maes.length)} nota${maes.length > 1 ? 's' : ''} mãe${maes.length > 1 ? 's' : ''} · ${_acCnpjFmt(f.cnpj)}` : _acCnpjFmt(f.cnpj);
   return `<button class="mp-row mp-item ${recuo}${sel ? ' sel' : AC.sel ? ' apagado' : ''}" onclick="acSel('${f.cnpj}')">
-    ${_acIco(sv, g?.pendT, maes.length || sv)}<span class="mp-nome"><b title="${_acE(f.nome)}">${_acE(f.nome)}</b><small>${sub}${sv ? ` · <span style="color:var(--red)">${sv} sem vínculo</span>` : ''}</small></span>
-    <span class="mp-dir"><span class="mp-v">${g?.pendT ? _acT(g.pendT) : '—'}</span>${g?.pendR ? `<span class="mo-hint mono" style="font-size:11.5px">${_acR(g.pendR)}</span>` : ''}</span></button>`;
+    ${s.ico}<span class="mp-nome"><b title="${_acE(f.nome)}">${_acE(f.nome)}</b><small>${sub}</small></span>
+    <span class="mp-dir"><span class="mp-v">${s.pen > 0.001 ? _acT(s.pen) : '—'}</span>${s.selo}</span></button>`;
 }
+// Linha de grupo (regional, central ou material): mesmos números, somados.
+function _acLinhaGrupo(nivel, k, fs, rec, aberta, sel, apagado, sub, onclick) {
+  const maes = fs.flatMap(f => _acMaesDe(f.cnpj).filter(m => _acNoRecorte(m, rec)));
+  const sv = fs.reduce((t, f) => t + (AC.porForn.get(f.cnpj)?.semVinc || []).filter(s => _acNoRecorte(s, rec)).length, 0);
+  const s = _acSit(maes, sv);
+  return `<button class="mp-row ${nivel}${sel ? ' sel' : apagado ? ' apagado' : ''}" onclick="${onclick}" data-k="${_acE(k)}">
+    <i class="ti ti-chevron-${aberta ? 'down' : 'right'} mp-chev"></i>${s.ico}
+    <span class="mp-nome"><b>${_acE(k)}</b><small>${sub}${sv ? ` · <span style="color:var(--red)">${_acNf0.format(sv)} sem vínculo</span>` : ''}</small></span>
+    <span class="mp-v">${s.pen > 0.001 ? _acT(s.pen) : '—'}</span></button>`;
+}
+const _acQtdF = n => `${_acNf0.format(n)} fornecedor${n === 1 ? '' : 'es'}`;
 function _acListaHtml() {
   const forns = _acFornDaAba();
   if (AC.listaRecolhida) {
     return `<section class="mp-lista recolhida"><button class="mp-lista-abrir" onclick="acLista()" title="Mostrar a lista" aria-expanded="false">
       <i class="ti ti-layout-sidebar-left-expand"></i><span>Fornecedores · ${forns.length}</span></button></section>`;
   }
-  let linhas;
-  if (AC.F.grupo === 'fornecedor') linhas = forns.map(f => _acLinhaForn(f, 'mp-item-1')).join('');
+  // Agrupa fornecedores por uma chave das notas (o fornecedor entra em cada grupo onde tem nota).
+  const agrupa = (fs, chave, rec) => {
+    const m = new Map();
+    fs.forEach(f => new Set([..._acMaesDe(f.cnpj), ...(AC.porForn.get(f.cnpj)?.semVinc || [])].filter(n => _acNoRecorte(n, rec)).flatMap(chave))
+      .forEach(k => (m.get(k) || m.set(k, []).get(k)).push(f)));
+    const peso = (k, l) => _acSit(l.flatMap(f => _acMaesDe(f.cnpj).filter(x => _acNoRecorte(x, rec) && chave(x).includes(k))), 0).pen;
+    return [...m.entries()].map(([k, l]) => [k, l.sort(_acOrdemForn), peso(k, l)]).sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0], 'pt-BR'));
+  };
+  const sem = forns.filter(f => !_acMaesDe(f.cnpj).length && !(AC.porForn.get(f.cnpj)?.semVinc.length));
+  const com = forns.filter(f => !sem.includes(f));
+  const G = AC.F.grupo, chave = _acGrupoDe[G];
+  let linhas = '';
+  if (G === 'fornecedor') linhas = forns.map(f => _acLinhaForn(f, 'mp-item-1')).join('');
   else {
-    // O fornecedor aparece em cada grupo onde tem nota mãe; sem nota mãe vai para o fim.
-    const chave = _acGrupoDe[AC.F.grupo], grupos = new Map(), sem = [];
-    forns.forEach(f => {
-      const maes = _acMaesDe(f.cnpj);
-      if (!maes.length) { sem.push(f); return; }
-      new Set(maes.flatMap(chave)).forEach(k => (grupos.get(k) || grupos.set(k, []).get(k)).push(f));
-    });
-    const pendDe = (k, fs) => fs.reduce((t, f) => t + _acMaesDe(f.cnpj).filter(m => m.status === 'autorizada' && chave(m).includes(k)).reduce((a, m) => a + m.pendT, 0), 0);
-    const blocos = [...grupos.entries()].map(([k, fs]) => [k, fs, pendDe(k, fs)]).sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0], 'pt-BR'));
-    if (sem.length) blocos.push(['Sem nota mãe', sem, 0]);
-    linhas = blocos.map(([k, fs, p]) => {
-      const aberta = AC.grp === k, sv = fs.reduce((t, f) => t + (AC.porForn.get(f.cnpj)?.semVinc.length || 0), 0);
-      return `<div class="mp-bloco${aberta ? ' aberto' : ''}"><button class="mp-row mp-reg${aberta && !AC.sel ? ' sel' : (AC.grp && !aberta) ? ' apagado' : ''}" onclick="acGrp(this.dataset.k)" data-k="${_acE(k)}">
-        <i class="ti ti-chevron-${aberta ? 'down' : 'right'} mp-chev"></i>${_acIco(sv, p, k !== 'Sem nota mãe')}
-        <span class="mp-nome"><b>${_acE(k)}</b><small>${fs.length} fornecedor${fs.length > 1 ? 'es' : ''}${sv ? ` · <span style="color:var(--red)">${sv} sem vínculo</span>` : ''}</small></span>
-        <span class="mp-v">${p ? _acT(p) : '—'}</span></button>${aberta ? fs.map(f => _acLinhaForn(f, 'mp-item-1')).join('') : ''}</div>`;
+    linhas = agrupa(com, chave).map(([k, fs]) => {
+      const rec = n => chave(n).includes(k), aberta = AC.grp === k;
+      const tem = !!AC.grp;
+      if (G !== 'regional') {
+        return `<div class="mp-bloco${aberta ? ' aberto' : ''}">${_acLinhaGrupo('mp-reg', k, fs, rec, aberta, aberta && !AC.sel, tem && !aberta, _acQtdF(fs.length), 'acGrp(this.dataset.k)')}`
+          + (aberta ? fs.map(f => _acLinhaForn(f, 'mp-item-1', rec)).join('') : '') + '</div>';
+      }
+      // Regional → central → fornecedor (dois níveis, como Regional → Central → item nas Operações).
+      const cens = agrupa(fs, n => [n.central || 'Sem central'], rec);
+      let h = `<div class="mp-bloco${aberta ? ' aberto' : ''}">` + _acLinhaGrupo('mp-reg', k, fs, rec, aberta, aberta && !AC.sub && !AC.sel, tem && !aberta,
+        `${_acNf0.format(cens.length)} centra${cens.length === 1 ? 'l' : 'is'} · ${_acQtdF(fs.length)}`, 'acGrp(this.dataset.k)');
+      if (aberta) cens.forEach(([c, cfs]) => {
+        const rc = n => rec(n) && (n.central || 'Sem central') === c, cab = AC.sub === c;
+        h += `<div class="mp-sub${cab ? ' aberto' : ''}">` + _acLinhaGrupo('mp-cen', c, cfs, rc, cab, cab && !AC.sel, !!AC.sub && !cab, _acQtdF(cfs.length), 'acSub(this.dataset.k)')
+          + (cab ? cfs.map(f => _acLinhaForn(f, '', rc)).join('') : '') + '</div>';
+      });
+      return h + '</div>';
     }).join('');
+    if (sem.length) {
+      const aberta = AC.grp === 'Sem nota mãe';
+      linhas += `<div class="mp-bloco${aberta ? ' aberto' : ''}">${_acLinhaGrupo('mp-reg', 'Sem nota mãe', sem, null, aberta, aberta && !AC.sel, !!AC.grp && !aberta, `${_acQtdF(sem.length)} sem notas de entrega futura`, 'acGrp(this.dataset.k)')}`
+        + (aberta ? sem.map(f => _acLinhaForn(f, 'mp-item-1')).join('') : '') + '</div>';
+    }
   }
   const contaAba = k => [...AC.forn.values()].filter(f => (f.modalidade || '') === k && (!_acTemFiltro() || _acMaesDe(f.cnpj).length)).length;
   return `<section class="mp-lista">
@@ -624,18 +662,19 @@ function _acPainelHtml() {
   if (f) return _acPainelForn(f);
   // Geral (ou o grupo aberto): resumo das notas mães dos fornecedores da aba.
   const forns = _acFornDaAba(true);
-  const doGrupo = m => !AC.grp || AC.F.grupo === 'fornecedor' || _acGrupoDe[AC.F.grupo](m).includes(AC.grp);
+  const doGrupo = m => (!AC.grp || AC.F.grupo === 'fornecedor' || AC.grp === 'Sem nota mãe' || _acGrupoDe[AC.F.grupo](m).includes(AC.grp)) && (!AC.sub || (m.central || 'Sem central') === AC.sub);
   const maes = forns.flatMap(x => _acMaesDe(x.cnpj)).filter(doGrupo);
   const aut = maes.filter(m => m.status === 'autorizada');
   const soma = k => aut.reduce((t, m) => t + m[k], 0);
   const sv = forns.reduce((t, x) => t + (AC.porForn.get(x.cnpj)?.semVinc.length || 0), 0);
   const rot = AC_ABAS.find(a => a[0] === AC.aba)[2];
   const mig = [AC.grp ? `<button class="mo-link" onclick="acGrp('')">Geral</button>` : '<span>Geral</span>'];
-  if (AC.grp) mig.push(`<span>${AC_GRUPOS[AC.F.grupo]}</span>`);
+  if (AC.grp) mig.push(AC.sub ? `<button class="mo-link" onclick="acSub('')">${_acE(AC.grp)}</button>` : `<span>${AC_GRUPOS[AC.F.grupo]}</span>`);
+  if (AC.sub) mig.push('<span>Central</span>');
   const top = forns.map(x => [x, AC.porForn.get(x.cnpj)]).filter(([, g]) => g?.pendT > 0).sort((a, b) => b[1].pendR - a[1].pendR).slice(0, 8);
   const maxR = top[0]?.[1].pendR || 1;
   const semV = forns.map(x => [x, AC.porForn.get(x.cnpj)?.semVinc.length || 0]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  return _acCab(mig, _acE(AC.grp || 'Acordos · ' + rot), `${forns.length} fornecedor${forns.length === 1 ? '' : 'es'} nesta aba · ${AC.maes.length} notas mães e ${AC.filhas.length} filhas no SEFAZ importado`, soma('pendT'), soma('pendR'))
+  return _acCab(mig, _acE(AC.sub || AC.grp || 'Acordos · ' + rot), `${forns.length} fornecedor${forns.length === 1 ? '' : 'es'} nesta aba · ${AC.maes.length} notas mães e ${AC.filhas.length} filhas no SEFAZ importado`, soma('pendT'), soma('pendR'))
     + (AC.cfop.size ? '' : '<div class="mp-card"><p class="mo-hint">Nenhum CFOP marcado como nota mãe/filha (Configurações → CFOP → Acordo).</p></div>')
     + `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(aut, maes)}</span></h4>${_acCardsSaldo(aut)}${_acGraficos(aut)}</div>
     <div class="mp-dois">
@@ -667,7 +706,77 @@ function _acPainelForn(f) {
         `<button class="mo-aba${AC.paba === k ? ' on' : ''}" role="tab" aria-selected="${AC.paba === k}" onclick="acPaba('${k}')"><i class="ti ${ic}"${cor ? ` style="color:${cor}"` : ''}></i>${rot} <b${cor ? ` style="color:${cor}"` : ''}>${n}</b></button>`).join('')}</div>
       <div class="ac-maes">${AC.paba === 'semvinc' ? _acAlertaSemVinc(f, g) : _acCardsMaes(maes)}</div>`;
   }
-  return _acCab(mig, _acE(f.nome), _acCnpjFmt(f.cnpj), ehMae ? soma('pendT') : 0, ehMae ? soma('pendR') : 0) + mod + corpo;
+  return _acCab(mig, _acE(f.nome), _acCnpjFmt(f.cnpj), ehMae ? soma('pendT') : 0, ehMae ? soma('pendR') : 0) + mod + _acFicha(f, g) + corpo;
+}
+
+/* ───────── ficha do fornecedor (Hugo, 26/11/2026) ───────── */
+// Só leitura. Endereço do CNPJ: o cadastro da aba Custos (custos_geo); faltando,
+// busca na BrasilAPI pela mesma rotina dela (_cuGeoUm, custos.js) e grava lá.
+// O resto vem de TODAS as notas do fornecedor no SEFAZ importado (sem os filtros
+// da tela): quantidade, período, centrais, materiais e transportadoras.
+const AC_FI_TOP = 5;
+function _acFicha(f, g) {
+  const nfs = [...g.maes, ...g.filhas, ...g.semVinc];
+  const conta = (lista, chave) => { const c = new Map(); lista.forEach(x => { const k = chave(x); if (k) c.set(k, (c.get(k) || 0) + 1); }); return [...c.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), 'pt-BR')); };
+  const lista = (ic, tit, pares, vazio) => {
+    const max = pares[0]?.[1] || 1, resto = pares.slice(AC_FI_TOP);
+    return `<div class="ac-fi-l"><div class="ac-fi-lt"><i class="ti ${ic}"></i>${tit}<b>${_acNf0.format(pares.length)}</b></div>${pares.length
+      ? pares.slice(0, AC_FI_TOP).map(([k, n]) => `<div class="ac-fi-li" title="${_acE(k)} · ${_acNf0.format(n)} nota${n === 1 ? '' : 's'}"><span>${_acE(k)}</span><b>${_acNf0.format(n)}</b><i style="width:${(n / max * 100).toFixed(1)}%"></i></div>`).join('')
+        + (resto.length ? `<div class="ac-fi-resto" title="${_acE(resto.map(([k, n]) => `${k} (${n})`).join(', '))}">+ ${resto.length} outra${resto.length === 1 ? '' : 's'}</div>` : '')
+      : `<p class="mo-hint">${vazio}</p>`}</div>`;
+  };
+  const datas = nfs.map(n => n.emissao).filter(Boolean);
+  const nFilhas = g.filhas.length + g.semVinc.length;
+  const geo = AC.geo.get(f.cnpj);
+  if (geo === undefined || (geo === null && Date.now() - (AC.geoErro.get(f.cnpj) || Infinity) > 60000)) { AC.geo.delete(f.cnpj); _acGeoBuscar(f.cnpj, f.nome); }
+  const temEnd = geo && (geo.logradouro || geo.municipio);
+  const mun = conta(nfs, n => n.municipio ? n.municipio + (n.uf ? ' – ' + n.uf : '') : '')[0]?.[0];
+  const cep = c => String(c).replace(/^(\d{5})(\d{3})$/, '$1‑$2');
+  const end = temEnd
+    ? `<b>${_acE([geo.logradouro, geo.numero].filter(Boolean).join(', ') || [geo.municipio, geo.uf].filter(Boolean).join(' – '))}</b>
+       <small>${_acE([geo.bairro, geo.logradouro ? [geo.municipio, geo.uf].filter(Boolean).join(' – ') : '', geo.cep ? 'CEP ' + cep(geo.cep) : ''].filter(Boolean).join(' · '))}</small>`
+    : `<b>${_acE(mun || 'Endereço não encontrado')}</b><small>${geo === undefined ? '<i class="ti ti-loader-2 ac-gira"></i> buscando o endereço do CNPJ…'
+        : AC.geoErro.has(f.cnpj) ? 'a consulta do CNPJ não respondeu agora — tenta de novo ao reabrir o fornecedor'
+        : mun ? 'município das notas no SEFAZ — o CNPJ não tem endereço na Receita' : 'o CNPJ não tem endereço na Receita'}</small>`;
+  return `<div class="mp-card" id="ac-ficha"><h4 class="mp-tit">Ficha do fornecedor <span class="mo-hint">todas as notas no SEFAZ importado</span></h4>
+    <div class="ac-fi-topo">
+      <div class="ac-fi-end"><i class="ti ti-map-pin"></i><div>${end}</div></div>
+      <div class="ac-fi-n"><b>${_acNf0.format(g.maes.length)}</b><span>nota${g.maes.length === 1 ? '' : 's'} mãe${g.maes.length === 1 ? '' : 's'}</span></div>
+      <div class="ac-fi-n"><b>${_acNf0.format(nFilhas)}</b><span>nota${nFilhas === 1 ? '' : 's'} filha${nFilhas === 1 ? '' : 's'}${g.semVinc.length ? ` · <em>${_acNf0.format(g.semVinc.length)} sem vínculo</em>` : ''}</span></div>
+      <div class="ac-fi-n"><b>${datas.length ? `${_acData(Math.min(...datas))} <span class="ac-fi-seta">→</span> ${_acData(Math.max(...datas))}` : '—'}</b><span>primeira e última nota</span></div>
+    </div>
+    <div class="ac-fi-listas">
+      ${lista('ti-building-factory-2', 'Centrais atendidas', conta(nfs, n => n.central), 'nenhuma central nas Entradas')}
+      ${lista('ti-box', 'Materiais', conta(nfs.flatMap(n => n.materiais.map(m => ({ m }))), x => x.m), 'sem material nas notas')}
+      ${lista('ti-truck', 'Transportadoras', conta(nfs, n => n.transp), 'não informada no SEFAZ')}
+    </div></div>`;
+}
+// Endereço do CNPJ em AC.geo (undefined = buscando; null = sem endereço).
+async function _acGeoBuscar(cnpj, nome) {
+  if (AC.geoBuscando.has(cnpj)) return;
+  AC.geoBuscando.add(cnpj);
+  let g = null;
+  try {
+    const { data } = await window.supabaseClient.from('custos_geo').select('logradouro, numero, bairro, cep, municipio, uf, precisao, atualizado_em').eq('cnpj', cnpj).maybeSingle();
+    g = data || null;
+    // Sem cadastro (ou "não achou" de mais de 30 dias): consulta a Receita pela rotina da aba Custos.
+    const velho = g && !g.logradouro && !g.municipio && Date.now() - Date.parse(g.atualizado_em) > 30 * 864e5;
+    if ((!g || velho) && typeof _cuGeoUm === 'function') {
+      const row = await _cuGeoUm({ cnpj, tipo: 'fornecedor', nome });
+      if (!row) AC.geoErro.set(cnpj, Date.now());   // BrasilAPI fora/limitando: não grava nada
+      else {
+        AC.geoErro.delete(cnpj);
+        g = row;
+        const { error } = await window.supabaseClient.from('custos_geo').upsert(row, { onConflict: 'cnpj' });
+        if (error) console.warn('[Acordos] custos_geo:', error.message);
+        if (typeof CU !== 'undefined' && CU.geo) CU.geo.set(cnpj, row);   // a aba Custos já aberta vê o endereço novo
+      }
+    }
+  } catch (e) { console.warn('[Acordos] endereço do CNPJ:', e); AC.geoErro.set(cnpj, Date.now()); }
+  AC.geoBuscando.delete(cnpj);
+  AC.geo.set(cnpj, g);
+  const el = document.getElementById('ac-ficha');
+  if (el && AC.sel === cnpj) { const g2 = AC.porForn.get(cnpj), f = AC.forn.get(cnpj); if (g2 && f) el.outerHTML = _acFicha(f, g2); }
 }
 
 /* ───────── cards no padrão da Visão Micro (expande, recolhe, foco) ───────── */
@@ -812,9 +921,10 @@ function _acCurva(m) {
 
 /* ───────── ações de tela ───────── */
 function acSel(cnpj) { AC.sel = AC.sel === cnpj ? '' : cnpj; AC.paba = 'maes'; AC.abertas.clear(); _acDesenhar(); }
-function acGrp(k) { AC.grp = AC.grp === k ? '' : k; AC.sel = ''; _acDesenhar(); }
-function acGrupo(g) { AC.F.grupo = g; AC.grp = ''; _acDesenhar(); }
-function acAba(k) { AC.aba = k; AC.sel = ''; AC.grp = ''; _acDesenhar(); }
+function acGrp(k) { AC.grp = AC.grp === k ? '' : k; AC.sub = ''; AC.sel = ''; _acDesenhar(); }
+function acSub(k) { AC.sub = AC.sub === k ? '' : k; AC.sel = ''; _acDesenhar(); }
+function acGrupo(g) { AC.F.grupo = g; AC.grp = ''; AC.sub = ''; _acDesenhar(); }
+function acAba(k) { AC.aba = k; AC.sel = ''; AC.grp = ''; AC.sub = ''; _acDesenhar(); }
 function acPaba(k) { AC.paba = k; _acDesenhar(); }
 let _acBuscaT = null;
 // Só a lista muda: o painel resume a aba e os filtros, não o texto da busca.
@@ -1001,6 +1111,6 @@ function _acRealtime() {
     }).subscribe();
 }
 
-Object.assign(window, { acordosRender, acSel, acGrp, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acCopiar, acDesvincular });
+Object.assign(window, { acordosRender, acSel, acGrp, acSub, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acCopiar, acDesvincular });
 // Lista recolhida: lembrada neste navegador.
 try { AC.listaRecolhida = localStorage.getItem('acordos.listaRecolhida') === '1'; } catch (_) { /* sem storage */ }

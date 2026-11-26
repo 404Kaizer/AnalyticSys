@@ -343,12 +343,32 @@ function _rpFiltrosHtml() {
 /* ───────── lista (mesma das Operações, mural-painel.js) ───────── */
 // Folha = fornecedor × central × material × mês. A aba decide quais folhas
 // aparecem; o número do grupo é sempre o total dele.
+// Fornecedores de um item travado: os que têm NF identificada no item e os donos
+// das NFs achadas em outro material/central (repExplicarSemForn).
+const RP_SEM = '_sem';
+function _rpFornTrav(r) {
+  const m = new Map();
+  r.partes.forEach(p => { if (p.tipo === 'forn') m.set(p.k, p.nome); });
+  r.motivos.forEach(x => (x.forns || []).forEach(f => { if (!m.has(f.k)) m.set(f.k, f.nome); }));
+  return [...m].map(([k, nome]) => ({ k, nome }));
+}
+// Motivos com o mesmo texto (fora o nº da NF) viram uma linha só: "NFs 6896, 6907… de X estão…".
+function _rpMotivosTxt(ms) {
+  const g = new Map();
+  ms.forEach(m => { const k = m.fim ? m.c + '|' + m.quem + '|' + m.fim : m.c === 'sem_forn' ? m.c : m.t; (g.get(k) || g.set(k, []).get(k)).push(m); });
+  return [...g.values()].map(l => {
+    const m = l[0], n = l.length, nfs = l.map(x => x.nf), lst = nfs.slice(0, 6).join(', ') + (n > 6 ? ` e mais ${n - 6}` : '');
+    if (m.fim) return `${n > 1 ? 'NFs' : 'NF'} ${lst} de ${m.quem} ${n > 1 ? 'estão' : 'está'} ${m.fim}`;
+    if (m.c === 'sem_forn') return `${n > 1 ? 'NFs' : 'NF'} ${lst} ${n > 1 ? 'estão' : 'está'} no SAP e não ${n > 1 ? 'foram achadas' : 'foi achada'} nas Entradas com nenhum fornecedor`;
+    return m.t;
+  });
+}
 function _rpFolhas(itens) {
   const out = [];
   itens.forEach(r => {
     const b = { r, reg: r.par.regional, cen: r.par.central, mat: r.par.material, ym: r.par.ym, key: _rpKey(r) };
     if (r.estado === 'desfalque') r.partes.forEach(p => { if (p.tipo === 'forn' && p.cotaKg) { const n = _rpNeg(p.k, r.par.ym); out.push({ ...b, forn: p.k, nome: p.nome, kg: p.cotaKg, v: p.valor, st: n?.status || '', n }); } });
-    else if (r.estado === 'bloqueado') { const fs = r.partes.filter(p => p.tipo === 'forn'); (fs.length ? fs : [{ k: '', nome: 'Sem fornecedor identificado' }]).forEach((p, i) => out.push({ ...b, forn: p.k, nome: p.nome, kg: 0, v: 0, st: 'trav', i })); }
+    else if (r.estado === 'bloqueado') { const fs = _rpFornTrav(r); (fs.length ? fs : [{ k: RP_SEM, nome: 'Sem fornecedor identificado' }]).forEach((p, i) => out.push({ ...b, forn: p.k, nome: p.nome, kg: 0, v: 0, st: 'trav', i })); }
   });
   return out;
 }
@@ -370,7 +390,7 @@ function _rpListaHtml(itens) {
     const tit = vv === 'fornecedor' ? `${x.cen} · ${x.mat}` : tr ? (vv === 'material' ? x.cen : x.mat) : x.nome, sub = vv === 'fornecedor' ? x.reg : tr ? '' : vv === 'material' ? x.cen : x.mat;
     const pz = x.n?.dados?.prazo && (x.st === 'acordada' || x.st === 'negociando') ? ' · prazo ' + _rpData(x.n.dados.prazo).slice(0, 5) : '';
     const pre = [sub, RP.mes.length > 1 ? _rpMesC(x.ym) : ''].filter(Boolean).map(_rpE).join(' · ');
-    return `<button class="mp-row mp-item ${recuo}${eu ? ' sel' : noItem ? ' apagado' : ''}" ${_rpNoAttr({ tipo: 'item', via: v, reg: x.reg, cen: x.cen, mat: x.mat, forn: tr && vv !== 'fornecedor' ? '' : x.forn, key: x.key, ym: x.ym })}>${ponto(x.st)}<span class="mp-nome"><b title="${_rpE(tit)}">${_rpE(tit)}</b><small>${pre}${pre ? ' · ' : ''}<span style="color:${RP_ST[x.st][1]}">${tr ? _rpE(x.r.motivos[0].t) : RP_ST[x.st][0] + pz}</span></small></span>${tr ? val(x.r.desfalqueKg ? _rpT(x.r.desfalqueKg) : '—', 'em dúvida') : val(_rpT(x.kg), _rpR(x.v))}</button>`;
+    return `<button class="mp-row mp-item ${recuo}${eu ? ' sel' : noItem ? ' apagado' : ''}" ${_rpNoAttr({ tipo: 'item', via: v, reg: x.reg, cen: x.cen, mat: x.mat, forn: tr && vv !== 'fornecedor' ? '' : x.forn, key: x.key, ym: x.ym })}>${ponto(x.st)}<span class="mp-nome"><b title="${_rpE(tit)}">${_rpE(tit)}</b><small>${pre}${pre ? ' · ' : ''}<span style="color:${RP_ST[x.st][1]}">${tr ? _rpE(_rpMotivosTxt(x.r.motivos)[0]) : RP_ST[x.st][0] + pz}</span></small></span>${tr ? val(x.r.desfalqueKg ? _rpT(x.r.desfalqueKg) : '—', 'em dúvida') : val(_rpT(x.kg), _rpR(x.v))}</button>`;
   };
   const folhas = (ps, recuo, v) => unicos(ps).sort((a, b) => b.v - a.v || b.r.desfalqueKg - a.r.desfalqueKg).map(x => folha(x, recuo, v)).join('');
   const grupo = (alvo, tit, sub, gTodos, ab, sel, apag, recuo) => { const [kg, v] = soma(gTodos), st = RP_ORD.find(s => gTodos.some(x => x.st === s)) ?? ''; return `<button class="mp-row ${recuo}${sel ? ' sel' : apag ? ' apagado' : ''}" aria-expanded="${ab}" ${_rpNoAttr(alvo)}><i class="ti ti-chevron-${ab ? 'down' : 'right'} mp-chev"></i>${ponto(st)}<span class="mp-nome"><b title="${_rpE(tit)}">${_rpE(tit)}</b><small>${_rpE(sub)}</small></span>${val(_rpT(kg), _rpR(v))}</button>`; };
@@ -415,7 +435,7 @@ function _rpMigas() {
   }
   return p.join('<span>›</span>');
 }
-function _rpNome(k) { for (const l of RP.res.values()) for (const r of l) for (const p of r.partes) if (p.k === k) return p.nome; return k; }
+function _rpNome(k) { if (k === RP_SEM) return 'Sem fornecedor identificado'; for (const l of RP.res.values()) for (const r of l) { for (const p of r.partes) if (p.k === k) return p.nome; for (const x of r.motivos) for (const f of x.forns || []) if (f.k === k) return f.nome; } return k; }
 const _rpKpi = (rot, cor, b, s, small, attr) => `<${attr ? 'button' : 'div'} class="rp-kpi" ${cor ? `style="--c:${cor}"` : ''} ${attr || ''}><span class="rp-kpi-r">${cor ? '<i></i>' : ''}${rot}</span><b>${b}</b>${s ? `<span class="rp-kpi-s">${s}</span>` : ''}${small ? `<small>${small}</small>` : ''}</${attr ? 'button' : 'div'}>`;
 
 function _rpGeral(itens) {
@@ -481,7 +501,7 @@ function _rpConta(r, eu) {
   const p = r.par, b = r.estado === 'bloqueado', L = (a, v, c = '') => `<div class="${c}"><span>${a}</span><span>${v}</span></div>`, ent = r.partes.filter(x => x.tipo === 'forn').reduce((s, x) => s + x.kg, 0), sem = r.partes.find(x => x.tipo === 'sem');
   let ci = 0;
   const cor = new Map(r.partes.map(x => [x.k, x.tipo === 'forn' ? RP_CORP[ci++ % RP_CORP.length] : x.tipo === 'ini' ? 'var(--rp-2)' : x.tipo === 'repos' ? 'var(--text2)' : 'var(--text3)'])), des = r.estado === 'desfalque' || (b && r.desfalqueKg > 0);
-  return `${r.motivos.map(m => _rpNota(`<b>Travado:</b> ${_rpE(m.t)}.`, 'var(--urgente)', 'ti-lock')).join('')}${r.motivos.length ? '<p class="mo-hint">Fica fora dos totais até ser corrigido na origem. Os números abaixo são só para conferência.</p>' : ''}${r.avisos.map(a => _rpNota(_rpE(a))).join('')}
+  return `${_rpMotivosTxt(r.motivos).map(t => _rpNota(`<b>Travado:</b> ${_rpE(t)}.`, 'var(--urgente)', 'ti-lock')).join('')}${r.motivos.length ? '<p class="mo-hint">Fica fora dos totais até ser corrigido na origem. Os números abaixo são só para conferência.</p>' : ''}${r.avisos.map(a => _rpNota(_rpE(a))).join('')}
   <div class="rp-conta"><div><h4>Passo 1 · Quanto faltou</h4><div class="rp-linhas">
     ${L(`Estoque inicial (livro SAP${p.ancora ? `, base ${p.ancora}` : ''})`, p.estIniKg == null ? 'ausente' : _rpT(p.estIniKg, 3))}${p.estIniFisKg != null ? L('<span class="mo-hint">contagem do fim do mês anterior</span>', `<span class="mo-hint">${_rpT(p.estIniFisKg, 3)}</span>`) : ''}${L('+ Entradas de fornecedores', _rpT(ent, 3))}${r.reposKg ? L('+ NF de reposição (saldo)', _rpT(r.reposKg, 3)) : ''}${r.passagemKg ? L('+ NF que só passa por aqui (destino em outra central)', _rpT(r.passagemKg, 3)) : ''}${sem ? L('+ Entradas sem fornecedor (transferências)', _rpT(sem.kg, 3)) : ''}${L('− Saídas (consumo, transferências enviadas)', _rpT(-r.saidasKg, 3))}
     ${L('= Teórico', _rpT(r.teoKg, 3), 'eq')}${L(`− Real (contagem${p.fimData ? ' de ' + p.fimData : ''})`, p.estFimKg == null ? 'ausente' : _rpT(p.estFimKg, 3))}${r.estado === 'sobra' ? L('= Sobra', _rpT(r.sobraKg, 3), 'eq') : L('= Desfalque', p.estFimKg == null || p.estIniKg == null ? '—' : _rpT(r.desfalqueKg, 3), 'des')}</div>
@@ -508,13 +528,83 @@ function _rpPainelItem(itens) {
   ${pe && r.estado === 'desfalque' ? `<div class="rp-kpis">${_rpKpi(_rpE(pe.nome), RP_COR.forn, _rpT(pe.cotaKg), _rpR(pe.valor), _rpP(pe.pct) + ' de participação')}${_rpKpi('Negociação de ' + _rpMesL(r.par.ym), '', RP_ST[_rpNeg(eu, r.par.ym)?.status || ''][0], '', `Vale para todas as centrais do fornecedor<br><button class="btn btn-sm" style="margin-top:8px" data-rp="fornMes" data-v="${eu}" data-ym="${r.par.ym}"><i class="ti ti-heart-handshake"></i> Ver negociação</button>`)}</div>` : ''}<div class="mp-card rp-espaco">${_rpConta(r, eu || '')}</div>`;
 }
 
+// Fornecedor sem nada negociável no período (só itens travados) ou o grupo "Sem
+// fornecedor identificado": painel só com os itens travados, para conferir.
+function _rpSoTravados(k, itens) {
+  const trav = itens.filter(r => r.estado === 'bloqueado' && (k === RP_SEM ? !_rpFornTrav(r).length : _rpFornTrav(r).some(p => p.k === k)));
+  if (!trav.length) return null;
+  const nome = k === RP_SEM ? 'Sem fornecedor identificado' : _rpFornTrav(trav[0]).find(p => p.k === k).nome;
+  return `<div class="mp-cab"><div style="min-width:0"><div class="mp-migalhas">${_rpMigas()}</div><h2>${_rpE(nome)}</h2><p class="mo-hint">${k === RP_SEM ? 'Itens travados em que nenhuma NF do SAP foi ligada a um fornecedor' : 'Raiz do CNPJ ' + k.replace(/^(..)(...)(...)$/, '$1.$2.$3')} · ${_rpPer()}</p></div><div class="mp-cab-num"><b>${_rpPlural(trav.length, 'item', 'itens')}</b><span class="mo-hint">travado${trav.length > 1 ? 's' : ''}</span></div></div>
+  ${_rpFicha(k)}
+  ${_rpNota(k === RP_SEM ? 'Corrija a origem (Entradas ou SAP) para que o item volte a ser negociável.' : 'Este fornecedor não tem nada negociável no período: todos os itens dele estão travados. Corrija a origem para que voltem à conta.', 'var(--accent)', 'ti-info-circle')}
+  ${trav.map(r => _rpItemCard(r, k === RP_SEM ? '' : k)).join('')}`;
+}
 function _rpForn(f, itens) {
-  const um = RP.mes.length === 1 ? RP.mes[0] : '', st = _rpStForn(f.k, RP.mes), base = f.itens.reduce((s, i) => s + i.r.desfalqueKg, 0), ord = [...f.itens].sort((a, b) => b.p.valor - a.p.valor), trav = itens.filter(r => r.estado === 'bloqueado' && r.partes.some(p => p.k === f.k));
+  const um = RP.mes.length === 1 ? RP.mes[0] : '', st = _rpStForn(f.k, RP.mes), base = f.itens.reduce((s, i) => s + i.r.desfalqueKg, 0), ord = [...f.itens].sort((a, b) => b.p.valor - a.p.valor), trav = itens.filter(r => r.estado === 'bloqueado' && _rpFornTrav(r).some(p => p.k === f.k));
   return `<div class="mp-cab"><div style="min-width:0"><div class="mp-migalhas">${_rpMigas()}</div><h2>${_rpE(f.nome)}</h2><p class="mo-hint">Raiz do CNPJ ${f.k.replace(/^(..)(...)(...)$/, '$1.$2.$3')} · ${_rpPer()}</p></div><div class="mp-cab-num">${um ? _rpSelo(RP_ST[st][0], RP_ST[st][1]) : ''}<b>${_rpT(f.kg)}</b><span class="mo-hint mono">${_rpR(f.valor)}</span></div></div>
   <div class="rp-kpis">${_rpKpi('Cota do fornecedor', RP_COR.forn, _rpT(f.kg), _rpR(f.valor), `${_rpPlural(f.itens.length, 'item', 'itens')} em ${_rpPlural(f.cens.size, 'central', 'centrais')}`)}${_rpKpi('Desfalque nesses itens', '', _rpT(base), _rpP1(f.kg / base * 100) + ' é dele', 'O resto é do estoque inicial e de outras origens')}${_rpKpi('Preço médio', '', 'R$ ' + _rpN[2].format(f.kg ? f.valor / f.kg * 1000 : 0), 'por tonelada', 'Ponderado pela cota, das NFs dele')}${_rpKpi('Sobra no período', '', _rpT(f.sobra), 'não compensa', 'Só para você saber se ele citar')}${_rpKpiCam(_rpCaminhoes([f]), `Média de ${_rpPlural(_rpMediaCam(f.k)?.n || 0, 'NF', 'NFs')} dele, arredondado para cima`)}</div>
+  ${_rpFicha(f.k)}
   <div class="rp-dois"><div class="mp-card"><h4 class="mp-tit">Cota por central e material</h4>${_rpGraf(_rpColunas(ord.slice(0, 8).map(({ r, p }) => ({ n: r.par.central + ' ' + r.par.material + (um ? '' : ' ' + _rpMesC(r.par.ym)), segs: [{ n: 'Cota', v: p.cotaKg, c: RP_COR.forn }], on: `data-rp="abreItem" data-v="${_rpE(r.par.ym + _rpKey(r))}"` })), 't'), 220)}</div><div class="mp-card"><h4 class="mp-tit">Mês a mês <span class="mo-hint">${_rpLeg([['Cota', 'var(--rp-1)'], ['Recuperado', 'var(--rp-3)']])}</span></h4>${_rpGraf(_rpHistFn(), 220, 'rp-hist')}</div></div>
   ${um ? _rpNegHtml(f, um) : `<div class="mp-card"><h4 class="mp-tit">Negociação</h4><p class="mo-hint">A negociação é por mês. Abra um mês:</p><div class="mp-chips">${RP.mes.filter(m => _rpFornDe(m, f.k).length).map(m => `<button class="mp-chip" data-rp="fornMes" data-v="${f.k}" data-ym="${m}">${_rpMesL(m)} · ${RP_ST[_rpNeg(f.k, m)?.status || ''][0]}</button>`).join('')}</div></div>`}
   <h4 class="mp-tit">A conta, item por item</h4>${ord.map(({ r }) => _rpItemCard(r, f.k)).join('')}${trav.length ? `<h4 class="mp-tit">Travados deste fornecedor</h4>${trav.map(r => _rpItemCard(r, f.k)).join('')}` : ''}`;
+}
+
+/* ───────── ficha do fornecedor ───────── */
+// Cadastro pela BrasilAPI (Receita Federal) — a mesma fonte do endereço na aba
+// Custos. CNPJ = o que mais aparece nas Entradas daquela raiz (as filiais ficam
+// listadas). O que vem da base (NFs, materiais, centrais) é do período escolhido.
+const RP_FICHA = new Map();   // cnpj → { st: 'carregando' | 'ok' | 'nao' | 'erro', d }
+const _rpCnpjFmt = c => String(c).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+function _rpCnpjsDaRaiz(raiz) {
+  const e = state.entradas || [];
+  if (RP.cnpjIdxRef !== e || RP.cnpjIdxLen !== e.length) {
+    RP.cnpjIdx = new Map(); RP.cnpjIdxRef = e; RP.cnpjIdxLen = e.length;
+    for (let i = 0; i < e.length; i++) {
+      const c = String(e[i].cnpjFornecedor || '');
+      if (c.length !== 14) continue;
+      const m = RP.cnpjIdx.get(c.slice(0, 8)) || RP.cnpjIdx.set(c.slice(0, 8), new Map()).get(c.slice(0, 8));
+      m.set(c, (m.get(c) || 0) + 1);
+    }
+  }
+  return [...(RP.cnpjIdx.get(raiz) || new Map())].sort((a, b) => b[1] - a[1]);
+}
+async function _rpFichaBuscar(cnpj) {
+  RP_FICHA.set(cnpj, { st: 'carregando' });
+  let r = null;
+  try { r = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + cnpj); } catch (_) { /* rede */ }
+  if (r && r.ok) RP_FICHA.set(cnpj, { st: 'ok', d: await r.json() });
+  else if (r && (r.status === 404 || r.status === 400)) RP_FICHA.set(cnpj, { st: 'nao' });
+  else {
+    // BrasilAPI fora: tenta o endereço já guardado pela aba Custos.
+    let g = null;
+    try { const { data } = await window.supabaseClient.from('custos_geo').select('*').eq('cnpj', cnpj).maybeSingle(); g = data; } catch (_) { /* sem tabela */ }
+    RP_FICHA.set(cnpj, g && g.municipio ? { st: 'ok', parcial: true, d: { nome_fantasia: g.nome, logradouro: g.logradouro, numero: g.numero, bairro: g.bairro, cep: g.cep, municipio: g.municipio, uf: g.uf } } : { st: 'erro' });
+  }
+  const el = document.querySelector(`#rp-root .rp-ficha[data-cnpj="${cnpj}"]`);
+  if (el) el.outerHTML = _rpFicha(el.dataset.raiz);
+}
+function _rpFicha(raiz) {
+  if (!raiz || raiz === RP_SEM) return '';
+  const cnpjs = _rpCnpjsDaRaiz(raiz), cnpj = cnpjs[0]?.[0];
+  // Da base, no período: NFs (distintas), peso, materiais e centrais em que ele entregou.
+  const nfs = new Set(), mats = new Set(), cens = new Set(); let kg = 0;
+  RP.mes.forEach(ym => _rpDoMes(ym).forEach(r => r.partes.forEach(p => { if (p.k !== raiz || !p.nfs.length) return; mats.add(r.par.material); cens.add(r.par.central); p.nfs.forEach(n => { nfs.add(ym + '|' + n.nf); kg += n.kg; }); })));
+  const L = (rot, v, cl = '') => v ? `<div class="${cl}"><span>${rot}</span><b>${v}</b></div>` : '';
+  const base = L('No período', nfs.size ? `${_rpPlural(nfs.size, 'NF', 'NFs')} · ${_rpT(kg)}` : 'sem NF identificada') + L('Materiais', _rpE([...mats].sort().join(', '))) + L(`${cens.size === 1 ? 'Central atendida' : 'Centrais atendidas'}`, _rpE([...cens].sort().join(', ')), 'rp-largo')
+    + L(cnpjs.length > 1 ? 'CNPJs nas Entradas' : 'CNPJ', cnpjs.map(([c, n]) => _rpCnpjFmt(c) + (cnpjs.length > 1 ? ` <small>(${_rpPlural(n, 'linha', 'linhas')})</small>` : '')).join('<br>'), cnpjs.length > 1 ? 'rp-largo' : '');
+  if (!cnpj) return `<div class="mp-card rp-ficha" data-raiz="${raiz}"><h4 class="mp-tit">Ficha do fornecedor <span class="mo-hint">sem CNPJ completo nas Entradas: reimporte as Entradas para trazer o cadastro</span></h4><div class="rp-dados">${base}</div></div>`;
+  const f = RP_FICHA.get(cnpj);
+  if (!f) setTimeout(() => _rpFichaBuscar(cnpj), 0);
+  const d = f?.d || {}, sit = d.descricao_situacao_cadastral, tel = [d.ddd_telefone_1, d.ddd_telefone_2].filter(Boolean).map(t => String(t).replace(/^(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3')).join(' · ');
+  const rua = [[d.descricao_tipo_de_logradouro, d.logradouro].filter(Boolean).join(' '), d.numero, d.complemento].filter(Boolean).join(', ') + (d.bairro ? ' – ' + d.bairro : '');
+  const cad = !f || f.st === 'carregando' ? '<div class="rp-largo"><span>Cadastro</span><b class="mo-hint">Buscando na Receita Federal…</b></div>'
+    : f.st === 'nao' ? '<div class="rp-largo"><span>Cadastro</span><b>CNPJ não encontrado na Receita Federal</b></div>'
+    : f.st === 'erro' ? `<div class="rp-largo"><span>Cadastro</span><b>Receita Federal sem resposta agora. <button class="mo-link" data-rp="fichaDeNovo" data-v="${cnpj}">Tentar de novo</button></b></div>`
+    : L('Razão social', _rpE(d.razao_social), 'rp-largo') + L('Nome fantasia', _rpE(d.nome_fantasia))
+      + L('Situação', sit ? `<span style="color:${/ATIVA/i.test(sit) ? 'var(--green)' : 'var(--red)'}">${_rpE(sit)}</span>` : '') + L('Abertura', d.data_inicio_atividade ? _rpData(d.data_inicio_atividade) : '')
+      + L('Município', d.municipio ? _rpE(d.municipio + (d.uf ? '/' + d.uf : '')) : '') + L('Endereço', _rpE(rua), 'rp-largo') + L('CEP', d.cep ? String(d.cep).replace(/\D/g, '').replace(/^(\d{5})(\d{3})$/, '$1-$2') : '')
+      + L('Telefone', _rpE(tel)) + L('E-mail', _rpE(String(d.email || '').toLowerCase())) + L('Atividade principal', _rpE(d.cnae_fiscal_descricao), 'rp-largo') + L('Porte', _rpE(d.porte || d.descricao_porte));
+  return `<div class="mp-card rp-ficha" data-raiz="${raiz}" data-cnpj="${cnpj}"><h4 class="mp-tit">Ficha do fornecedor <span class="mo-hint">${f?.parcial ? 'endereço guardado pela aba Custos (Receita Federal sem resposta)' : 'Receita Federal (BrasilAPI) · CNPJ ' + _rpCnpjFmt(cnpj)}</span></h4><div class="rp-dados">${cad}${base}</div></div>`;
 }
 
 /* ───────── negociação ───────── */
@@ -636,9 +726,10 @@ function _rpDesenhar() {
   }
   RP.desenhos = [];
   const itens = _rpItens(), f = RP.no.tipo === 'forn' ? _rpPorForn(itens).get(RP.no.forn) : null;
-  if (RP.no.tipo === 'forn' && !f) RP.no = { tipo: 'geral' };
+  const fTrav = RP.no.tipo === 'forn' && !f ? _rpSoTravados(RP.no.forn, itens) : null;
+  if (RP.no.tipo === 'forn' && !f && !fTrav) RP.no = { tipo: 'geral' };
   const sc = root.querySelector('.mp-lista-corpo')?.scrollTop, ae = document.activeElement, foco = ae?.id, pos = ae?.selectionStart;
-  root.innerHTML = `<div class="mp-root">${_rpFiltrosHtml()}<div class="mp">${_rpListaHtml(itens)}<section class="mp-painel">${RP.no.tipo === 'item' ? _rpPainelItem(itens) : f ? _rpForn(f, itens) : _rpGeral(itens)}</section></div></div>`;
+  root.innerHTML = `<div class="mp-root">${_rpFiltrosHtml()}<div class="mp">${_rpListaHtml(itens)}<section class="mp-painel">${RP.no.tipo === 'item' ? _rpPainelItem(itens) : f ? _rpForn(f, itens) : fTrav || _rpGeral(itens)}</section></div></div>`;
   _rpPintar(RP.desenhos);
   const ti = document.getElementById('rp-tab-itens');
   if (ti && typeof injectColFilterButtons === 'function') injectColFilterButtons(ti, 'reposicoes');
@@ -717,6 +808,7 @@ const RP_ACOES = {
       RP.negs.delete(n.raiz + '|' + n.ym); RP.aba = 'novo'; _rpReposMudou(); toast('Negociação excluída.', 'success'); reposicoesRender();
     } });
   },
+  fichaDeNovo(b) { RP_FICHA.delete(b.dataset.v); _rpFichaBuscar(b.dataset.v); },
   doc(b) { try { b.dataset.v === 'pdf' ? _rpDocPdf() : _rpDocXls(); } catch (e) { console.error('[Reposições] documento', e); toast('Falha ao gerar o documento: ' + (e.message || e), 'error'); } },
 };
 function _rpIrForn(k) {
