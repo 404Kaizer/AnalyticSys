@@ -905,6 +905,9 @@ function muralPainelBusca(q) {
   _mp.busca = q;
   clearTimeout(_mpBuscaT);
   _mpBuscaT = setTimeout(() => {
+    // Só a lista muda (o painel não depende da busca); sem lista na tela, tudo.
+    document.querySelector('#mural-root .mp-grupos')?.classList.toggle('mp-grupos-off', _mpTermos().length > 0);
+    if (_mp._todos && _mp.aba !== 'semuso' && mpTrocarCorpoLista(document.querySelector('#mural-root .mp-lista'), _mpListaHtml(_mp._todos))) return;
     muralRender();
     const i = document.getElementById('mp-busca');
     if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }

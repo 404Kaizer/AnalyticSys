@@ -365,7 +365,7 @@ function _acFiltrosHtml() {
       <button class="micro-filter-trigger${ap.size ? ' active' : ''}" onclick="acFAbrir('${x.k}')"><i class="ti ${x.icon}"></i><span>${_acE(rotulo)}</span><i class="ti ti-chevron-down micro-filter-chev${aberto ? ' open' : ''}"></i></button>
       <div class="micro-filter-dropdown${aberto ? ' open' : ''}">
         <div class="micro-filter-search-wrap"><i class="ti ti-search"></i>
-          <input class="micro-filter-search" id="acf-busca" type="text" placeholder="Buscar ${x.label.toLowerCase()}…" value="${_acE(aberto ? AC.fBusca : '')}" oninput="acFBuscar(this.value)"></div>
+          <input class="micro-filter-search" id="acf-busca-${x.k}" type="text" placeholder="Buscar ${x.label.toLowerCase()}…" value="${_acE(aberto ? AC.fBusca : '')}" oninput="acFBuscar(this)"></div>
         <div class="micro-filter-options">${opcoes}</div>
         <div class="micro-filter-footer">
           <button class="btn btn-filter-clear" onclick="acFLimpar('${x.k}')"><i class="ti ti-filter-off"></i> Limpar</button>
@@ -421,14 +421,14 @@ function _acDesenhar() {
   const foco = document.activeElement?.id;
   root.innerHTML = `<div class="mp-root">${_acFiltrosHtml()}<div class="mp">${_acListaHtml()}<section class="mp-painel">${_acPainelHtml()}</section></div></div>`;
   const c2 = root.querySelector('.mp-lista-corpo'); if (c2) c2.scrollTop = sc;
-  if (foco === 'ac-busca' || foco === 'acf-busca') { const i = document.getElementById(foco); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+  if (foco === 'ac-busca' || foco?.startsWith('acf-busca')) { const i = document.getElementById(foco); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
   _acFoco();
   _acEvoDesenhar();
 }
 
 /* ───────── lista (esquerda) ───────── */
-function _acFornDaAba() {
-  const q = normalizeText(AC.F.q).toLowerCase();
+function _acFornDaAba(semBusca) {
+  const q = semBusca ? '' : normalizeText(AC.F.q).toLowerCase();
   return [...AC.forn.values()].filter(f => {
     if ((f.modalidade || '') !== AC.aba) return false;
     if (q && !normalizeText(f.nome + ' ' + f.cnpj + ' ' + _acCnpjFmt(f.cnpj)).toLowerCase().includes(q)) return false;
@@ -623,7 +623,7 @@ function _acPainelHtml() {
   const f = AC.forn.get(AC.sel);
   if (f) return _acPainelForn(f);
   // Geral (ou o grupo aberto): resumo das notas mães dos fornecedores da aba.
-  const forns = _acFornDaAba();
+  const forns = _acFornDaAba(true);
   const doGrupo = m => !AC.grp || AC.F.grupo === 'fornecedor' || _acGrupoDe[AC.F.grupo](m).includes(AC.grp);
   const maes = forns.flatMap(x => _acMaesDe(x.cnpj)).filter(doGrupo);
   const aut = maes.filter(m => m.status === 'autorizada');
@@ -767,11 +767,19 @@ function _acRelatorio(m) {
     </div>
     <div class="micro-body-section">
       <div class="micro-section-title"><i class="ti ti-file-info"></i> Dados da nota</div>
-      <div class="ac-dados">
-        <div><span>Emissão</span><b>${_acData(m.emissao)}</b></div><div><span>Central</span><b>${_acE(m.central || '—')}${m.regional ? ` <small class="mo-hint">${_acE(m.regional)}</small>` : ''}</b></div>
-        <div><span>Material</span><b>${_acE(m.materiais.join(', ') || '—')}</b></div><div><span>Peso</span><b class="mono">${_acT(m.peso)}</b></div>
-        <div><span>Custo un.</span><b class="mono">${_acR(m.custoUn)}/t</b></div><div><span>Valor total</span><b class="mono">${_acR(m.valor)}</b></div>
-        <div class="ac-dados-chave"><span>Chave de acesso</span><b class="mono">${m.chave}</b></div>
+      <div class="ac-dn">
+        <div class="ac-dn-id">
+          <div><span>Emissão</span><b>${_acData(m.emissao)}</b></div>
+          <div><span>Central</span><b>${_acE(m.central || '—')}</b>${m.regional ? `<small>Regional ${_acE(m.regional)}</small>` : ''}</div>
+          <div class="ac-dn-mat"><span>Material</span><b>${_acE(m.materiais.join(', ') || '—')}</b></div>
+        </div>
+        <div class="ac-dn-num">
+          <div><span>Peso</span><b>${_acT(m.peso)}</b></div>
+          <div><span>Custo unitário</span><b>${_acR(m.custoUn)}<small> /t</small></b></div>
+          <div><span>Valor total</span><b>${_acR(m.valor)}</b></div>
+        </div>
+        <div class="ac-dn-chave"><span>Chave de acesso</span><code>${m.chave.replace(/(\d{4})(?=\d)/g, '$1 ')}</code>
+          <button class="btn btn-sm" onclick="event.stopPropagation();acCopiar('${m.chave}')" title="Copiar a chave (sem espaços)"><i class="ti ti-copy"></i> Copiar</button></div>
       </div>
     </div>
     <div class="micro-body-section"><div class="micro-section-title"><i class="ti ti-truck-delivery"></i> Notas filhas (${m.filhas.length})</div>
@@ -809,7 +817,11 @@ function acGrupo(g) { AC.F.grupo = g; AC.grp = ''; _acDesenhar(); }
 function acAba(k) { AC.aba = k; AC.sel = ''; AC.grp = ''; _acDesenhar(); }
 function acPaba(k) { AC.paba = k; _acDesenhar(); }
 let _acBuscaT = null;
-function acBusca(q) { AC.F.q = q; clearTimeout(_acBuscaT); _acBuscaT = setTimeout(_acDesenhar, 250); }
+// Só a lista muda: o painel resume a aba e os filtros, não o texto da busca.
+function acBusca(q) {
+  AC.F.q = q; clearTimeout(_acBuscaT);
+  _acBuscaT = setTimeout(() => { if (!mpTrocarCorpoLista(document.querySelector('#ac-root .mp-lista'), _acListaHtml())) _acDesenhar(); }, 250);
+}
 // Recolhe/expande com a animação do Mural (muralPainelLista): a largura da
 // lista que já está na tela transita (CSS .mp-anim) e o conteúdo novo entra com
 // fade (.entrando). Só a lista é trocada: o painel (e o que estiver digitado
@@ -839,10 +851,10 @@ function acFAbrir(k) {
   if (AC.fAberto === k) return acFFechar();
   AC.fAberto = k; AC.fPend = new Set(AC.F[k]); AC.fBusca = '';
   _acDesenhar();
-  document.getElementById('acf-busca')?.focus();
+  document.getElementById('acf-busca-' + k)?.focus();
 }
 function acFMarcar(el) { if (el.checked) AC.fPend.add(el.dataset.v); else AC.fPend.delete(el.dataset.v); }
-function acFBuscar(v) { AC.fBusca = v; _acDesenhar(); }
+function acFBuscar(el) { AC.fBusca = el.value; mfFiltrarOpcoes(el); }
 function acFFechar() { AC.fAberto = null; AC.fPend = null; AC.fBusca = ''; _acDesenhar(); }
 function acFAplicar(k) { AC.F[k] = new Set(AC.fPend); acFFechar(); }
 function acFLimpar(k) { AC.F[k] = new Set(); acFFechar(); }
@@ -947,6 +959,12 @@ async function acVincularRecs(cnpj, chaveFilha) {
   acordosRender();
 }
 
+function acCopiar(txt) {
+  const ok = () => toast('Chave de acesso copiada.', 'success');
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(ok, () => prompt('Copie a chave de acesso:', txt));
+  else prompt('Copie a chave de acesso:', txt);
+}
+
 async function acDesvincular(chaveFilha) {
   if (!confirm('Desfazer o vínculo manual desta nota filha? Ela volta para os alertas se o complementar não citar a nota mãe.')) return;
   const { error } = await window.supabaseClient.from('acordo_vinculos').delete().eq('chave_filha', chaveFilha);
@@ -983,6 +1001,6 @@ function _acRealtime() {
     }).subscribe();
 }
 
-Object.assign(window, { acordosRender, acSel, acGrp, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acDesvincular });
+Object.assign(window, { acordosRender, acSel, acGrp, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acCopiar, acDesvincular });
 // Lista recolhida: lembrada neste navegador.
 try { AC.listaRecolhida = localStorage.getItem('acordos.listaRecolhida') === '1'; } catch (_) { /* sem storage */ }

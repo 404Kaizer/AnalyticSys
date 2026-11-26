@@ -9348,3 +9348,37 @@ function renderImports() {
     initSidebarHover();
   }
 })();
+
+
+// ── Busca nas listas .mp-lista e nos filtros .micro-filter (Operações, Acordos,
+// Reposições) sem redesenhar a tela a cada letra (26/11/2026) ─────────────────
+// Busca dentro do filtro (Regional, Central…): só esconde as opções que não
+// batem. As marcadas continuam marcadas; nada é redesenhado.
+function mfFiltrarOpcoes(input) {
+  const box = input?.closest('.micro-filter-dropdown')?.querySelector('.micro-filter-options');
+  if (!box) return;
+  const q = normalizeText(input.value).toLowerCase();
+  let n = 0;
+  box.querySelectorAll('.micro-filter-option').forEach(l => {
+    const ok = !q || normalizeText(l.textContent).toLowerCase().includes(q);
+    l.style.display = ok ? '' : 'none';
+    if (ok) n++;
+  });
+  let vazio = box.querySelector('.mf-vazio');
+  if (!n && box.querySelector('.micro-filter-option')) {
+    if (!vazio) box.insertAdjacentHTML('beforeend', '<div class="mf-vazio" style="padding:12px 10px;color:var(--text3);font-size:13.5px;text-align:center">Nenhum resultado</div>');
+  } else vazio?.remove();
+}
+// Busca da lista: troca só o que vem abaixo do campo de busca (o campo fica,
+// com o foco e o cursor). `html` = a lista inteira desenhada de novo. Devolve
+// false se a lista está recolhida (sem campo) — aí quem chama redesenha tudo.
+function mpTrocarCorpoLista(lista, html) {
+  if (!lista?.firstElementChild?.classList.contains('mp-lista-head')) return false;
+  const t = document.createElement('div');
+  t.innerHTML = html;
+  const nova = t.querySelector('.mp-lista');
+  if (!nova?.firstElementChild?.classList.contains('mp-lista-head')) return false;
+  [...lista.children].slice(1).forEach(c => c.remove());
+  [...nova.children].slice(1).forEach(c => lista.appendChild(c));
+  return true;
+}

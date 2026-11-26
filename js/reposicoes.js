@@ -333,7 +333,7 @@ function _rpFiltrosHtml() {
       ops = l.length ? l.map((v, n) => `<label class="micro-filter-option" for="rpf-${n}"><input type="checkbox" id="rpf-${n}" ${RP.fPend.has(v) ? 'checked' : ''} data-rpc="fMarcar" data-v="${_rpE(v)}"><span class="micro-filter-option-label" title="${_rpE(v)}">${_rpE(v)}</span></label>`).join('') : '<div style="padding:12px 10px;color:var(--text3);font-size:13.5px;text-align:center">Nenhum resultado</div>';
     }
     return `<div class="micro-filter-group mo-fg"><button class="micro-filter-trigger${ap.size ? ' active' : ''}" data-rp="fAbrir" data-v="${x.k}"><i class="ti ${x.icon}"></i><span>${_rpE(rot)}</span><i class="ti ti-chevron-down micro-filter-chev${ab ? ' open' : ''}"></i></button>
-      <div class="micro-filter-dropdown${ab ? ' open' : ''}"><div class="micro-filter-search-wrap"><i class="ti ti-search"></i><input class="micro-filter-search" id="rpf-busca" type="text" placeholder="Buscar ${x.label.toLowerCase()}…" value="${_rpE(ab ? RP.fBusca : '')}" data-rpi="fBuscar"></div><div class="micro-filter-options">${ops}</div>
+      <div class="micro-filter-dropdown${ab ? ' open' : ''}"><div class="micro-filter-search-wrap"><i class="ti ti-search"></i><input class="micro-filter-search" id="rpf-busca-${x.k}" type="text" placeholder="Buscar ${x.label.toLowerCase()}…" value="${_rpE(ab ? RP.fBusca : '')}" data-rpi="fBuscar"></div><div class="micro-filter-options">${ops}</div>
       <div class="micro-filter-footer"><button class="btn btn-filter-clear" data-rp="fLimpar" data-v="${x.k}"><i class="ti ti-filter-off"></i> Limpar</button><button class="btn" data-rp="fFechar"><i class="ti ti-x"></i> Cancelar</button><button class="btn btn-primary" data-rp="fAplicar" data-v="${x.k}"><i class="ti ti-check"></i> Aplicar</button></div></div></div>`;
   }).join('');
   return `<div class="micro-filter-bar mo-filter-bar"><div class="micro-group-mode mp-grupos${RP.q.trim() ? ' mp-grupos-off' : ''}" role="group" aria-label="Agrupar a lista">${grupos.map(([k, i, t]) => `<button class="${RP.grupo === k ? 'active' : ''}" data-rp="grupo" data-v="${k}" title="${t}" aria-label="${t}" aria-pressed="${RP.grupo === k}"><i class="ti ${i}"></i></button>`).join('')}</div><div class="micro-filter-divider"></div>${filtros}
@@ -700,7 +700,7 @@ const RP_ACOES = {
     l.classList.add('mp-anim'); l.classList.toggle('recolhida', RP.rec);
     setTimeout(() => { RP.lAnim = false; _rpDesenhar(); }, MP_LISTA_ANIM_MS);
   },
-  fAbrir(b) { const k = b.dataset.v; if (RP.fAberto === k) return RP_ACOES.fFechar(); RP.fAberto = k; RP.fPend = new Set(RP.F[k]); RP.fBusca = ''; _rpDesenhar(); document.querySelector('#rp-root .micro-filter-dropdown.open #rpf-busca')?.focus(); },
+  fAbrir(b) { const k = b.dataset.v; if (RP.fAberto === k) return RP_ACOES.fFechar(); RP.fAberto = k; RP.fPend = new Set(RP.F[k]); RP.fBusca = ''; _rpDesenhar(); document.getElementById('rpf-busca-' + k)?.focus(); },
   fFechar() { RP.fAberto = null; RP.fPend = null; RP.fBusca = ''; _rpDesenhar(); },
   fAplicar(b) { RP.F[b.dataset.v] = new Set(RP.fPend); RP_ACOES.fFechar(); },
   fLimpar(b) { RP.F[b.dataset.v] = new Set(); RP_ACOES.fFechar(); },
@@ -738,8 +738,15 @@ const RP_MUDA = {   // change
 };
 let _rpT1 = null, _rpT2 = null;
 const RP_DIGITA = {   // input
-  busca(el) { RP.q = el.value; clearTimeout(_rpT1); _rpT1 = setTimeout(_rpDesenhar, 250); },
-  fBuscar(el) { RP.fBusca = el.value; _rpDesenhar(); },
+  // Só a lista muda (a busca não mexe no painel); a filtragem das opções é no lugar.
+  busca(el) {
+    RP.q = el.value; clearTimeout(_rpT1);
+    _rpT1 = setTimeout(() => {
+      document.querySelector('#rp-root .mp-grupos')?.classList.toggle('mp-grupos-off', !!RP.q.trim());
+      if (!mpTrocarCorpoLista(document.querySelector('#rp-root .mp-lista'), _rpListaHtml(_rpItens()))) _rpDesenhar();
+    }, 250);
+  },
+  fBuscar(el) { RP.fBusca = el.value; mfFiltrarOpcoes(el); },
 };
 function _rpFechaMes() { document.getElementById('rp-month-dropdown')?.classList.remove('open'); document.getElementById('rp-month-trigger')?.classList.remove('open'); }
 window.rpToggleMes = function () {
