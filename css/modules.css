@@ -14596,3 +14596,22 @@ button.rp-kpi { cursor: pointer; } button.rp-kpi:hover { border-color: var(--bor
 @media (max-width: 640px) { .rp-dados > .rp-largo { grid-column: auto; } }
 /* Selo das linhas da lista de Acordos: o mesmo da prioridade nas Operações, sem o balão. */
 .mp-prio.ac-selo { cursor: inherit; }
+
+/* Pontos e regional em foco (26/11, referências do Hugo): central = ponto laranja com a SIGLA
+   à direita; fornecedor = ponto cinza-azulado; foco (regional aberta) = ciano, com as centrais
+   ligadas por uma faixa translúcida; outras centrais do estado apagadas, sem rótulo. */
+#page-custos { --mp-cen-fora: #8c6a3c; --mp-mun-fora: #77521a; --mp-foco-mun: rgba(34,195,217,.5); }
+body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --mp-cen-fora: #e2c08e; --mp-mun-fora: #f1cf96; --mp-foco-mun: rgba(20,151,173,.38); }
+#cu-map .pt { stroke: var(--mp-halo); cursor: pointer; }
+#cu-map .pt-cen { fill: var(--mp-cen); }
+#cu-map .pt-cen.foco { fill: var(--mp-foco); }
+#cu-map .pt-cen.fora { fill: var(--mp-cen-fora); }
+#cu-map .pt-forn { fill: var(--mp-forn); }
+#cu-map .pt.off { fill: var(--mp-forn-off); }
+#cu-map .pt.sel { fill: var(--mp-foco); stroke: #fff; }
+#cu-map .pt:hover { stroke: var(--mp-txt); }
+#cu-map .lig { stroke: var(--mp-foco); stroke-opacity: .32; stroke-linecap: round; fill: none; pointer-events: none; }
+#cu-map .mn.foco { fill: var(--mp-foco-mun); stroke: var(--mp-foco); stroke-width: calc(var(--sw) * 1.2px); }
+#cu-map .mn.temc.fora { fill: var(--mp-mun-fora); stroke: none; pointer-events: none; }
+#cu-map .lbl.dir { text-anchor: start; font-weight: 700; }
+#cu-map .lbl.dir.foco { fill: var(--mp-txt); }

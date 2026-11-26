@@ -417,7 +417,7 @@ function _cuMapaInit() {
   // 3 casas decimais no espaço projetado (0–1000): caminhos bem menores, sem perda visível até o zoom de município.
   CU.path = d3.geoPath(CU.proj); if (CU.path.digits) CU.path.digits(3);
   _cuSvg = d3.select('#cu-map'); _cuG = _cuSvg.append('g');
-  ['st', 'mun', 'stl', 'agg', 'rt', 'hit', 'f', 'c', 'b', 'l', 'rg'].forEach(k => _cuGr[k] = _cuG.append('g'));
+  ['st', 'mun', 'stl', 'agg', 'lig', 'rt', 'hit', 'f', 'c', 'b', 'l', 'rg'].forEach(k => _cuGr[k] = _cuG.append('g'));
   // Fluidez: o transform do grupo muda a cada evento (barato); a reescala de marcadores, rótulos e rotas
   // roda no máximo uma vez por quadro (requestAnimationFrame), não a cada evento de roda/arrasto.
   _cuZoom = d3.zoom().scaleExtent([.6, 800])
@@ -507,24 +507,34 @@ function _cuAlternaMunicipio() { CU.soMun = !CU.soMun; _cuCrumbs(); _cuFit(_cuBo
 const _cuCssM = n => getComputedStyle(document.getElementById('cu-mapwrap')).getPropertyValue(n).trim();
 function _cuHeat(ix) { const c = d3.color(_cuCssM(ix >= 0 ? '--mp-ruim' : '--mp-bom')) || d3.color('#888'); c.opacity = Math.min(.85, .15 + Math.abs(ix) / .12 * .7); return c + ''; }
 function _cuRtCor(ix) { return _cuCssM(ix > .06 ? '--mp-ruim' : ix > .02 ? '--mp-medio' : ix < -.03 ? '--mp-bom' : '--mp-neutro'); }
-// Ícones (traço estilo Tabler, 24×24) usados nos marcadores: regional, central, fornecedor.
-const CU_ICONES = {
-  reg: 'M3 7l6 -3l6 3l6 -3v13l-6 3l-6 -3l-6 3v-13M9 4v13M15 7v13',
-  cen: 'M3 21h18M5 21v-12l5 4v-4l5 4h4M19 21v-8l-1.436 -9.574a.5 .5 0 0 0 -.495 -.426h-1.145a.5 .5 0 0 0 -.494 .418l-1.43 8.582M9 17h1M14 17h1',
-  forn: 'M5 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M15 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M5 17h-2v-11a1 1 0 0 1 1 -1h9v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5',
-};
-// Marcador = círculo branco com borda na cor do tipo + ícone; escala fixa na tela (ver _cuRescale).
-function _cuMarcador(sel, tipo) {
-  return sel.join(en => { const g = en.append('g').attr('class', 'mk mk-' + tipo); g.append('circle').attr('r', 11); g.append('path').attr('d', CU_ICONES[tipo]).attr('transform', 'translate(-7.2 -7.2) scale(.6)'); return g; });
+// Sigla SAP da central para o rótulo do mapa: o alias (ex.: "VRE"); se vier no formato
+// "36 | VRE | VOLTA REDONDA", a parte do meio. O nome completo fica no tooltip.
+function _cuSigla(c) { const s = String(c.alias || c.nome || ''); const p = s.split('|').map(x => x.trim()).filter(Boolean); return p.length >= 2 ? p[1] : s; }
+// Pontos (sem ícones, pedido do Hugo 26/11): central laranja, fornecedor cinza-azulado, foco ciano.
+// Tamanho fixo na tela: raio em this._r, posição em this._xy (ver _cuRescale).
+function _cuPontos(sel, tipo) { return sel.join(en => en.append('circle').attr('class', 'pt pt-' + tipo)); }
+// Ligação das centrais da regional em foco: árvore geradora mínima (Prim), faixa larga translúcida.
+function _cuArvore(pts) {
+  const n = pts.length; if (n < 2) return [];
+  const dentro = new Array(n).fill(false), dist = new Array(n).fill(Infinity), pai = new Array(n).fill(-1), arestas = [];
+  dist[0] = 0;
+  for (let it = 0; it < n; it++) {
+    let u = -1; for (let i = 0; i < n; i++) if (!dentro[i] && (u < 0 || dist[i] < dist[u])) u = i;
+    dentro[u] = true; if (pai[u] >= 0) arestas.push([pts[pai[u]], pts[u]]);
+    for (let v = 0; v < n; v++) if (!dentro[v]) { const d = Math.hypot(pts[u][0] - pts[v][0], pts[u][1] - pts[v][1]); if (d < dist[v]) { dist[v] = d; pai[v] = u; } }
+  }
+  return arestas;
 }
 
 // O mapa revela um nível por clique, para não poluir:
-//   Brasil   → só estados, pintados pelo gasto (sem bolhas), selo de alertas no centro do estado;
-//   Estado   → um marcador por regional (estado com várias regionais);
-//   Regional → as centrais (municípios delas em laranja, clicáveis);
+//   Brasil   → só estados, pintados pelo gasto, selo de alertas no centro do estado;
+//   Estado   → municípios das centrais em laranja, pontos com a SIGLA; clique abre a regional;
+//   Regional → as centrais dela em ciano (municípios e pontos), ligadas por uma faixa; as demais
+//              centrais do estado ficam apagadas, só para contexto (nome da regional só no tooltip);
 //   Central  → rotas, fornecedores com compra e as alternativas em cinza.
 // Fornecedor em foco (painel, comparador ou filtro) mostra as rotas dele em qualquer nível.
 function _cuAbreCentral(c) { Object.assign(CU.F, { uf: _cuUfCen(c), reg: c.regional, cen: c.alias }); CU.sel = { t: 'cen', id: c.alias }; CU.tab = 'nfs'; _cuUpdate(true); }
+function _cuAbreRegional(reg) { _cuTipOff(); CU.F.reg = reg; CU.F.cen = ''; CU.sel = { t: 'reg', reg }; _cuUpdate(true); }
 function _cuNivel() { const F = CU.F; return F.cen ? 'cen' : F.reg ? 'reg' : F.uf ? 'uf' : 'br'; }
 function _cuFornFoco() { const s = CU.sel; return s?.t === 'forn' ? new Set([s.id]) : s?.t === 'rota' ? new Set([s.forn]) : CU.F.forns.size ? CU.F.forns : null; }
 function _cuDesenhar() {
@@ -540,8 +550,8 @@ function _cuDesenhar() {
   const gUf = Object.fromEntries(Object.entries(porUf).map(([u, a]) => [u, _cuAgg(a)]));
   const gUfMax = d3.max(Object.values(gUf), s => s.g) || 1;
   const tom = d3.interpolateRgb(_cuCssM('--mp-uf-min'), _cuCssM('--mp-uf-max'));
+  // Estados com central mantêm o tom em todos os níveis; sem central ficam cinza (dim).
   _cuGr.st.selectAll('path').attr('class', f => { const uf = CU_UFS[f.properties.codarea]; return 'st' + (cenUfs.has(uf) ? ' has' : '') + (ufFoco && uf === ufFoco ? ' foco' : '') + (ufFoco && uf !== ufFoco && !cenUfs.has(uf) ? ' dim' : ''); })
-  // Referência (23/11): estados com central mantêm o tom em todos os níveis; sem central ficam cinza (dim).
     .style('fill', f => {
       if (ufFoco) return null;
       const uf = CU_UFS[f.properties.codarea], s = gUf[uf];
@@ -549,14 +559,14 @@ function _cuDesenhar() {
       return L.calor ? _cuHeat(_cuIdx(porUf[uf], ref)) : tom(Math.sqrt(s.g / gUfMax));
     });
   _cuGr.stl.style('display', ufFoco ? 'none' : null).selectAll('text').classed('has', f => cenUfs.has(CU_UFS[f.properties.codarea]));
-  // municípios: o estado em foco inteiro; na regional/central, o município de cada central
-  // fica em laranja e clicável (abre a central), inclusive em outro estado (só esse município).
+  // ── Municípios: só os que têm central são desenhados ──
+  //   Estado: todos em laranja (clicáveis → regional); Regional/Central: os da regional em ciano
+  //   (clicáveis → central), os das outras regionais do estado apagados; o da central aberta, ciano forte.
   const naRegional = (nivel === 'reg' || nivel === 'cen') && F.reg;
-  const munCen = new Map(); // feição do município → centrais da regional nele
-  CU._munCen = munCen; // lido pelos eventos fixos dos municípios (_cuCarregarMun)
-  // Nível Estado com várias regionais: município → regional (cor e clique abrem a regional).
-  const porReg = nivel === 'uf' && !fornFoco && _cuRegsDaUf(F.uf).length > 1, temReg = new Map();
-  CU._munReg = porReg ? temReg : null;
+  const munCen = new Map(); // feição → centrais da regional em foco
+  CU._munCen = munCen;      // lido pelos eventos fixos dos municípios (_cuCarregarMun)
+  const temReg = new Map(); // nível Estado: feição → regional (clique e tooltip)
+  CU._munReg = nivel === 'uf' && !fornFoco ? temReg : null;
   const ufsReg = new Set();
   if (naRegional) [...CU.cen.values()].filter(c => c.regional === F.reg && _cuLL(c.cnpj)).forEach(c => {
     const uf = _cuUfCen(c); if (!uf) return;
@@ -569,14 +579,13 @@ function _cuDesenhar() {
   if (comCentral) [...CU.cen.values()].filter(c => _cuUfCen(c) === ufFoco && _cuLL(c.cnpj)).forEach(c => { const mm = _cuMunDoPonto(ufFoco, _cuLL(c.cnpj)); if (mm) (comCentral.get(mm) || comCentral.set(mm, []).get(mm)).push(c.alias); });
   Object.entries(CU.mun).forEach(([uf, m]) => {
     const ativo = uf === ufFoco || ufsReg.has(uf);
-    // Só município com central tem desenho (referência do Hugo 23/11): os demais nem são desenhados.
-    // Com regional aberta, só os municípios das centrais DELA (munCen); todos do estado só no nível Estado.
-    const temC = new Set(); if (uf === ufFoco && !F.reg) [...CU.cen.values()].forEach(c => { if (_cuUfCen(c) === uf) { const mm = _cuMunDoPonto(uf, _cuLL(c.cnpj)); if (mm) { temC.add(mm); if (porReg) temReg.set(mm, c.regional); } } });
+    const temC = new Set();
+    if (uf === ufFoco) [...CU.cen.values()].forEach(c => { if (_cuUfCen(c) === uf) { const mm = _cuMunDoPonto(uf, _cuLL(c.cnpj)); if (mm) { temC.add(mm); if (!temReg.has(mm)) temReg.set(mm, c.regional); } } });
     m.sel.style('display', f => ativo && (temC.has(f) || munCen.has(f) || f === munSel) ? null : 'none');
     if (!ativo) return;
-    m.sel.attr('class', f => 'mn' + (temC.has(f) ? ' temc' : '') + (munCen.has(f) || temReg.has(f) ? ' hasc' : '') + (f === munSel ? ' sel' : ''))
-      .style('stroke', f => porReg && temReg.has(f) ? _cuCorReg(temReg.get(f)) : null)
-      .style('fill', f => { if (porReg && temReg.has(f)) return _cuCorReg(temReg.get(f)); if (!comCentral || f === munSel) return null; const al = comCentral.get(f); if (!al) return null; const a = arr.filter(n => al.includes(n.cen)); return a.length ? _cuHeat(_cuIdx(a, ref)) : null; });
+    m.sel.attr('class', f => 'mn' + (munCen.has(f) ? ' foco hasc' : temC.has(f) ? (naRegional ? ' temc fora' : ' temc' + (CU._munReg ? ' hasc' : '')) : '') + (f === munSel ? ' sel' : ''))
+      .style('stroke', null)
+      .style('fill', f => { if (!comCentral || f === munSel) return null; const al = comCentral.get(f); if (!al) return null; const a = arr.filter(n => al.includes(n.cen)); return a.length ? _cuHeat(_cuIdx(a, ref)) : null; });
   });
   // rotas: só no nível da central, ou as do fornecedor em foco
   const base = nivel === 'cen' ? arr.filter(n => n.cen === F.cen) : fornFoco ? arr.filter(n => fornFoco.has(n.forn)) : [];
@@ -591,7 +600,7 @@ function _cuDesenhar() {
     .style('opacity', l => nivel === 'cen' && sel && (sel.t === 'forn' || sel.t === 'rota') ? (foco(l) ? 1 : .2) : .9)
     .each(l => { l.w = L.cor ? 1 + 3.2 * Math.sqrt(l.s.g / vmax) : foco(l) ? 2.2 : 1.6; });
   _cuGr.hit.selectAll('path').data(vis, l => l.c + '|' + l.f).join('path').attr('class', 'rthit').attr('d', curva)
-    .on('mousemove', (e, l) => { const km = _cuKmPar(l.c, l.f); _cuTip(e, `<b>${_cuE(_cuNomeF(l.f))}</b> → <b>${_cuE(CU.cen.get(l.c).nome)}</b><br><span class="mono">${l.mats.map(_cuE).join(', ')}<br>${km ? _cuNf0.format(km) + ' km · ' : ''}${_cuBrlc(l.s.g)}${l.mats.length === 1 ? ' · ' + _cuP(l.mats[0], l.s.pm) : ''}<br>preço vs média: ${_cuPct(l.ix)}${l.s.d ? ` · ${l.s.d} alerta${l.s.d > 1 ? 's' : ''}` : ''}</span>`); })
+    .on('mousemove', (e, l) => { const km = _cuKmPar(l.c, l.f); _cuTip(e, `<b>${_cuE(_cuNomeF(l.f))}</b> → <b>${_cuE(_cuSigla(CU.cen.get(l.c)))}</b><br><span class="mono">${l.mats.map(_cuE).join(', ')}<br>${km ? _cuNf0.format(km) + ' km · ' : ''}${_cuBrlc(l.s.g)}${l.mats.length === 1 ? ' · ' + _cuP(l.mats[0], l.s.pm) : ''}<br>preço vs média: ${_cuPct(l.ix)}${l.s.d ? ` · ${l.s.d} alerta${l.s.d > 1 ? 's' : ''}` : ''}</span>`); })
     .on('mouseleave', _cuTipOff).on('click', (e, l) => { CU.sel = { t: 'rota', cen: l.c, forn: l.f }; CU.tab = 'nfs'; _cuUpdate(false); });
   // fornecedores: os das rotas visíveis + (nível central) alternativas em cinza
   const ativos = new Set(vis.map(l => l.f));
@@ -611,42 +620,46 @@ function _cuDesenhar() {
   const selF = fk => !!fornFoco?.has(fk) && (sel?.t === 'forn' || sel?.t === 'rota');
   // Alternativas (cinza) desenhadas primeiro: ficam por baixo dos fornecedores com compra.
   const flOrd = [...fl.filter(fk => !ativos.has(fk)), ...fl.filter(fk => ativos.has(fk))];
-  _cuMarcador(_cuGr.f.selectAll('g.mk').data(flOrd, fk => fk), 'forn')
-    .attr('class', fk => 'mk mk-forn' + (ativos.has(fk) ? '' : ' off') + (selF(fk) ? ' sel' : ''))
-    .each(function (fk) { this._xy = _cuXY(fk); this._s = ativos.has(fk) || selF(fk) ? 1 : .72; })
+  _cuPontos(_cuGr.f.selectAll('circle.pt').data(flOrd, fk => fk), 'forn')
+    .attr('class', fk => 'pt pt-forn' + (ativos.has(fk) ? '' : ' off') + (selF(fk) ? ' sel' : ''))
+    .each(function (fk) { this._xy = _cuXY(fk); this._r = selF(fk) ? 6 : ativos.has(fk) ? 4.5 : 3.5; })
     .on('mousemove', (e, fk) => { const a = aggForn(fk), g = CU.geo.get(fk); _cuTip(e, `<b>${_cuE(_cuNomeF(fk))}</b><br><span class="mono">${_cuE((g?.municipio || '') + (g?.uf ? '/' + g.uf : ''))}<br>${a.n ? _cuBrlc(a.g) + ' no recorte' : 'sem compra no recorte (alternativa)'}</span>`); })
     .on('mouseleave', _cuTipOff).on('click', (e, fk) => { CU.sel = { t: 'forn', id: fk }; CU.tab = 'nfs'; _cuUpdate(false); })
     .order();
-  // centrais: regional (todas dela), central (só ela), ou as das rotas do fornecedor em foco
+  // ── Centrais ──
   const porCen = _cuGroup(arr, 'cen');
-  const cenVis = nivel === 'reg' ? c => c.regional === F.reg : nivel === 'cen' ? c => c.alias === F.cen : fornFoco ? c => vis.some(l => l.c === c.alias) : () => false;
-  // Na regional entram todas as centrais dela; sem NF no período ficam em cinza (antes sumiam).
-  const cs = [...CU.cen.values()].filter(c => cenPos.has(c.alias) && cenVis(c) && (porCen[c.alias] || nivel === 'reg' || nivel === 'cen'));
-  cs.forEach(c => { const a = _cuAgg(porCen[c.alias] || []); c._g = a.g; c._nd = a.d; c._sem = !porCen[c.alias]; c._xy = cenPos.get(c.alias); });
-  const gmax = d3.max(cs, c => c._g) || 1;
-  cs.forEach(c => { c._rr = L.calor && !c._sem ? 9 + 7 * Math.sqrt(c._g / gmax) : 11; });
+  let cs = [];
+  if (nivel === 'uf' && !fornFoco) cs = [...CU.cen.values()].filter(c => cenPos.has(c.alias) && _cuUfCen(c) === ufFoco);
+  else if (naRegional) cs = [...CU.cen.values()].filter(c => cenPos.has(c.alias) && (c.regional === F.reg || _cuUfCen(c) === ufFoco));
+  else if (fornFoco) cs = [...CU.cen.values()].filter(c => cenPos.has(c.alias) && vis.some(l => l.c === c.alias));
   const cenSel = c => F.cen === c.alias || (sel?.t === 'cen' && sel.id === c.alias) || (sel?.t === 'rota' && sel.cen === c.alias);
-  _cuMarcador(_cuGr.c.selectAll('g.mk').data(cs, c => c.alias), 'cen')
-    .attr('class', c => 'mk mk-cen' + (c._sem ? ' off' : '') + (cenSel(c) ? ' sel' : ''))
-    .each(function (c) { this._xy = c._xy; this._s = c._rr / 11; })
-    .on('mousemove', (e, c) => _cuTip(e, `<b>${_cuE(c.nome)}</b><br><span class="mono">${_cuE(c.regional)}<br>${c._sem ? 'sem NF no período e filtros' : _cuBrlc(c._g)}${c._nd ? ` · ${c._nd} alerta${c._nd > 1 ? 's' : ''} de preço` : ''}</span>`))
+  cs.forEach(c => {
+    const a = _cuAgg(porCen[c.alias] || []); c._g = a.g; c._nd = a.d; c._sem = !porCen[c.alias]; c._xy = cenPos.get(c.alias);
+    c._foco = naRegional && c.regional === F.reg; c._fora = naRegional && !c._foco;
+  });
+  const gmax = d3.max(cs, c => c._g) || 1;
+  cs.forEach(c => { c._rr = cenSel(c) ? 7 : c._fora ? 3.5 : L.calor && !c._sem ? 4 + 5 * Math.sqrt(c._g / gmax) : 5; });
+  // Ligação das centrais da regional em foco (faixa ciano translúcida, por baixo dos pontos).
+  const lig = naRegional ? _cuArvore(cs.filter(c => c._foco).map(c => c._xy)) : [];
+  _cuGr.lig.selectAll('line').data(lig).join('line').attr('class', 'lig')
+    .attr('x1', d => d[0][0]).attr('y1', d => d[0][1]).attr('x2', d => d[1][0]).attr('y2', d => d[1][1]);
+  // Desenha as apagadas primeiro (ficam por baixo das centrais da regional em foco).
+  const csOrd = [...cs.filter(c => c._fora), ...cs.filter(c => !c._fora)];
+  _cuPontos(_cuGr.c.selectAll('circle.pt').data(csOrd, c => c.alias), 'cen')
+    .attr('class', c => 'pt pt-cen' + (c._sem ? ' off' : '') + (c._foco ? ' foco' : '') + (c._fora ? ' fora' : '') + (cenSel(c) ? ' sel' : ''))
+    .each(function (c) { this._xy = c._xy; this._r = c._rr; })
+    .on('mousemove', (e, c) => _cuTip(e, `<b>${_cuE(_cuSigla(c))}</b> · ${_cuE(c.nome)}<br><span class="mono">${_cuE(c.regional)}<br>${c._sem ? 'sem NF no período e filtros' : _cuBrlc(c._g)}${c._nd ? ` · ${c._nd} alerta${c._nd > 1 ? 's' : ''} de preço` : ''}<br>${nivel === 'uf' ? 'clique para abrir a regional' : 'clique para abrir a central'}</span>`))
     .on('mouseleave', _cuTipOff)
-    .on('click', (e, c) => _cuAbreCentral(c));
-  // Estado com várias regionais: sem ícones (encavalavam); o município de cada central fica na cor da
-  // regional e o tooltip dele mostra a soma da regional (CU._regInfo, lido pelos eventos fixos).
-  const bol = [];
+    .on('click', (e, c) => nivel === 'uf' && !fornFoco ? _cuAbreRegional(c.regional) : _cuAbreCentral(c))
+    .order();
+  // Nível Estado: soma por regional para o tooltip do município (CU._regInfo, lido pelos eventos fixos).
   CU._regInfo = nivel === 'uf' && !fornFoco ? new Map(Object.entries(_cuGroup(arr, n => CU.cen.get(n.cen).regional)).map(([r, a]) => [r, { s: _cuAgg(a), n: new Set(a.map(x => x.cen)).size }])) : null;
-  const bmax = d3.max(bol, b => b.g) || 1;
-  bol.forEach(b => { b._xy = b.xy; b._nd = b.nd; b._rr = 12 + 8 * Math.sqrt(b.g / bmax); });
-  _cuMarcador(_cuGr.agg.selectAll('g.mk').data(bol, b => b.id), 'reg')
-    .each(function (b) { this._xy = b.xy; this._s = b._rr / 11; d3.select(this).select('circle').style('stroke', b.cor); d3.select(this).select('path').style('stroke', b.cor); })
-    .on('mousemove', (e, b) => _cuTip(e, b.tip)).on('mouseleave', _cuTipOff).on('click', (e, b) => { _cuTipOff(); b.ir(); });
-  // selos de alerta: no centro do estado (Brasil), no marcador da regional ou da central
+  // selos de alerta: no centro do estado (Brasil) ou ao lado do ponto da central (não nas apagadas)
   const selosUf = nivel === 'br' && !fornFoco ? Object.entries(gUf).filter(([u, s]) => s.d > 0).map(([u, s]) => { const st = CU.br.features.find(f => CU_UFS[f.properties.codarea] === u); return st ? { id: 'uf' + u, _xy: CU.path.centroid(st), _nd: s.d, _rr: 7 } : null; }).filter(Boolean) : [];
-  _cuGr.b.selectAll('g').data(L.selos ? [...selosUf, ...bol, ...cs].filter(x => x._nd > 0) : [], x => x.id || x.alias)
+  _cuGr.b.selectAll('g').data(L.selos ? [...selosUf, ...cs.filter(c => !c._fora)].filter(x => x._nd > 0) : [], x => x.id || x.alias)
     .join(en => { const g = en.append('g').attr('class', 'bdg'); g.append('circle'); g.append('text'); return g; })
     .each(function (x) { d3.select(this).select('text').text(x._nd > 999 ? '999+' : x._nd); });
-  // rótulos (dy em px de tela; só do que está visível)
+  // rótulos (dx/dy em px de tela; só do que está visível)
   // Distância de cada rota no meio da curva (estimativa por estrada = linha reta × 1,3).
   const kmRotas = vis.length > 60 ? [] : vis.map(l => {
     const a = cenPos.get(l.c), b = _cuXY(l.f), km = _cuKmPar(l.c, l.f); if (!km) return null;
@@ -655,11 +668,11 @@ function _cuDesenhar() {
   }).filter(Boolean);
   const lb = [
     ...kmRotas,
-    ...bol.map(b => ({ id: 'b' + b.id, x: b.xy[0], y: b.xy[1], t: b.nome + ' · ' + _cuBrlc(b.g), cls: 'lbl agg', dy: b._rr + 14 })),
-    ...cs.map(c => ({ id: 'c' + c.alias, x: c._xy[0], y: c._xy[1], t: c.nome, cls: 'lbl', dy: -(c._rr + 6) })),
-    ...fl.filter(fk => ativos.has(fk) || fornFoco?.has(fk)).map(fk => { const p = _cuXY(fk); return { id: 'f' + fk, x: p[0], y: p[1], t: _cuNomeF(fk), cls: 'lbl f' + (ativos.has(fk) ? '' : ' off'), dy: -17 }; }),
+    // Sigla da central à direita do ponto (nas apagadas, só no tooltip).
+    ...cs.filter(c => !c._fora).map(c => ({ id: 'c' + c.alias, x: c._xy[0], y: c._xy[1], t: _cuSigla(c), cls: 'lbl dir' + (c._foco ? ' foco' : ''), dx: c._rr + 4, dy: 4 })),
+    ...fl.filter(fk => ativos.has(fk) || fornFoco?.has(fk)).map(fk => { const p = _cuXY(fk); return { id: 'f' + fk, x: p[0], y: p[1], t: _cuNomeF(fk), cls: 'lbl f' + (ativos.has(fk) ? '' : ' off'), dy: -10 }; }),
   ];
-  _cuGr.l.selectAll('text').data(lb, d => d.id).join('text').attr('class', d => d.cls).text(d => d.t).attr('x', d => d.x);
+  _cuGr.l.selectAll('text').data(lb, d => d.id).join('text').attr('class', d => d.cls).text(d => d.t);
   _cuRescale();
 }
 function _cuRescale() {
@@ -668,11 +681,12 @@ function _cuRescale() {
   const k = CU.K;
   _cuGr.rt.selectAll('path').style('stroke-width', l => l.w / k).style('stroke-dasharray', CU.L.cor ? `${6 / k} ${5 / k}` : `${4 / k} ${3 / k}`);
   _cuGr.hit.selectAll('path').style('stroke-width', 10 / k);
-  // Marcadores com tamanho fixo na tela (o zoom só muda a posição).
-  [_cuGr.agg, _cuGr.c, _cuGr.f].forEach(g => g.selectAll('g.mk').attr('transform', function () { return `translate(${this._xy[0]},${this._xy[1]}) scale(${(this._s || 1) / k})`; }));
+  _cuGr.lig.selectAll('line').style('stroke-width', 16 / k);
+  // Pontos com tamanho fixo na tela (o zoom só muda a posição).
+  [_cuGr.c, _cuGr.f].forEach(g => g.selectAll('circle.pt').each(function () { this.setAttribute('cx', this._xy[0]); this.setAttribute('cy', this._xy[1]); this.setAttribute('r', (this._r || 5) / k); this.style.strokeWidth = (1.6 / k) + 'px'; }));
   _cuGr.b.selectAll('g').each(function (x) { const o = (x._rr || 6) * .72 + 3, cx = x._xy[0] + o / k, cy = x._xy[1] - o / k; d3.select(this).select('circle').attr('cx', cx).attr('cy', cy).attr('r', (x._nd > 99 ? 9 : 7) / k).style('stroke-width', 1.2 / k); d3.select(this).select('text').attr('x', cx).attr('y', cy).style('font-size', ((x._nd > 99 ? 7.5 : 8.5) / k) + 'px'); });
   _cuGr.stl.selectAll('text').style('font-size', (14 / k) + 'px').style('display', k > 2.6 ? 'none' : null);
-  _cuGr.l.selectAll('text').style('font-size', (11 / k) + 'px').attr('y', d => d.y + d.dy / k).style('stroke-width', 3.5 / k);
+  _cuGr.l.selectAll('text').style('font-size', (11.5 / k) + 'px').attr('x', d => d.x + (d.dx || 0) / k).attr('y', d => d.y + d.dy / k).style('stroke-width', 3.5 / k);
 }
 
 /* ───────── migalhas, legenda, filtros ───────── */
@@ -698,12 +712,13 @@ function _cuLegenda() {
     <label><input type="checkbox" data-l="selos"${L.selos ? ' checked' : ''}> Selos de alerta</label>
     ${rotas ? `<label><input type="checkbox" data-l="cor"${L.cor ? ' checked' : ''}> Rotas coloridas por preço</label>` : ''}
     <label><input type="checkbox" data-l="calor"${L.calor ? ' checked' : ''}> Mapa de calor</label></div>`;
-  // Ícone de marcador (mesmo desenho do mapa) para a legenda.
-  const ic = (tipo, cor) => `<svg width="18" height="18" viewBox="-12 -12 24 24" aria-hidden="true"><circle r="10.5" style="fill:var(--mp-mk-fundo);stroke:${cor};stroke-width:2"/><path d="${CU_ICONES[tipo]}" transform="translate(-7.2 -7.2) scale(.6)" style="fill:none;stroke:${cor};stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>`;
+  // Ponto da legenda (mesmo desenho do mapa).
+  const ic = (tipo, cor) => `<i style="width:10px;height:10px;border-radius:50%;background:${cor};box-shadow:0 0 0 1.5px var(--mp-halo)"></i>`;
   if (nivel === 'br' && !rotas && !L.calor) h += `<div class="r"><i class="grad" style="width:60px;background:linear-gradient(90deg,var(--mp-uf-min),var(--mp-uf-max))"></i>Estado · tom = gasto no período</div>`;
-  if (nivel === 'uf' && !rotas) h += `<div class="r">${ic('reg', 'var(--mp-foco)')}Regional · tamanho = gasto no período</div>`;
-  if (nivel === 'reg' || rotas) h += `<div class="r">${ic('cen', 'var(--mp-cen)')}Central</div>`;
-  if (nivel === 'reg') h += `<div class="r"><i style="width:14px;height:10px;border-radius:2px;background:var(--mp-mun);border:1px solid var(--mp-mun-borda)"></i>Município com central (clique para abrir)</div>`;
+  if (nivel === 'uf' && !rotas) h += `<div class="r">${ic('cen', 'var(--mp-cen)')}Central (sigla SAP) · clique abre a regional</div><div class="r"><i style="width:14px;height:10px;border-radius:2px;background:var(--mp-mun);border:1px solid var(--mp-mun-borda)"></i>Município com central</div>`;
+  if (nivel === 'reg' || nivel === 'cen') h += `<div class="r">${ic('cen', 'var(--mp-foco)')}Central da regional (ligadas pela faixa)</div><div class="r">${ic('cen', 'var(--mp-cen-fora)')}Outras centrais do estado</div>`;
+  else if (rotas) h += `<div class="r">${ic('cen', 'var(--mp-cen)')}Central</div>`;
+  if (nivel === 'reg') h += `<div class="r"><i style="width:14px;height:10px;border-radius:2px;background:var(--mp-foco-mun);border:1px solid var(--mp-foco)"></i>Município da regional (clique para abrir)</div>`;
   if (rotas) {
     h += `<div class="r">${ic('forn', 'var(--mp-forn)')}Fornecedor com compra</div>`;
     if (nivel === 'cen') {
@@ -1221,8 +1236,8 @@ function _cuReguaPonto(e) {
   // Ponto no sistema do mapa (já descontado o zoom); gruda na central/fornecedor desenhado mais próximo.
   const [x, y] = d3.pointer(e, _cuG.node()), raio = 16 / CU.K;
   let melhor = null, dmin = raio;
-  _cuGr.c.selectAll('g.mk').each(c => { const d = Math.hypot(c._xy[0] - x, c._xy[1] - y); if (d < dmin) { dmin = d; melhor = { xy: c._xy, nome: c.nome }; } });
-  _cuGr.f.selectAll('g.mk').each(fk => { const p = _cuXY(fk), d = Math.hypot(p[0] - x, p[1] - y); if (d < dmin) { dmin = d; melhor = { xy: p, nome: _cuNomeF(fk) }; } });
+  _cuGr.c.selectAll('circle.pt').each(c => { const d = Math.hypot(c._xy[0] - x, c._xy[1] - y); if (d < dmin) { dmin = d; melhor = { xy: c._xy, nome: _cuSigla(c) + ' · ' + c.nome }; } });
+  _cuGr.f.selectAll('circle.pt').each(fk => { const p = _cuXY(fk), d = Math.hypot(p[0] - x, p[1] - y); if (d < dmin) { dmin = d; melhor = { xy: p, nome: _cuNomeF(fk) }; } });
   const xy = melhor ? melhor.xy : [x, y];
   return { xy, ll: CU.proj.invert(xy), nome: melhor?.nome || null };
 }
