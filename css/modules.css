@@ -13184,7 +13184,9 @@ body:not(.role-admin) .es-so-admin { display: none !important; }
 /* Perfil Usuário vê Cobranças só pra consulta: some tudo que edita
    (.cob-edita) — a trava de verdade é a RLS (escrita só admin + insumos). */
 body:not(.role-admin):not(.role-insumos) .cob-edita,
-body:not(.role-admin):not(.role-insumos) .cob-insumos,
+/* .padrao-adm (Centrais/Materiais/Fatores) é .cob-insumos só pra sobreviver ao
+   filtro do INSUMOS acima; analista continua vendo e editando o próprio cadastro. */
+body:not(.role-admin):not(.role-insumos) .cob-insumos:not(.padrao-adm),
 body:not(.role-insumos) .cob-so-insumos { display: none !important; }
 
 /* ══════════════════════════════════════════
