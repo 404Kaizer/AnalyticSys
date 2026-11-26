@@ -15,6 +15,7 @@
 // ══════════════════════════════════════════════════════════════════════
 
 const RP_ST = { '': ['Não iniciada', 'var(--text2)'], negociando: ['Em negociação', 'var(--accent)'], acordada: ['Acordada', 'var(--amber)'], trav: ['Travado', 'var(--urgente)'], sem_acordo: ['Sem acordo', 'var(--red)'], concluida: ['Concluída', 'var(--green)'] };
+const RP_ICO = { '': 'ti-circle-dashed', negociando: 'ti-messages', acordada: 'ti-clock-hour-4', trav: 'ti-lock', sem_acordo: 'ti-circle-x', concluida: 'ti-circle-check' };
 const RP_ORD = ['', 'negociando', 'acordada', 'trav', 'sem_acordo', 'concluida'];
 const RP_ABAS = {
   novo: ['A negociar', 'ti-heart-handshake', s => s === ''], and: ['Em negociação', 'ti-messages', s => s === 'negociando' || s === 'acordada'],
@@ -383,14 +384,16 @@ function _rpListaHtml(itens) {
   const soma = ps => ps.reduce((s, x) => [s[0] + x.kg, s[1] + x.v], [0, 0]), ordenar = m => [...m].sort((a, b) => soma(b[1])[1] - soma(a[1])[1] || String(a[0]).localeCompare(b[0], 'pt-BR'));
   const unicos = ps => ps.filter(x => !(x.st === 'trav' && x.i && g !== 'fornecedor'));
   const via = no.via || g, noItem = no.tipo === 'item', tem = no.tipo !== 'geral' && (via === 'fornecedor' ? !!no.forn : true);
-  const ponto = st => `<span class="rp-pto" style="--c:${RP_ST[st][1]}" title="${RP_ST[st][0]}"></span>`;
+  // Padrão das Operações (mural-painel.js): ícone da situação à esquerda; na folha, valor em t e selo com o R$ embaixo.
+  const ponto = st => `<i class="ti ${RP_ICO[st]} mp-ico" style="color:${RP_ST[st][1]}" title="${RP_ST[st][0]}" aria-hidden="true"></i>`;
+  const selo = (a, b, st) => `<span class="mp-dir"><span class="mp-v">${a}</span><span class="mp-prio ac-selo" style="--c:${RP_ST[st][1]}">${b}</span></span>`;
   const val = (a, b) => `<span class="mp-dir"><span class="mp-v">${a}</span><small class="mo-hint mono">${b}</small></span>`;
   const folha = (x, recuo, v) => {   // v = visão do grupo; o que já está no grupo não se repete
     const tr = x.st === 'trav', eu = noItem && no.key === x.key && no.ym === x.ym && (!no.forn || no.forn === x.forn || tr), vv = v === 'regional' ? 'central' : v;
     const tit = vv === 'fornecedor' ? `${x.cen} · ${x.mat}` : tr ? (vv === 'material' ? x.cen : x.mat) : x.nome, sub = vv === 'fornecedor' ? x.reg : tr ? '' : vv === 'material' ? x.cen : x.mat;
     const pz = x.n?.dados?.prazo && (x.st === 'acordada' || x.st === 'negociando') ? ' · prazo ' + _rpData(x.n.dados.prazo).slice(0, 5) : '';
     const pre = [sub, RP.mes.length > 1 ? _rpMesC(x.ym) : ''].filter(Boolean).map(_rpE).join(' · ');
-    return `<button class="mp-row mp-item ${recuo}${eu ? ' sel' : noItem ? ' apagado' : ''}" ${_rpNoAttr({ tipo: 'item', via: v, reg: x.reg, cen: x.cen, mat: x.mat, forn: tr && vv !== 'fornecedor' ? '' : x.forn, key: x.key, ym: x.ym })}>${ponto(x.st)}<span class="mp-nome"><b title="${_rpE(tit)}">${_rpE(tit)}</b><small>${pre}${pre ? ' · ' : ''}<span style="color:${RP_ST[x.st][1]}">${tr ? _rpE(_rpMotivosTxt(x.r.motivos)[0]) : RP_ST[x.st][0] + pz}</span></small></span>${tr ? val(x.r.desfalqueKg ? _rpT(x.r.desfalqueKg) : '—', 'em dúvida') : val(_rpT(x.kg), _rpR(x.v))}</button>`;
+    return `<button class="mp-row mp-item ${recuo}${eu ? ' sel' : noItem ? ' apagado' : ''}" ${_rpNoAttr({ tipo: 'item', via: v, reg: x.reg, cen: x.cen, mat: x.mat, forn: tr && vv !== 'fornecedor' ? '' : x.forn, key: x.key, ym: x.ym })}>${ponto(x.st)}<span class="mp-nome"><b title="${_rpE(tit)}">${_rpE(tit)}</b><small>${pre}${pre ? ' · ' : ''}<span style="color:${RP_ST[x.st][1]}">${tr ? _rpE(_rpMotivosTxt(x.r.motivos)[0]) : RP_ST[x.st][0] + pz}</span></small></span>${tr ? selo(x.r.desfalqueKg ? _rpT(x.r.desfalqueKg) : '—', 'em dúvida', 'trav') : selo(_rpT(x.kg), _rpR(x.v), x.st)}</button>`;
   };
   const folhas = (ps, recuo, v) => unicos(ps).sort((a, b) => b.v - a.v || b.r.desfalqueKg - a.r.desfalqueKg).map(x => folha(x, recuo, v)).join('');
   const grupo = (alvo, tit, sub, gTodos, ab, sel, apag, recuo) => { const [kg, v] = soma(gTodos), st = RP_ORD.find(s => gTodos.some(x => x.st === s)) ?? ''; return `<button class="mp-row ${recuo}${sel ? ' sel' : apag ? ' apagado' : ''}" aria-expanded="${ab}" ${_rpNoAttr(alvo)}><i class="ti ti-chevron-${ab ? 'down' : 'right'} mp-chev"></i>${ponto(st)}<span class="mp-nome"><b title="${_rpE(tit)}">${_rpE(tit)}</b><small>${_rpE(sub)}</small></span>${val(_rpT(kg), _rpR(v))}</button>`; };
