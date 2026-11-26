@@ -14612,7 +14612,6 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --
 #cu-map .pt.off { fill: var(--mp-forn-off); }
 #cu-map .pt.sel { fill: var(--mp-foco); stroke: #fff; }
 #cu-map .pt:hover { stroke: var(--mp-txt); }
-#cu-map .lig { stroke: var(--mp-foco); stroke-opacity: .32; stroke-linecap: round; fill: none; pointer-events: none; }
 #cu-map .mn.foco { fill: var(--mp-foco-mun); stroke: var(--mp-foco); stroke-width: calc(var(--sw) * 1.2px); }
 #cu-map .mn.temc.fora { fill: var(--mp-mun-fora); stroke: none; pointer-events: none; }
 #cu-map .lbl.dir { text-anchor: start; font-weight: 700; }
@@ -14623,15 +14622,10 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --
 /* ...exceto onde dois municípios com central se encostam: linha fina na cor do fundo, separando-os. */
 #cu-map .mn.viz { stroke: var(--mp-mar); stroke-width: calc(var(--sw) * 1.2px); }
 
-/* Triangulação das centrais da regional (26/11): triângulos levemente preenchidos + arestas. */
-#cu-map .tri { fill: var(--mp-foco); fill-opacity: .1; stroke: none; pointer-events: none; }
-#cu-map .lig { stroke-opacity: .38; }
 /* Realce no hover: o resto esmaece (fill/stroke-opacity: sem criar camadas, barato). */
 #cu-map.esmaece .pt:not(.ativo) { fill-opacity: .22; stroke-opacity: .22; }
 #cu-map.esmaece .lbl:not(.ativo) { fill-opacity: .2; stroke-opacity: .2; }
 #cu-map.esmaece .mn.temc:not(.ativo), #cu-map.esmaece .mn.foco:not(.ativo), #cu-map.esmaece .mn.hasc:not(.ativo) { fill-opacity: .3; }
-#cu-map.esmaece .lig:not(.ativo) { stroke-opacity: .08; }
-#cu-map.esmaece .tri { fill-opacity: .04; }
 #cu-map.esmaece .rt:not(.ativo) { stroke-opacity: .12; }
 #cu-map.esmaece .pt.ativo { stroke: var(--mp-txt); }
 

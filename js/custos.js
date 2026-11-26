@@ -23,7 +23,9 @@
 
 const CU_D3_URL = 'https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js';
 const CU_IBGE = 'https://servicodados.ibge.gov.br/api/v3/malhas/';
-const CU_GEOJSON = 'formato=application/vnd.geo%2Bjson&qualidade=minima';
+// Qualidade intermediária: a mínima deixava os contornos duros/poligonais no zoom de regional (Hugo, 26/11).
+// ~3× maior (MG 1,8 MB), mas fica em cache no IndexedDB e é pintada no canvas. A máxima (MG 8,8 MB) pesa demais.
+const CU_GEOJSON = 'formato=application/vnd.geo%2Bjson&qualidade=intermediaria';
 const CU_UFS = { 11:'RO',12:'AC',13:'AM',14:'RR',15:'PA',16:'AP',17:'TO',21:'MA',22:'PI',23:'CE',24:'RN',25:'PB',26:'PE',27:'AL',28:'SE',29:'BA',31:'MG',32:'ES',33:'RJ',35:'SP',41:'PR',42:'SC',43:'RS',50:'MS',51:'MT',52:'GO',53:'DF' };
 const CU_SER = ['--accent', '--teal', '--amber', '--purple', '--red', '--green'];
 const CU_ALERTA = { acima: 'Acima das últimas 5', abaixo: 'Abaixo das últimas 5', novo: 'Fornecedor novo' };
@@ -545,7 +547,7 @@ function _cuMapaInit() {
   // 3 casas decimais no espaço projetado (0–1000): caminhos bem menores, sem perda visível até o zoom de município.
   CU.path = d3.geoPath(CU.proj); if (CU.path.digits) CU.path.digits(3);
   _cuSvg = d3.select('#cu-map'); _cuG = _cuSvg.append('g');
-  ['st', 'mun', 'stl', 'agg', 'raio', 'lig', 'rt', 'hit', 'f', 'c', 'b', 'l', 'rg'].forEach(k => _cuGr[k] = _cuG.append('g'));
+  ['st', 'mun', 'stl', 'agg', 'raio', 'rt', 'hit', 'f', 'c', 'b', 'l', 'rg'].forEach(k => _cuGr[k] = _cuG.append('g'));
   _cuCvInit();
   // Fluidez: o transform do grupo muda a cada evento (barato); a reescala de marcadores, rótulos e rotas
   // roda no máximo uma vez por quadro (requestAnimationFrame), não a cada evento de roda/arrasto.
@@ -658,18 +660,6 @@ function _cuSigla(c) { const s = String(c.alias || c.nome || ''); const p = s.sp
 // Pontos (sem ícones, pedido do Hugo 26/11): central laranja, fornecedor cinza-azulado, foco ciano.
 // Tamanho fixo na tela: raio em this._r, posição em this._xy (ver _cuRescale).
 function _cuPontos(sel, tipo) { return sel.join(en => en.append('circle').attr('class', 'pt pt-' + tipo)); }
-// Ligação das centrais da regional em foco: árvore geradora mínima (Prim), faixa larga translúcida.
-function _cuArvore(pts) {
-  const n = pts.length; if (n < 2) return [];
-  const dentro = new Array(n).fill(false), dist = new Array(n).fill(Infinity), pai = new Array(n).fill(-1), arestas = [];
-  dist[0] = 0;
-  for (let it = 0; it < n; it++) {
-    let u = -1; for (let i = 0; i < n; i++) if (!dentro[i] && (u < 0 || dist[i] < dist[u])) u = i;
-    dentro[u] = true; if (pai[u] >= 0) arestas.push([pts[pai[u]], pts[u]]);
-    for (let v = 0; v < n; v++) if (!dentro[v]) { const d = Math.hypot(pts[u][0] - pts[v][0], pts[u][1] - pts[v][1]); if (d < dist[v]) { dist[v] = d; pai[v] = u; } }
-  }
-  return arestas;
-}
 
 // O mapa revela um nível por clique, para não poluir:
 //   Brasil   → só estados, pintados pelo gasto, selo de alertas no centro do estado;
@@ -694,8 +684,6 @@ function _cuRealca({ cens = new Set(), forns = new Set(), rota = null }) {
   _cuGr.c.selectAll('circle.pt').classed('ativo', c => cs.has(c.alias));
   _cuGr.f.selectAll('circle.pt').classed('ativo', fk => fs.has(fk));
   _cuGr.mun.selectAll('path.mn').classed('ativo', f => muns.has(f));
-  // Arestas da triangulação: as que tocam a central acesa (ou ligam duas acesas).
-  _cuGr.lig.selectAll('line.lig').classed('ativo', d => cs.size === 1 ? (xys.has(d[0]) || xys.has(d[1])) : (xys.has(d[0]) && xys.has(d[1])));
   _cuGr.rt.selectAll('path').classed('ativo', rtOn);
   _cuGr.l.selectAll('text').classed('ativo', d => d.forn && d.cen ? rtOn({ c: d.cen, f: d.forn }) : d.cen ? cs.has(d.cen) : d.forn ? fs.has(d.forn) : false);
 }
@@ -823,19 +811,6 @@ function _cuDesenhar() {
   });
   const gmax = d3.max(cs, c => c._g) || 1;
   cs.forEach(c => { c._rr = cenSel(c) ? 7 : c._fora ? 3.5 : L.calor && !c._sem ? 4 + 5 * Math.sqrt(c._g / gmax) : 5; });
-  // Triangulação (Delaunay) das centrais da regional em foco: triângulos levemente preenchidos e
-  // arestas como faixas. Com 2 centrais (ou todas alinhadas), cai na ligação simples (_cuArvore).
-  const ptsF = cs.filter(c => c._foco).map(c => c._xy), tri = [];
-  let arestas = [];
-  if (naRegional && ptsF.length >= 3) {
-    const dl = d3.Delaunay.from(ptsF), T = dl.triangles, H = dl.halfedges;
-    for (let t = 0; t < T.length; t += 3) tri.push([ptsF[T[t]], ptsF[T[t + 1]], ptsF[T[t + 2]]]);
-    for (let e = 0; e < T.length; e++) if (H[e] < e) arestas.push([ptsF[T[e]], ptsF[T[e % 3 === 2 ? e - 2 : e + 1]]]);
-  }
-  if (naRegional && !arestas.length) arestas = _cuArvore(ptsF);
-  _cuGr.lig.selectAll('path.tri').data(tri).join('path').attr('class', 'tri').attr('d', t => 'M' + t.map(p => p.join(',')).join('L') + 'Z');
-  _cuGr.lig.selectAll('line.lig').data(arestas).join('line').attr('class', 'lig')
-    .attr('x1', d => d[0][0]).attr('y1', d => d[0][1]).attr('x2', d => d[1][0]).attr('y2', d => d[1][1]);
   // Desenha as apagadas primeiro (ficam por baixo das centrais da regional em foco).
   const csOrd = [...cs.filter(c => c._fora), ...cs.filter(c => !c._fora)];
   _cuPontos(_cuGr.c.selectAll('circle.pt').data(csOrd, c => c.alias), 'cen')
@@ -875,7 +850,6 @@ function _cuRescale() {
   const k = CU.K;
   _cuGr.rt.selectAll('path').style('stroke-width', l => l.w / k).style('stroke-dasharray', CU.L.cor ? `${6 / k} ${5 / k}` : `${4 / k} ${3 / k}`);
   _cuGr.hit.selectAll('path').style('stroke-width', 10 / k);
-  _cuGr.lig.selectAll('line.lig').style('stroke-width', 10 / k);
   // Pontos com tamanho fixo na tela (o zoom só muda a posição).
   [_cuGr.c, _cuGr.f].forEach(g => g.selectAll('circle.pt').each(function () { this.setAttribute('cx', this._xy[0]); this.setAttribute('cy', this._xy[1]); this.setAttribute('r', (this._r || 5) / k); this.style.strokeWidth = (1.6 / k) + 'px'; }));
   _cuGr.b.selectAll('g').each(function (x) { const o = (x._rr || 6) * .72 + 3, cx = x._xy[0] + o / k, cy = x._xy[1] - o / k; d3.select(this).select('circle').attr('cx', cx).attr('cy', cy).attr('r', (x._nd > 99 ? 9 : 7) / k).style('stroke-width', 1.2 / k); d3.select(this).select('text').attr('x', cx).attr('y', cy).style('font-size', ((x._nd > 99 ? 7.5 : 8.5) / k) + 'px'); });
