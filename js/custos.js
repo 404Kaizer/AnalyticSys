@@ -33,6 +33,7 @@ const CU_MESES_NOME = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Ju
 const CU = {
   // uf/reg/cen = onde o mapa está (navegação); regs/cens/mats/forns = filtros (vários itens).
   // mat/forn = o único material/fornecedor marcado (ou ''), derivado em _cuSync.
+  rotas: new Map(), rotaFila: [], rotaTentou: new Set(), rotaRodando: false,
   F: { uf: '', reg: '', cen: '', mat: '', forn: '', div: false, regs: new Set(), cens: new Set(), mats: new Set(), forns: new Set() },
   L: { selos: false, cor: true, calor: false, esp: 'gasto', raio: 0 }, // esp: espessura da rota (gasto | frete por km); raio: km em volta da central (0 = desligado) // selos de alerta saíram do mapa (26/11): alertas ficam na gaveta e no tooltip
   sel: null, tab: 'nfs', pmat: null, cmpMat: null,
@@ -117,19 +118,21 @@ function _cuGarantirBase() {
   CU.base = (async () => {
     await _cuScript(CU_D3_URL);
     const sb = !!window.supabaseClient;
-    const [br, filiais, geo, coms, forns, fretes] = await Promise.all([
+    const [br, filiais, geo, coms, forns, fretes, rotas] = await Promise.all([
       _cuMalha(CU_IBGE + 'paises/BR?' + CU_GEOJSON + '&intrarregiao=UF').then(g => { if (!g) throw new Error('malha do IBGE indisponível'); return g; }),
       sb ? _cuFetchAll('filiais', 'origem, alias, cnpj, regional, uf', 'alias').catch(() => []) : [],
       sb ? _cuFetchAll('custos_geo', '*', 'cnpj').catch(e => { console.warn('[Custos] custos_geo:', e); return []; }) : [],
       sb ? _cuFetchAll('custos_comentarios', '*', 'created_at').catch(e => { console.warn('[Custos] custos_comentarios:', e); return []; }) : [],
       sb ? _cuFetchAll('cob_fornecedores', 'nome, cnpj', 'cnpj').catch(() => []) : [],
       sb ? _cuFetchAll('custos_frete', '*', 'created_at').catch(e => { console.warn('[Custos] custos_frete (rodou o SQL 20261119_custos_frete?):', e); return []; }) : [],
+      sb ? _cuFetchAll('custos_rotas', '*', 'central').catch(e => { console.warn('[Custos] custos_rotas (rodou o SQL 20261126_custos_rotas?):', e); return []; }) : [],
     ]);
     CU.br = _cuRewind(br);
     _cuMontarCentrais([...(state.filiais || []), ...filiais]);
     geo.forEach(g => CU.geo.set(g.cnpj, g));
     _cuSetComs(coms);
     _cuSetFrete(fretes);
+    _cuSetRotas(rotas);
     forns.forEach(f => { const c = String(f.cnpj || '').replace(/\D/g, ''); if (c.length === 14) { CU.cnpjPorNome.set(_cuNomeNorm(f.nome), c); CU.fornCad.set(c, f.nome || c); } });
     _cuMapaInit();
     if (sb) {
@@ -431,7 +434,58 @@ function _cuCorReg(reg) { const regs = _cuRegsDaUf(CU.F.uf); const i = regs.inde
 function _cuLL(cnpj) { const g = cnpj && CU.geo.get(cnpj); return g && g.lat != null && g.lng != null ? [g.lng, g.lat] : null; }
 function _cuXY(cnpj) { const ll = _cuLL(cnpj); return ll ? CU.proj(ll) : null; }
 function _cuKm(a, b) { const r = Math.PI / 180, dl = (b[1] - a[1]) * r, dn = (b[0] - a[0]) * r, h = Math.sin(dl / 2) ** 2 + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin(dn / 2) ** 2; return 6371 * 2 * Math.asin(Math.sqrt(h)) * 1.3; }
-function _cuKmPar(cen, fk) { const a = _cuLL(CU.cen.get(cen)?.cnpj), b = _cuLL(fk); return a && b ? _cuKm(a, b) : null; }
+function _cuKmPar(cen, fk) { const r = _cuRota(cen, fk); if (r) return r.km; const a = _cuLL(CU.cen.get(cen)?.cnpj), b = _cuLL(fk); return a && b ? _cuKm(a, b) : null; }
+/* ───────── rota rodoviária (OSRM) ─────────
+   Servidor público do OSRM: gratuito, mas de cortesia (sem uso em massa). Por isso só pede as rotas que
+   estão na tela (central aberta ou fornecedor em foco), uma por vez com 1,1 s de intervalo, e cada rota é
+   calculada uma única vez e guardada em custos_rotas para todos. Sem rota, fica a linha reta × 1,3.
+   ponytail: servidor público; se o volume crescer, apontar CU_OSRM para um OSRM próprio ou serviço pago. */
+const CU_OSRM = 'https://router.project-osrm.org/route/v1/driving/';
+const _cuRotaK = (cen, fk) => fk + '|' + cen;
+function _cuSetRotas(rows) { rows.forEach(r => CU.rotas.set(_cuRotaK(r.central, r.fornecedor), r)); }
+// Rota guardada só vale se foi calculada com as mesmas coordenadas (folga de ~1 km).
+function _cuRota(cen, fk) {
+  const r = CU.rotas.get(_cuRotaK(cen, fk)); if (!r) return null;
+  const o = _cuLL(fk), d = _cuLL(CU.cen.get(cen)?.cnpj); if (!o || !d) return null;
+  const perto = (lat, lng, p) => lat != null && Math.abs(lat - p[1]) < .01 && Math.abs(lng - p[0]) < .01;
+  return perto(r.o_lat, r.o_lng, o) && perto(r.d_lat, r.d_lng, d) ? r : null;
+}
+// Polyline do OSRM (precisão 5) → [[lng, lat], ...]
+function _cuPolyline(s) {
+  const out = []; let i = 0, lat = 0, lng = 0;
+  while (i < s.length) {
+    for (let k = 0; k < 2; k++) { let b, sh = 0, v = 0; do { b = s.charCodeAt(i++) - 63; v |= (b & 31) << sh; sh += 5; } while (b >= 32); const dv = v & 1 ? ~(v >> 1) : v >> 1; if (k) lng += dv; else lat += dv; }
+    out.push([lng / 1e5, lat / 1e5]);
+  }
+  return out;
+}
+// Caminho projetado (fornecedor → central) e ponto do meio, guardados no próprio registro.
+function _cuRotaGeo(r) {
+  if (!r._d) { const pts = _cuPolyline(r.geometria).map(p => CU.proj(p).map(v => +v.toFixed(2))); r._d = pts.join('L'); r._mid = pts[pts.length >> 1]; }
+  return r;
+}
+function _cuRotasPedir(pares) {
+  pares.forEach(([c, f]) => { const k = _cuRotaK(c, f); if (!_cuRota(c, f) && !CU.rotaTentou.has(k) && _cuLL(f) && _cuLL(CU.cen.get(c)?.cnpj)) { CU.rotaTentou.add(k); CU.rotaFila.push([c, f]); } });
+  if (!CU.rotaRodando && CU.rotaFila.length) _cuRotasRodar();
+}
+async function _cuRotasRodar() {
+  CU.rotaRodando = true; let mudou = 0, ultimo = 0;
+  while (CU.rotaFila.length) {
+    const [c, f] = CU.rotaFila.shift(), o = _cuLL(f), d = _cuLL(CU.cen.get(c)?.cnpj);
+    if (!o || !d) continue;
+    const espera = 1100 - (Date.now() - ultimo); if (espera > 0) await new Promise(r => setTimeout(r, espera));
+    ultimo = Date.now();
+    const j = await fetch(`${CU_OSRM}${o[0]},${o[1]};${d[0]},${d[1]}?overview=simplified&geometries=polyline`).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (!j) { CU.rotaFila.forEach(([c2, f2]) => CU.rotaTentou.delete(_cuRotaK(c2, f2))); CU.rotaTentou.delete(_cuRotaK(c, f)); CU.rotaFila.length = 0; break; } // fora do ar: tenta de novo depois
+    const rt = j.code === 'Ok' && j.routes?.[0]; if (!rt) continue; // sem rota por estrada (ilha, coordenada ruim): fica a reta
+    const row = { fornecedor: f, central: c, km: Math.round(rt.distance / 100) / 10, minutos: Math.round(rt.duration / 60), geometria: rt.geometry, o_lat: o[1], o_lng: o[0], d_lat: d[1], d_lng: d[0] };
+    CU.rotas.set(_cuRotaK(c, f), { ...row }); mudou++;
+    if (window.supabaseClient) window.supabaseClient.from('custos_rotas').upsert(row, { onConflict: 'fornecedor,central' }).then(({ error }) => { if (error) console.warn('[Custos] custos_rotas (rodou o SQL 20261126_custos_rotas?):', error.message); });
+    if (mudou % 3 === 0) _cuDesenhar(); // redesenha em lotes enquanto chegam
+  }
+  CU.rotaRodando = false;
+  if (mudou) { _cuDesenhar(); if (CU.tab !== 'frete') _cuPainel(); } // km do painel passam a ser os da estrada
+}
 
 /* ───────── mapa ───────── */
 let _cuSvg, _cuG, _cuZoom, _cuGr = {};
@@ -706,17 +760,19 @@ function _cuDesenhar() {
   const vis = Object.entries(_cuGroup(base, n => n.cen + '\u0001' + n.forn)).map(([k, a]) => { const [c, f] = k.split('\u0001'); const s = _cuAgg(a); return { c, f, a, s, ix: _cuIdx(a, ref), mats: [...s.mats] }; })
     .filter(l => cenPos.has(l.c) && _cuXY(l.f));
   const foco = l => sel && ((sel.t === 'forn' && l.f === sel.id) || (sel.t === 'rota' && l.c === sel.cen && l.f === sel.forn));
-  const curva = l => { const a = cenPos.get(l.c), b = _cuXY(l.f), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1]; return `M${b[0]},${b[1]}Q${mx - dy * .18},${my + dx * .18} ${a[0]},${a[1]}`; };
+  // Rota pela estrada (OSRM) quando já calculada; senão a curva estimada.
+  const curva = l => { const r = _cuRota(l.c, l.f), a = cenPos.get(l.c), b = _cuXY(l.f); if (r) return `M${b}L${_cuRotaGeo(r)._d}L${a}`; const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1]; return `M${b[0]},${b[1]}Q${mx - dy * .18},${my + dx * .18} ${a[0]},${a[1]}`; };
   // Espessura da rota: pelo gasto (padrão) ou pelo FRETE POR KM (frete por unidade ÷ km estimados).
   vis.forEach(l => { const km = _cuKmPar(l.c, l.f); l.km = km; l.fkm = km ? l.s.fu / km : 0; l.val = L.esp === 'frete' ? l.fkm : l.s.g; });
   const vmax = d3.max(vis, l => l.val) || 1;
+  _cuRotasPedir(vis.map(l => [l.c, l.f]));
   _cuGr.rt.selectAll('path').data(vis, l => l.c + '|' + l.f).join('path').attr('d', curva)
     .attr('class', 'rt') // sem animação do tracejado: ela redesenhava o mapa inteiro a cada quadro
     .style('stroke', l => L.cor ? _cuRtCor(l.ix) : foco(l) ? _cuCssM('--mp-foco') : _cuCssM('--mp-rota'))
     .style('opacity', l => nivel === 'cen' && sel && (sel.t === 'forn' || sel.t === 'rota') ? (foco(l) ? 1 : .2) : .9)
     .each(l => { l.w = (foco(l) ? 1.4 : 1) + 3.2 * Math.sqrt(l.val / vmax); });
   _cuGr.hit.selectAll('path').data(vis, l => l.c + '|' + l.f).join('path').attr('class', 'rthit').attr('d', curva)
-    .on('mousemove', (e, l) => { const km = _cuKmPar(l.c, l.f); _cuTip(e, `<b>${_cuE(_cuNomeF(l.f))}</b> → <b>${_cuE(_cuSigla(CU.cen.get(l.c)))}</b><br><span class="mono">${l.mats.map(_cuE).join(', ')}<br>${km ? _cuNf0.format(km) + ' km · ' : ''}${_cuBrlc(l.s.g)}${l.mats.length === 1 ? ' · ' + _cuP(l.mats[0], l.s.pm) : ''}<br>frete ${l.mats.length === 1 ? _cuP(l.mats[0], l.s.fu) : _cuBrlc(l.s.ge - l.s.g)}${l.fkm && l.mats.length === 1 ? ' · ' + _cuPn(l.mats[0], l.fkm) + '/' + _cuU(l.mats[0]) + '·km' : ''}<br>preço vs média: ${_cuPct(l.ix)}${l.s.d ? ` · ${l.s.d} alerta${l.s.d > 1 ? 's' : ''}` : ''}</span>`); })
+    .on('mousemove', (e, l) => { const km = _cuKmPar(l.c, l.f); _cuTip(e, `<b>${_cuE(_cuNomeF(l.f))}</b> → <b>${_cuE(_cuSigla(CU.cen.get(l.c)))}</b><br><span class="mono">${l.mats.map(_cuE).join(', ')}<br>${km ? (_cuRota(l.c, l.f) ? _cuNf0.format(km) + ' km pela estrada · ' : '~' + _cuNf0.format(km) + ' km estimados · ') : ''}${_cuBrlc(l.s.g)}${l.mats.length === 1 ? ' · ' + _cuP(l.mats[0], l.s.pm) : ''}<br>frete ${l.mats.length === 1 ? _cuP(l.mats[0], l.s.fu) : _cuBrlc(l.s.ge - l.s.g)}${l.fkm && l.mats.length === 1 ? ' · ' + _cuPn(l.mats[0], l.fkm) + '/' + _cuU(l.mats[0]) + '·km' : ''}<br>preço vs média: ${_cuPct(l.ix)}${l.s.d ? ` · ${l.s.d} alerta${l.s.d > 1 ? 's' : ''}` : ''}</span>`); })
     .on('mouseenter', (e, l) => _cuRealca({ rota: l })).on('mouseleave', () => { _cuTipOff(); _cuRealceOff(); })
     .on('click', (e, l) => { CU.sel = { t: 'rota', cen: l.c, forn: l.f }; CU.tab = 'nfs'; _cuUpdate(false); });
   // fornecedores: os das rotas visíveis + (nível central) alternativas em cinza
@@ -797,9 +853,10 @@ function _cuDesenhar() {
     .join(en => { const g = en.append('g').attr('class', 'bdg'); g.append('circle'); g.append('text'); return g; })
     .each(function (x) { d3.select(this).select('text').text(x._nd > 999 ? '999+' : x._nd); });
   // rótulos (dx/dy em px de tela; só do que está visível)
-  // Distância de cada rota no meio da curva (estimativa por estrada = linha reta × 1,3).
+  // Distância de cada rota no meio do traçado: pela estrada (OSRM) ou, sem rota ainda, ~ linha reta × 1,3.
   const kmRotas = vis.length > 60 ? [] : vis.map(l => {
     const a = cenPos.get(l.c), b = _cuXY(l.f), km = _cuKmPar(l.c, l.f); if (!km) return null;
+    const r = _cuRota(l.c, l.f); if (r) { const m = _cuRotaGeo(r)._mid; return { id: 'k' + l.c + '|' + l.f, cen: l.c, forn: l.f, x: m[0], y: m[1], t: _cuNf0.format(km) + ' km', cls: 'lbl km', dy: 4 }; }
     const cx = (a[0] + b[0]) / 2 - (b[1] - a[1]) * .18, cy = (a[1] + b[1]) / 2 + (b[0] - a[0]) * .18;
     return { id: 'k' + l.c + '|' + l.f, cen: l.c, forn: l.f, x: .25 * b[0] + .5 * cx + .25 * a[0], y: .25 * b[1] + .5 * cy + .25 * a[1], t: '~' + _cuNf0.format(km) + ' km', cls: 'lbl km', dy: 4 };
   }).filter(Boolean);
