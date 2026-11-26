@@ -14513,7 +14513,7 @@ button.rp-kpi { cursor: pointer; } button.rp-kpi:hover { border-color: var(--bor
 #rp-root .rp-t thead th { position: relative; padding: 7px 8px; min-width: 0; font: 600 12px var(--font); letter-spacing: 0; text-transform: none; color: var(--text2); background: transparent; border-bottom: 1px solid var(--border2); }
 #rp-root .rp-t tbody td { padding: 8px; max-width: none; white-space: nowrap; overflow: visible; border-bottom: 1px solid var(--border); }
 #rp-root .rp-t .n { text-align: right; }
-#rp-root #rp-tab-itens thead th { padding: 7px 18px 7px 6px; } #rp-root #rp-tab-itens tbody td { padding: 8px 6px; } #rp-root #rp-tab-itens .rp-selo { padding: 2px 7px; } #rp-root .rp-t td.n, .rp-t .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+#rp-root #rp-tab-itens thead th { padding: 7px 16px 7px 4px; } #rp-root #rp-tab-itens tbody td { padding: 8px 4px; } #rp-root #rp-tab-itens .rp-selo { padding: 2px 7px; } #rp-root .rp-t td.n, .rp-t .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .rp-clk { cursor: pointer; } #rp-root .rp-t tr.rp-eu td { background: var(--accent-dim); } #rp-root .rp-t tr.rp-tot td { font-weight: 600; border-top: 1px solid var(--border2); border-bottom: 0; }
 .rp-q { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; }
 .rp-item { border: 1px solid var(--border); border-radius: 12px; background: var(--bg2); overflow: hidden; scroll-margin-top: calc(var(--topbar-h) + 12px); } .rp-item.ab { border-color: var(--border3); }
