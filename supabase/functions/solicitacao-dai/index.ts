@@ -256,7 +256,8 @@ async function acaoCatalogo() {
     const key = normText(nome);
     if (!centraisVistas.has(key)) centraisVistas.set(key, nome);
   });
-  const centrais = [...centraisVistas.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  // numeric: ordena pelo código da central como número (03, 04 … 98, 101), não como texto.
+  const centrais = [...centraisVistas.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
 
   const materiaisPorCategoria: Record<string, string[]> = {};
   CATEGORIAS_FIXAS.forEach((c) => (materiaisPorCategoria[c] = []));
