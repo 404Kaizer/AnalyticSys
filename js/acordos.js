@@ -24,8 +24,9 @@
 // ══════════════════════════════════════════════════════════════════════
 
 const AC_MODALIDADES = { nota_mae: 'Nota mãe', rebate: 'Rebate', acordo_financeiro: 'Acordo financeiro' };
+// Finalizada: automático (mãe retirada até o fim), não fica em acordo_nf_status.
 const AC_STATUS = {
-  autorizada: ['Autorizada', 'badge-green'], cancelada: ['Cancelada', 'badge-red'],
+  autorizada: ['Autorizada', 'badge-green'], finalizada: ['Finalizada', 'badge-green'], cancelada: ['Cancelada', 'badge-red'],
   devolvida: ['Devolvida', 'badge-amber'], inutilizada: ['Inutilizada', 'badge-purple'],
   indevida: ['Indevida', 'badge-amber'], recusada: ['Recusada', 'badge-red'],
 };
@@ -59,6 +60,7 @@ const _acData = ms => ms ? new Date(ms).toLocaleDateString('pt-BR') : '—';
 const _acCnpjFmt = c => String(c || '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
 const _acNum = v => String(v ?? '').split('/')[0].replace(/\D/g, '').replace(/^0+(?=\d)/, '');
 const _acDia = 86400000;
+const AC_ZERO = 0.005;   // t: abaixo disso o saldo mostra "0,00 t" e conta como zerado
 
 /* ───────── carga ───────── */
 // table: nome da tabela ou função que devolve a consulta (rpc).
@@ -319,7 +321,7 @@ function _acMontar() {
   // Só filha Autorizada conta como retirado (Hugo, 27/11/2026).
   AC.filhas.forEach(f => {
     f.devNF = somaDev(f);
-    if (f.status === 'autorizada' && f.devNF > 0 && f.devNF >= f.peso - 0.001) { f.status = 'devolvida'; f.auto = true; }
+    if (f.status === 'autorizada' && f.devNF > 0 && f.devNF > f.peso - AC_ZERO) { f.status = 'devolvida'; f.auto = true; }
     f.ret = f.status === 'autorizada' ? Math.max(0, f.peso - f.devNF) : 0;
   });
   // Mãe sem Entrada: central mais frequente entre as filhas. Devoluções que zeram o
@@ -334,7 +336,7 @@ function _acMontar() {
     }
     m.regional = AC.regPorCen.get(m.central) || '';
     m.devNF = somaDev(m);
-    if (m.status === 'autorizada' && m.devNF > 0 && m.peso - m.filhas.reduce((t, f) => t + f.ret, 0) - m.devNF <= 0.001) { m.status = 'devolvida'; m.auto = true; }
+    if (m.status === 'autorizada' && m.devNF > 0 && m.peso - m.filhas.reduce((t, f) => t + f.ret, 0) - m.devNF < AC_ZERO) { m.status = 'devolvida'; m.auto = true; }
   });
   AC.filhas.forEach(f => { if (!f.central && f.mae) f.central = f.mae.central; f.regional = AC.regPorCen.get(f.central) || ''; });
   AC.devs.forEach(d => { if (!d.central && d.alvo) d.central = d.alvo.central; d.regional = AC.regPorCen.get(d.central) || ''; });
@@ -355,7 +357,11 @@ function _acMontar() {
     g.pesoMedio = ret.length ? ret.reduce((t, f) => t + f.ret, 0) / ret.length : 0;
     g.intervalo = _acIntervalo(ret);
     g.maes.sort((a, b) => b.emissao - a.emissao);
-    g.maes.forEach(m => Object.assign(m, _acKpis(m, g)));
+    g.maes.forEach(m => {
+      Object.assign(m, _acKpis(m, g));
+      // Retirada até o fim → Finalizada (automático, não grava; Hugo 27/11/2026).
+      if (m.status === 'autorizada' && m.totT > 0 && m.pendT === 0) { m.status = 'finalizada'; m.auto = true; }
+    });
     g.pendT = g.maes.reduce((t, m) => t + m.pendT, 0);
     g.pendR = g.maes.reduce((t, m) => t + m.pendR, 0);
     g.semVinc.sort((a, b) => b.emissao - a.emissao);
@@ -375,13 +381,14 @@ function _acIntervalo(fs) {
 //   devolvida:  idem, mas tudo o que não foi retirado é devolvido (restante 0);
 //   cancelada, inutilizada, indevida, recusada: tudo zero (a nota não vale).
 function _acKpis(m, g) {
-  const vale = m.status === 'autorizada' || m.status === 'devolvida';
+  const vale = m.status === 'autorizada' || m.status === 'finalizada' || m.status === 'devolvida';
   const fs = vale ? m.filhas.filter(f => f.ret > 0) : [];
   const retT = fs.reduce((t, f) => t + f.ret, 0);
   const totT = vale ? m.peso : 0;
   const custoUn = m.peso > 0 ? m.valor / m.peso : (Number(m.itens[0]?.valor_unit) || 0);
   const devT = !vale ? 0 : m.status === 'devolvida' ? Math.max(0, totT - retT) : m.devNF;
-  const pendT = Math.max(0, totT - retT - devT);
+  // Sobra de arredondamento (aparece como "0,00 t") conta como zerado.
+  const pendT = totT - retT - devT < AC_ZERO ? 0 : totT - retT - devT;
   const pesoMedio = g.pesoMedio || (fs.length ? retT / fs.length : 0);
   const nfsRest = pendT > 0 && pesoMedio > 0 ? Math.ceil(pendT / pesoMedio) : (pendT > 0 ? null : 0);
   const intervalo = _acIntervalo(fs) ?? g.intervalo;
@@ -521,8 +528,8 @@ function _acOrdemForn(a, b) {
 const _acNoRecorte = (n, rec) => !rec || rec(n);
 function _acSit(maes, sv) {
   const tot = maes.reduce((t, m) => t + m.totT, 0), pen = maes.reduce((t, m) => t + m.pendT, 0), penR = maes.reduce((t, m) => t + m.pendR, 0);
-  const [ic, cor] = !maes.length && !sv ? ['ti-minus', 'var(--text3)'] : sv ? ['ti-link-off', 'var(--red)'] : pen > 0.001 ? ['ti-hourglass', 'var(--amber)'] : ['ti-circle-check', 'var(--green)'];
-  const selo = sv ? [`${_acNf0.format(sv)} sem vínculo`, '#f43f5e'] : pen > 0.001 ? [`Restante ${_acNf0.format(tot ? pen / tot * 100 : 0)}%`, '#f59e0b'] : maes.length ? ['Zerado', '#10b981'] : null;
+  const [ic, cor] = !maes.length && !sv ? ['ti-minus', 'var(--text3)'] : sv ? ['ti-link-off', 'var(--red)'] : pen > 0 ? ['ti-hourglass', 'var(--amber)'] : ['ti-circle-check', 'var(--green)'];
+  const selo = sv ? [`${_acNf0.format(sv)} sem vínculo`, '#f43f5e'] : pen > 0 ? [`Restante ${_acNf0.format(tot ? pen / tot * 100 : 0)}%`, '#f59e0b'] : maes.length ? ['Zerado', '#10b981'] : null;
   return { pen, penR, ico: `<i class="ti ${ic} mp-ico" style="color:${cor}" aria-hidden="true"></i>`, selo: selo ? `<span class="mp-prio ac-selo" style="--c:${selo[1]}">${selo[0]}</span>` : '' };
 }
 function _acLinhaForn(f, recuo, rec) {
@@ -731,7 +738,7 @@ window.addEventListener('resize', () => { clearTimeout(_acEvoT); _acEvoT = setTi
 function _acResumoTxt(maes, g) {
   const cont = new Map(), partes = [];
   maes.forEach(m => { if (m.status !== 'autorizada') cont.set(m.status, (cont.get(m.status) || 0) + 1); });
-  cont.forEach((n, st) => partes.push(`${_acNf0.format(n)} ${AC_STATUS[st][0].toLowerCase()}${n === 1 ? '' : 's'}${st === 'devolvida' ? '' : ' (valores zero)'}`));
+  cont.forEach((n, st) => partes.push(`${_acNf0.format(n)} ${AC_STATUS[st][0].toLowerCase()}${n === 1 ? '' : 's'}${st === 'devolvida' || st === 'finalizada' ? '' : ' (valores zero)'}`));
   if (g?.pesoMedio) partes.push(`filha de ${_acT(g.pesoMedio)} em média`);
   if (g?.intervalo > 0) partes.push(g.intervalo >= 1 ? `uma a cada ${_acNf1.format(g.intervalo)} dias` : `${_acNf1.format(1 / g.intervalo)} por dia`);
   return partes.join(' · ') || 'todas autorizadas';
@@ -876,8 +883,9 @@ function _acRecHtml(s, r) {
 function _acStHtml(n, quem) {
   const st = AC_STATUS[n.status];
   if (n.status === 'cancelada') return `<span class="badge ${st[1]}" title="Cancelada no SEFAZ">${st[0]}</span>`;
-  const tit = `Status da nota ${quem}${n.auto ? ' — Devolvida automaticamente pelas NFs de devolução' : ''}`;
-  return `<select class="form-select ac-st ${st[1]}" onclick="event.stopPropagation()" onchange="acStatus('${n.chave}', this.value)" title="${tit}">${AC_STATUS_MANUAIS.map(k => `<option value="${k}"${n.status === k ? ' selected' : ''}>${AC_STATUS[k][0]}${n.auto && k === 'devolvida' ? ' (auto)' : ''}</option>`).join('')}</select>`;
+  const tit = `Status da nota ${quem}${!n.auto ? '' : n.status === 'finalizada' ? ' — Finalizada automaticamente (retirada até o fim)' : ' — Devolvida automaticamente pelas NFs de devolução'}`;
+  const ops = AC_STATUS_MANUAIS.includes(n.status) ? AC_STATUS_MANUAIS : [n.status, ...AC_STATUS_MANUAIS];
+  return `<select class="form-select ac-st ${st[1]}" onclick="event.stopPropagation()" onchange="acStatus('${n.chave}', this.value)" title="${tit}">${ops.map(k => `<option value="${k}"${n.status === k ? ' selected' : ''}>${AC_STATUS[k][0]}${n.auto && k === n.status ? ' (auto)' : ''}</option>`).join('')}</select>`;
 }
 const _acVincHtml = (n, ph, lista) => `<div class="ac-vinc"><input class="form-input" id="ac-v-${n.chave}" placeholder="${ph}" list="${lista}" onkeydown="if(event.key==='Enter')acVincular('${n.chave}')"><button class="btn btn-sm" onclick="acVincular('${n.chave}')" title="Vincular"><i class="ti ti-link"></i></button></div>`;
 const _acMatTd = n => `<td class="ac-comp ac-comp-mat" title="${_acE(n.materiais.join(', '))}">${_acE(n.materiais.join(', ') || '—')}</td>`;
@@ -922,7 +930,7 @@ function _acCardsMaes(maes) {
   if (!maes.length) return `<div class="mp-card"><p class="mo-hint">Nenhuma nota mãe deste fornecedor no SEFAZ importado${_acTemFiltro() ? ' para o filtro' : ''}.</p></div>`;
   return `<div class="micro-section-title" style="margin:6px 2px 0"><i class="ti ti-file-dollar"></i> Notas mães (${maes.length})</div>` + maes.map(m => {
     const ab = AC.abertas.has(m.chave);
-    return `<div class="micro-filial-card ac-mcard${m.status !== 'autorizada' ? ' ac-inativa' : ''}" data-ac="${m.chave}">
+    return `<div class="micro-filial-card ac-mcard${_acTom(m)}" data-ac="${m.chave}">
       <div class="micro-filial-header-wrap${ab ? ' open' : ''}">
         <div class="micro-filial-header" onclick="acToggle(this.closest('.micro-filial-header-wrap'))">
           <div class="micro-filial-name"><i class="ti ti-file-dollar"></i> NF ${_acE(m.numero)}<span class="ac-mcard-sub">${_acE(m.central || 'sem central')} · ${_acData(m.emissao)}</span></div>
@@ -943,6 +951,9 @@ function _acCardsMaes(maes) {
   }).join('');
 }
 
+// Cor do card pelo status (Hugo, 27/11/2026): Finalizada verde, Devolvida laranja,
+// as que zeram a nota (Cancelada, Inutilizada, Indevida, Recusada) vermelho.
+const _acTom = m => m.status === 'autorizada' ? '' : m.status === 'finalizada' ? ' ac-tom-fin' : m.status === 'devolvida' ? ' ac-tom-dev' : ' ac-tom-zero';
 const AC_VINC = { manual: ['Manual', 'badge-purple'], chave: ['Pela chave', 'badge-teal'], numero: ['Pelo número', 'badge-teal'] };
 const _acVincTd = n => `<td><span class="badge ${AC_VINC[n.vinculo][1]}">${AC_VINC[n.vinculo][0]}</span></td>
       <td class="mono ac-chave" title="${n.chave}">${n.chave}</td>
