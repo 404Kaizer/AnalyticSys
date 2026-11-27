@@ -42,6 +42,7 @@ const AC = {
   regPorCen: new Map(),       // alias → regional
   nfs: [],                    // NFs do SEFAZ (mães + filhas), cruas
   maes: [], filhas: [], devs: [], porForn: new Map(),
+  cit: new Map(), citFalta: new Set(),   // motivo das devoluções sem vínculo: notas citadas buscadas em cob_sefaz
   cenIdx: null, cenIdxRef: null, cenIdxLen: -1,
   sel: '', grp: '', aba: null, paba: 'maes', abertas: new Set(), listaRecolhida: false,
   geo: new Map(), geoBuscando: new Set(), geoErro: new Map(),   // ficha do fornecedor: endereço do CNPJ (custos_geo)
@@ -110,6 +111,7 @@ async function _acCarregar() {
   const porChave = new Map();
   lotes.flat().forEach(s => porChave.set(s.chave, s));
   AC.nfs = [...porChave.values()];
+  AC.cit = new Map(); AC.citFalta = new Set();
   AC.cenIdx = null;
   AC.sujo = false;
 }
@@ -289,6 +291,8 @@ function _acMontar() {
   AC.maePorNum = porNumDe(AC.maes);
   AC.notaPorChave = new Map([...AC.maes, ...AC.filhas].map(n => [n.chave, n]));
   AC.notaPorNum = porNumDe([...AC.maes, ...AC.filhas]);
+  AC.notaPorNumero = new Map();   // só o nº, qualquer CNPJ (motivo das devoluções sem vínculo)
+  [...AC.maes, ...AC.filhas].forEach(n => (AC.notaPorNumero.get(n.numero) || AC.notaPorNumero.set(n.numero, []).get(n.numero)).push(n));
   AC.maes.forEach(m => { m.filhas = []; m.devs = []; });
 
   // Filha → mãe: vínculo manual; senão a chave ou o número citado (_acAchar).
@@ -874,6 +878,65 @@ const _acMatTd = n => `<td class="ac-comp ac-comp-mat" title="${_acE(n.materiais
 
 // Subaba "Sem vínculo": filhas cujo complementar não cita a nota mãe e devoluções que
 // não citam a mãe/filha devolvida — vincular à mão.
+/* ───────── motivo das devoluções sem vínculo (Hugo, 27/11/2026) ───────── */
+// Por que a devolução não vinculou sozinha. Olha a chave e os números citados ao
+// lado de NF/NOTA/FATURAMENTO (até 3). Nota que não está na aba (CFOP que não é
+// mãe/filha, outro CNPJ, fora do SEFAZ importado) é procurada em cob_sefaz uma vez
+// por número/chave (AC.cit: chave 'n:<nº>' ou 'c:<chave>' → linhas; null = buscando).
+// Sem número ao lado de NF/NOTA, os números soltos (lacres, placas…) só são olhados
+// entre as notas da aba — não vão ao banco.
+const AC_CIT_MAX = 3;
+function _acMotivoDev(d) {
+  if (!d.comp) return 'O complementar está vazio.';
+  const { chaves, rot, todos } = _acCitacoes(d.comp);
+  const cnpjs = new Set([d.cnpj, d.cnpjDest].filter(Boolean));
+  const outro = n => `é de outro CNPJ (${_acCnpjFmt(n.cnpj_emitente || n.cnpj)} · ${_acE(n.nome || '')})`;
+  const naAba = (rot, notas) => {
+    const meu = notas.filter(n => cnpjs.has(n.cnpj));
+    if (meu.length > 1) return `${rot}: há ${meu.length} notas com esse número — vincule pela chave`;
+    const n = meu[0];
+    if (n?.status === 'cancelada') return `${rot} está cancelada no SEFAZ`;
+    if (n && n.emissao && d.emissao && _acDiaDe(n.emissao) > _acDiaDe(d.emissao)) return `${rot} foi emitida depois da devolução (${_acData(n.emissao)})`;
+    if (n) return `${rot} empatou com outra nota citada`;
+    return notas.length ? `${rot} ${outro(notas[0])}` : '';
+  };
+  const noBanco = (rot, k) => {
+    const rows = AC.cit.get(k);
+    if (rows === undefined || rows === null) { if (rows === undefined) AC.citFalta.add(k); return `${rot}: verificando…`; }
+    if (!rows.length) return `${rot} não está no SEFAZ importado`;
+    const meu = rows.filter(r => cnpjs.has(r.cnpj_emitente));
+    if (!meu.length) return `${rot} ${outro(rows[0])}`;
+    const cfops = [...new Set(meu.flatMap(r => (Array.isArray(r.itens) ? r.itens : []).map(i => i.cfop)).filter(Boolean))];
+    return `${rot} não é nota mãe nem filha (CFOP ${cfops.join(', ') || '—'}) — se for entrega futura, marque o CFOP no cadastro`;
+  };
+  const partes = [];
+  chaves.slice(0, AC_CIT_MAX).forEach(c => { if (!AC.notaPorChave.has(c)) partes.push(noBanco(`A chave da NF ${c.slice(25, 34).replace(/^0+/, '')}`, 'c:' + c)); });
+  [...rot].slice(0, AC_CIT_MAX).forEach(x => partes.push(naAba(`NF ${x}`, AC.notaPorNumero.get(x) || []) || noBanco(`NF ${x}`, 'n:' + x)));
+  if (!partes.length) {
+    const fora = [...todos].map(x => naAba(`NF ${x}`, AC.notaPorNumero.get(x) || [])).filter(Boolean);
+    partes.push(...fora.slice(0, AC_CIT_MAX));
+    if (!partes.length) partes.push('O complementar não cita o nº da nota ao lado de NF/NOTA, e nenhum número do texto é nota mãe ou filha deste fornecedor.');
+  }
+  return partes.map(p => p[0].toUpperCase() + p.slice(1)).join(' · ') + (partes.length === 1 && !/[.…]$/.test(partes[0]) ? '.' : '');
+}
+// Busca em cob_sefaz o que _acMotivoDev pediu (AC.citFalta) e redesenha a tabela.
+async function _acCitBuscar() {
+  const ks = [...AC.citFalta];
+  AC.citFalta.clear();
+  if (!ks.length || !window.supabaseClient) return;
+  ks.forEach(k => AC.cit.set(k, null));
+  const nums = ks.filter(k => k[0] === 'n').map(k => k.slice(2)), chaves = ks.filter(k => k[0] === 'c').map(k => k.slice(2));
+  const cols = 'chave, numero, cnpj_emitente, nome, status, emissao, itens';
+  const q = () => window.supabaseClient.from('cob_sefaz').select(cols);
+  try {
+    const [rn, rc] = await Promise.all([nums.length ? q().in('numero', nums) : { data: [] }, chaves.length ? q().in('chave', chaves) : { data: [] }]);
+    if (rn.error || rc.error) throw rn.error || rc.error;
+    nums.forEach(x => AC.cit.set('n:' + x, rn.data.filter(r => r.numero === x)));
+    chaves.forEach(c => AC.cit.set('c:' + c, rc.data.filter(r => r.chave === c)));
+  } catch (e) { console.warn('[Acordos] motivo das devoluções:', e); ks.forEach(k => AC.cit.delete(k)); return; }
+  if (AC.paba === 'semvinc' && document.getElementById('ac-tcorpo')) _acTabCorpo();
+}
+
 function _acAlertaSemVinc(f, g) {
   if (!g.semVinc.length && !g.devSemVinc.length) return '<div class="mp-card"><p class="mo-hint"><i class="ti ti-circle-check" style="color:var(--green)"></i> Todas as notas filhas e devoluções deste fornecedor estão vinculadas.</p></div>';
   const sv = _acFiltraSv(g.semVinc, true), dv = _acFiltraSv(g.devSemVinc, false);
@@ -893,13 +956,15 @@ function _acAlertaSemVinc(f, g) {
     </tbody></table></div></div>`;
   const devs = !dv.length ? '' : `<div class="mp-card ac-semvinc">
     <h4 class="mp-tit">${dv.length < g.devSemVinc.length ? `${dv.length} de ${g.devSemVinc.length}` : dv.length} devoluç${g.devSemVinc.length > 1 ? 'ões' : 'ão'} sem vínculo <span class="mo-hint">${_acT(dv.reduce((t, s) => t + s.peso, 0))} · o complementar não cita uma nota mãe ou filha deste fornecedor (pode ser de compra comum)</span></h4>
-    <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Devolução</th><th>Emissão</th><th>Emitente</th><th>Material</th><th class="num">Peso</th><th>Complementar</th><th>Vincular à nota mãe ou filha</th></tr></thead><tbody>
+    <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Devolução</th><th>Emissão</th><th>Emitente</th><th>Material</th><th class="num">Peso</th><th>Complementar</th><th>Por que não vinculou</th><th>Vincular à nota mãe ou filha</th></tr></thead><tbody>
     ${dv.map(d => `<tr>
       <td class="mono">${_acE(d.numero)}</td><td>${_acData(d.emissao)}</td><td>${d.cnpj === d.forn ? 'Fornecedor' : 'Concrelagos'}</td>${_acMatTd(d)}<td class="num mono">${_acT(d.peso)}</td>
       <td class="ac-comp" title="${_acE(d.comp)}">${_acE(d.comp || '—')}</td>
+      <td class="ac-mot">${d.vinculo === 'manual' ? '—' : _acMotivoDev(d)}</td>
       <td>${d.vinculo === 'manual' ? `<span class="mo-hint ac-rec-nao">vinculada à NF ${_acE(d.alvoNumero)}, que não está no SEFAZ importado</span>` : _acVincHtml(d, 'Nº/chave da nota', `ac-dl-dev-${f.cnpj}`)}</td>
     </tr>`).join('')}
     </tbody></table></div></div>`;
+  if (AC.citFalta.size) setTimeout(_acCitBuscar);
   return `${filhas}${devs}
     ${dv.length ? `<datalist id="ac-dl-dev-${f.cnpj}">${[...g.maes, ...g.filhas, ...g.semVinc].sort((a, b) => b.emissao - a.emissao).map(n => `<option value="${_acE(n.numero)}">${_acE(n.numero)} · ${n.tipo === 'mae' ? 'nota mãe' : 'filha'} · ${_acE(n.central || 'sem central')} · ${_acData(n.emissao)} · ${_acT(n.peso)}</option>`).join('')}</datalist>` : ''}
     ${[...new Set(sv.map(s => s.central))].map(c => {
