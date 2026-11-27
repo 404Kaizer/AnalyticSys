@@ -1202,9 +1202,12 @@ function muralPainelRender(el, itens) {
     el.addEventListener('mousemove', e => { if (e.target.closest?.(ALVO)) _moveTip(e); });
     el.addEventListener('mouseout', e => { if (e.target.closest?.(ALVO)) _hideTip(); });
   }
+  // Mantém a rolagem da fila ao redesenhar (clique num item não volta ao topo).
+  const sc = el.querySelector('.mp-lista-corpo')?.scrollTop;
   el.innerHTML = `<div class="mp-root">${_muralFiltrosHtml(itens)}
     <div class="mp">${_mpListaHtml(todos)}
       <section class="mp-painel">${semUso ? suPainelHtml() : _mpPainelHtml(todos, fila)}</section></div></div>`;
+  const c = el.querySelector('.mp-lista-corpo'); if (c && sc) c.scrollTop = sc;
   if (!semUso) _mpDepois(todos);
 }
 
