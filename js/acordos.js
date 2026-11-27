@@ -48,7 +48,7 @@ const AC = {
   fAberto: null, fPend: null, fBusca: '', evo: 't', evoNotas: [],
   F: { q: '', regs: new Set(), cens: new Set(), mats: new Set(), grupo: 'regional' },
   T: { q: '', st: new Set(), resto: false, ord: 'emissao' },   // filtros da lista de notas mães do fornecedor
-  S: { q: '', st: new Set(), cen: null },                      // filtros da sub-aba Sem vínculo (cen null = todas)
+  S: { q: '', st: new Set(), cen: new Set() },                 // filtros da sub-aba Sem vínculo
 };
 
 /* ───────── formatação ───────── */
@@ -434,31 +434,7 @@ const _acGrupoDe = { regional: m => [m.regional || 'Sem regional'], central: m =
 function _acFiltrosHtml() {
   const grupos = [['fornecedor', 'ti-truck', 'Por Fornecedor — lista simples'], ['regional', 'ti-users-group', 'Por Regional — regional → fornecedores'],
     ['central', 'ti-building-warehouse', 'Por Central — central → fornecedores'], ['material', 'ti-box', 'Por Material — material → fornecedores']];
-  const filtros = AC_FILTROS.map(x => {
-    const ap = AC.F[x.k], aberto = AC.fAberto === x.k;
-    const rotulo = ap.size === 1 ? [...ap][0] : ap.size > 1 ? `${x.label} (${ap.size})` : x.label;
-    let opcoes = '';
-    if (aberto) {
-      const marc = AC.fPend || ap, q = normalizeText(AC.fBusca).toLowerCase();
-      const lista = [...new Set(AC.maes.flatMap(x.de).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-        .filter(v => !q || normalizeText(v).toLowerCase().includes(q));
-      opcoes = lista.length ? lista.map((v, n) => `<label class="micro-filter-option" for="acf-${x.k}-${n}">
-          <input type="checkbox" id="acf-${x.k}-${n}" ${marc.has(v) ? 'checked' : ''} data-v="${_acE(v)}" onchange="acFMarcar(this)">
-          <span class="micro-filter-option-label" title="${_acE(v)}">${_acE(v)}</span></label>`).join('')
-        : '<div style="padding:12px 10px;color:var(--text3);font-size:13.5px;text-align:center">Nenhum resultado</div>';
-    }
-    return `<div class="micro-filter-group mo-fg" data-k="${x.k}">
-      <button class="micro-filter-trigger${ap.size ? ' active' : ''}" onclick="acFAbrir('${x.k}')"><i class="ti ${x.icon}"></i><span>${_acE(rotulo)}</span><i class="ti ti-chevron-down micro-filter-chev${aberto ? ' open' : ''}"></i></button>
-      <div class="micro-filter-dropdown${aberto ? ' open' : ''}">
-        <div class="micro-filter-search-wrap"><i class="ti ti-search"></i>
-          <input class="micro-filter-search" id="acf-busca-${x.k}" type="text" placeholder="Buscar ${x.label.toLowerCase()}…" value="${_acE(aberto ? AC.fBusca : '')}" oninput="acFBuscar(this)"></div>
-        <div class="micro-filter-options">${opcoes}</div>
-        <div class="micro-filter-footer">
-          <button class="btn btn-filter-clear" onclick="acFLimpar('${x.k}')"><i class="ti ti-filter-off"></i> Limpar</button>
-          <button class="btn" onclick="acFFechar()"><i class="ti ti-x"></i> Cancelar</button>
-          <button class="btn btn-primary" onclick="acFAplicar('${x.k}')"><i class="ti ti-check"></i> Aplicar</button>
-        </div></div></div>`;
-  }).join('');
+  const filtros = AC_FILTROS.map(x => _acFgHtml(x.k, x.label, x.icon, [...new Set(AC.maes.flatMap(x.de).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')))).join('');
   return `<div class="micro-filter-bar mo-filter-bar">
     <div class="micro-group-mode mp-grupos" role="group" aria-label="Agrupar a lista">${grupos.map(([k, ic, t]) =>
       `<button class="${AC.F.grupo === k ? 'active' : ''}" onclick="acGrupo('${k}')" title="${t}" aria-label="${t}" aria-pressed="${AC.F.grupo === k}"><i class="ti ${ic}"></i></button>`).join('')}</div>
@@ -921,11 +897,12 @@ function _acAlertaSemVinc(f, g) {
     ${dv.map(d => `<tr>
       <td class="mono">${_acE(d.numero)}</td><td>${_acData(d.emissao)}</td><td>${d.cnpj === d.forn ? 'Fornecedor' : 'Concrelagos'}</td>${_acMatTd(d)}<td class="num mono">${_acT(d.peso)}</td>
       <td class="ac-comp" title="${_acE(d.comp)}">${_acE(d.comp || '—')}</td>
-      <td>${d.vinculo === 'manual' ? `<span class="mo-hint ac-rec-nao">vinculada à NF ${_acE(d.alvoNumero)}, que não está no SEFAZ importado</span>` : _acVincHtml(d, 'Nº ou chave da mãe/filha', `ac-dl-${f.cnpj}-${_acDlId('')}`)}</td>
+      <td>${d.vinculo === 'manual' ? `<span class="mo-hint ac-rec-nao">vinculada à NF ${_acE(d.alvoNumero)}, que não está no SEFAZ importado</span>` : _acVincHtml(d, 'Nº/chave da nota', `ac-dl-dev-${f.cnpj}`)}</td>
     </tr>`).join('')}
     </tbody></table></div></div>`;
   return `${filhas}${devs}
-    ${[...new Set([...sv.map(s => s.central), ...(dv.length ? [''] : [])])].map(c => {
+    ${dv.length ? `<datalist id="ac-dl-dev-${f.cnpj}">${[...g.maes, ...g.filhas, ...g.semVinc].sort((a, b) => b.emissao - a.emissao).map(n => `<option value="${_acE(n.numero)}">${_acE(n.numero)} · ${n.tipo === 'mae' ? 'nota mãe' : 'filha'} · ${_acE(n.central || 'sem central')} · ${_acData(n.emissao)} · ${_acT(n.peso)}</option>`).join('')}</datalist>` : ''}
+    ${[...new Set(sv.map(s => s.central))].map(c => {
       // Sugestões só com as mães da central da filha (Hugo, 23/11/2026); filha
       // sem central (ou central sem mãe conhecida) vê todas as do fornecedor.
       const daCen = c ? g.maes.filter(m => m.central === c) : [];
@@ -935,46 +912,84 @@ function _acAlertaSemVinc(f, g) {
 }
 
 /* ───────── filtros das tabelas do fornecedor (Hugo, 27/11/2026) ───────── */
-// Notas mães: status, nº/chave, só com restante e ordem. Sem vínculo: nº/chave/
+// No padrão da barra do topo (Visão Micro): botões com lista de marcar (Limpar /
+// Cancelar / Aplicar), botão de liga/desliga e o seletor de modo para a ordem.
+// Notas mães: nº/chave, status, só com restante e ordem. Sem vínculo: nº/chave/
 // complementar, status da filha e central. Digitar troca só #ac-tcorpo (o campo
-// não perde o foco); chips e ordem redesenham a tela.
+// não perde o foco); o resto redesenha a tela.
 const _acDig = q => String(q || '').replace(/\D/g, '');
-const _acChipsSt = (lista, sel, fn) => {
-  const cont = new Map();
-  lista.forEach(n => cont.set(n.status, (cont.get(n.status) || 0) + 1));
-  return Object.keys(AC_STATUS).filter(k => cont.has(k)).map(k =>
-    `<button class="mp-chip${sel.has(k) ? ' ac-chip-on' : ''}" aria-pressed="${sel.has(k)}" onclick="${fn}('${k}')">${sel.has(k) ? '<i class="ti ti-check"></i>' : ''}${AC_STATUS[k][0]} <b>${_acNf0.format(cont.get(k))}</b></button>`).join('');
+const _acCenSv = n => n.central || 'Sem central';
+// Filtros de lista das tabelas: onde ficam os marcados e de onde vêm as opções.
+const AC_TF = {
+  tst: { label: 'Status', icon: 'ti-circle-dot', get: () => AC.T.st, set: s => { AC.T.st = s; }, rot: k => AC_STATUS[k][0] },
+  sst: { label: 'Status', icon: 'ti-circle-dot', get: () => AC.S.st, set: s => { AC.S.st = s; }, rot: k => AC_STATUS[k][0] },
+  scen: { label: 'Central', icon: 'ti-building-warehouse', get: () => AC.S.cen, set: s => { AC.S.cen = s; } },
 };
+const _acFGet = k => AC_TF[k] ? AC_TF[k].get() : AC.F[k];
+const _acFSet = (k, s) => { if (AC_TF[k]) AC_TF[k].set(s); else AC.F[k] = s; };
+
+// Botão de filtro com lista de marcar — o mesmo da barra do topo. valores: os
+// valores possíveis; cont: Map valor → quantidade (opcional, aparece na opção).
+function _acFgHtml(k, label, icon, valores, rot = v => v, cont = null) {
+  const ap = _acFGet(k), aberto = AC.fAberto === k;
+  const rotulo = ap.size === 1 ? rot([...ap][0]) : ap.size > 1 ? `${label} (${ap.size})` : label;
+  let opcoes = '';
+  if (aberto) {
+    const marc = AC.fPend || ap, q = normalizeText(AC.fBusca).toLowerCase();
+    const lista = valores.filter(v => !q || normalizeText(rot(v)).toLowerCase().includes(q));
+    opcoes = lista.length ? lista.map((v, n) => `<label class="micro-filter-option" for="acf-${k}-${n}">
+        <input type="checkbox" id="acf-${k}-${n}" ${marc.has(v) ? 'checked' : ''} data-v="${_acE(v)}" onchange="acFMarcar(this)">
+        <span class="micro-filter-option-label" title="${_acE(rot(v))}">${_acE(rot(v))}${cont ? ` <b class="ac-fg-n">${_acNf0.format(cont.get(v) || 0)}</b>` : ''}</span></label>`).join('')
+      : '<div style="padding:12px 10px;color:var(--text3);font-size:13.5px;text-align:center">Nenhum resultado</div>';
+  }
+  return `<div class="micro-filter-group mo-fg" data-k="${k}">
+    <button class="micro-filter-trigger${ap.size ? ' active' : ''}" onclick="acFAbrir('${k}')"><i class="ti ${icon}"></i><span>${_acE(rotulo)}</span><i class="ti ti-chevron-down micro-filter-chev${aberto ? ' open' : ''}"></i></button>
+    <div class="micro-filter-dropdown${aberto ? ' open' : ''}">
+      <div class="micro-filter-search-wrap"><i class="ti ti-search"></i>
+        <input class="micro-filter-search" id="acf-busca-${k}" type="text" placeholder="Buscar ${label.toLowerCase()}…" value="${_acE(aberto ? AC.fBusca : '')}" oninput="acFBuscar(this)"></div>
+      <div class="micro-filter-options">${opcoes}</div>
+      <div class="micro-filter-footer">
+        <button class="btn btn-filter-clear" onclick="acFLimpar('${k}')"><i class="ti ti-filter-off"></i> Limpar</button>
+        <button class="btn" onclick="acFFechar()"><i class="ti ti-x"></i> Cancelar</button>
+        <button class="btn btn-primary" onclick="acFAplicar('${k}')"><i class="ti ti-check"></i> Aplicar</button>
+      </div></div></div>`;
+}
+const _acContSt = lista => { const c = new Map(); lista.forEach(n => c.set(n.status, (c.get(n.status) || 0) + 1)); return c; };
+const _acFgSt = (k, lista) => { const c = _acContSt(lista); return _acFgHtml(k, 'Status', 'ti-circle-dot', Object.keys(AC_STATUS).filter(s => c.has(s)), AC_TF[k].rot, c); };
 const _acBuscaHtml = (id, v, ph, fn) => `<label class="mp-busca ac-tbusca"><i class="ti ti-search"></i><input id="${id}" type="text" placeholder="${ph}" value="${_acE(v)}" oninput="${fn}(this.value)" aria-label="${ph}"></label>`;
-const AC_ORDENS = { emissao: ['Emissão', m => -m.emissao], restante: ['Restante', m => -m.pendT], retirado: ['% retirado', m => -m.pct] };
+const AC_ORDENS = { emissao: ['ti-calendar', 'Emissão (mais nova primeiro)', m => -m.emissao], restante: ['ti-hourglass', 'Restante (maior primeiro)', m => -m.pendT], retirado: ['ti-percentage', '% retirado (maior primeiro)', m => -m.pct] };
 
 function _acFiltraMaes(maes) {
-  const q = _acDig(AC.T.q), k = AC_ORDENS[AC.T.ord][1];
+  const q = _acDig(AC.T.q), k = AC_ORDENS[AC.T.ord][2];
   return maes.filter(m => (!AC.T.st.size || AC.T.st.has(m.status)) && (!AC.T.resto || m.pendT > 0) && (!q || m.numero.includes(q) || m.chave.includes(q)))
     .sort((a, b) => k(a) - k(b) || b.emissao - a.emissao);
 }
 function _acBarraMaes(maes) {
   if (!maes.length) return '';
-  return `<div class="ac-tbar">${_acBuscaHtml('ac-tq', AC.T.q, 'Nº ou chave da nota mãe…', 'acTBusca')}
-    <div class="mp-chips">${_acChipsSt(maes, AC.T.st, 'acTSt')}
-      <button class="mp-chip${AC.T.resto ? ' ac-chip-on' : ''}" aria-pressed="${AC.T.resto}" onclick="acTResto()"><i class="ti ${AC.T.resto ? 'ti-check' : 'ti-hourglass'}"></i>Só com restante</button></div>
-    <span class="mp-modo" role="group" aria-label="Ordenar notas mães"><span class="mo-hint">Ordenar</span>${Object.entries(AC_ORDENS).map(([k, [r]]) =>
-      `<button class="${AC.T.ord === k ? 'on' : ''}" aria-pressed="${AC.T.ord === k}" onclick="acTOrd('${k}')">${r}</button>`).join('')}</span></div>`;
+  const tem = AC.T.q || AC.T.st.size || AC.T.resto;
+  return `<div class="micro-filter-bar mo-filter-bar ac-tbar">${_acBuscaHtml('ac-tq', AC.T.q, 'Nº ou chave da nota mãe…', 'acTBusca')}
+    <div class="micro-filter-divider"></div>${_acFgSt('tst', maes)}
+    <button class="micro-filter-trigger${AC.T.resto ? ' active' : ''}" aria-pressed="${AC.T.resto}" onclick="acTResto()" title="Esconder as notas mães zeradas"><i class="ti ti-hourglass"></i><span>Só com restante</span></button>
+    <div class="micro-filter-divider"></div>
+    <div class="micro-group-mode" role="group" aria-label="Ordenar as notas mães">${Object.entries(AC_ORDENS).map(([k, [ic, t]]) =>
+      `<button class="${AC.T.ord === k ? 'active' : ''}" onclick="acTOrd('${k}')" title="Ordenar por ${t}" aria-label="Ordenar por ${t}" aria-pressed="${AC.T.ord === k}"><i class="ti ${ic}"></i></button>`).join('')}</div>
+    ${tem ? `<button class="btn btn-sm mo-limpar" onclick="acTLimpar('T')"><i class="ti ti-filter-off"></i> Limpar filtros</button>` : ''}</div>`;
 }
 
-const _acCenSv = n => n.central || 'Sem central';
 function _acFiltraSv(lista, filhas) {
   const q = normalizeText(AC.S.q), d = _acDig(AC.S.q);
-  return lista.filter(n => (!filhas || !AC.S.st.size || AC.S.st.has(n.status)) && (AC.S.cen == null || _acCenSv(n) === AC.S.cen)
+  return lista.filter(n => (!filhas || !AC.S.st.size || AC.S.st.has(n.status)) && (!AC.S.cen.size || AC.S.cen.has(_acCenSv(n)))
     && (!q || (d && (n.numero.includes(d) || n.chave.includes(d))) || normalizeText(n.comp).includes(q)));
 }
 function _acBarraSv(g) {
   const todas = [...g.semVinc, ...g.devSemVinc];
   if (!todas.length) return '';
   const cens = [...new Set(todas.map(_acCenSv))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  return `<div class="ac-tbar">${_acBuscaHtml('ac-sq', AC.S.q, 'Nº, chave ou texto do complementar…', 'acSBusca')}
-    <div class="mp-chips">${_acChipsSt(g.semVinc, AC.S.st, 'acSSt')}</div>
-    <select class="form-select ac-tcen" onchange="acSCen(this.value)" aria-label="Central"><option value="">Todas as centrais</option>${cens.map(c => `<option value="${_acE(c)}"${AC.S.cen === c ? ' selected' : ''}>${_acE(c)}</option>`).join('')}</select></div>`;
+  const cc = new Map(); todas.forEach(n => cc.set(_acCenSv(n), (cc.get(_acCenSv(n)) || 0) + 1));
+  const tem = AC.S.q || AC.S.st.size || AC.S.cen.size;
+  return `<div class="micro-filter-bar mo-filter-bar ac-tbar">${_acBuscaHtml('ac-sq', AC.S.q, 'Nº, chave ou texto do complementar…', 'acSBusca')}
+    <div class="micro-filter-divider"></div>${g.semVinc.length ? _acFgSt('sst', g.semVinc) : ''}${_acFgHtml('scen', 'Central', 'ti-building-warehouse', cens, v => v, cc)}
+    ${tem ? `<button class="btn btn-sm mo-limpar" onclick="acTLimpar('S')"><i class="ti ti-filter-off"></i> Limpar filtros</button>` : ''}</div>`;
 }
 
 function _acTabCorpo() {
@@ -988,12 +1003,13 @@ let _acTBuscaT = null;
 const _acTDepois = () => { clearTimeout(_acTBuscaT); _acTBuscaT = setTimeout(_acTabCorpo, 200); };
 function acTBusca(v) { AC.T.q = v; _acTDepois(); }
 function acSBusca(v) { AC.S.q = v; _acTDepois(); }
-const _acTroca = (set, k) => { if (set.has(k)) set.delete(k); else set.add(k); _acDesenhar(); };
-function acTSt(k) { _acTroca(AC.T.st, k); }
-function acSSt(k) { _acTroca(AC.S.st, k); }
 function acTResto() { AC.T.resto = !AC.T.resto; _acDesenhar(); }
 function acTOrd(k) { AC.T.ord = k; _acDesenhar(); }
-function acSCen(v) { AC.S.cen = v || null; _acDesenhar(); }
+function acTLimpar(qual) {
+  if (qual === 'T') Object.assign(AC.T, { q: '', st: new Set(), resto: false });
+  else Object.assign(AC.S, { q: '', st: new Set(), cen: new Set() });
+  _acDesenhar();
+}
 
 function _acCardsMaes(maes, total = maes.length) {
   if (!maes.length) return `<div class="mp-card"><p class="mo-hint">${total ? 'Nenhuma nota mãe com esses filtros.' : `Nenhuma nota mãe deste fornecedor no SEFAZ importado${_acTemFiltro() ? ' para o filtro' : ''}.`}</p></div>`;
@@ -1136,7 +1152,7 @@ function _acCurva(m) {
 }
 
 /* ───────── ações de tela ───────── */
-function acSel(cnpj) { AC.sel = AC.sel === cnpj ? '' : cnpj; AC.paba = 'maes'; AC.abertas.clear(); AC.T.q = AC.S.q = ''; AC.S.cen = null; _acDesenhar(); }
+function acSel(cnpj) { AC.sel = AC.sel === cnpj ? '' : cnpj; AC.paba = 'maes'; AC.abertas.clear(); AC.T.q = AC.S.q = ''; AC.S.cen = new Set(); AC.fAberto = null; _acDesenhar(); }
 function acGrp(k) { AC.grp = AC.grp === k ? '' : k; AC.sub = ''; AC.sel = ''; _acDesenhar(); }
 function acSub(k) { AC.sub = AC.sub === k ? '' : k; AC.sel = ''; _acDesenhar(); }
 function acGrupo(g) { AC.F.grupo = g; AC.grp = ''; AC.sub = ''; _acDesenhar(); }
@@ -1175,15 +1191,15 @@ function acRecarregar() { AC.carga = null; AC.sujo = true; acordosRender(); }
 // Filtros com vários itens (mesmo fluxo do Mural: marca, Aplicar/Cancelar).
 function acFAbrir(k) {
   if (AC.fAberto === k) return acFFechar();
-  AC.fAberto = k; AC.fPend = new Set(AC.F[k]); AC.fBusca = '';
+  AC.fAberto = k; AC.fPend = new Set(_acFGet(k)); AC.fBusca = '';
   _acDesenhar();
   document.getElementById('acf-busca-' + k)?.focus();
 }
 function acFMarcar(el) { if (el.checked) AC.fPend.add(el.dataset.v); else AC.fPend.delete(el.dataset.v); }
 function acFBuscar(el) { AC.fBusca = el.value; mfFiltrarOpcoes(el); }
 function acFFechar() { AC.fAberto = null; AC.fPend = null; AC.fBusca = ''; _acDesenhar(); }
-function acFAplicar(k) { AC.F[k] = new Set(AC.fPend); acFFechar(); }
-function acFLimpar(k) { AC.F[k] = new Set(); acFFechar(); }
+function acFAplicar(k) { _acFSet(k, new Set(AC.fPend)); acFFechar(); }
+function acFLimpar(k) { _acFSet(k, new Set()); acFFechar(); }
 function acFLimparTodos() { AC_FILTROS.forEach(x => { AC.F[x.k] = new Set(); }); _acDesenhar(); }
 
 // Expandir/recolher um card (como toggleMicro). O corpo só é montado ao abrir.
@@ -1375,6 +1391,6 @@ function _acRealtime() {
     }).subscribe();
 }
 
-Object.assign(window, { acordosRender, acSel, acGrp, acSub, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acCopiar, acDesvincular, acTBusca, acSBusca, acTSt, acSSt, acTResto, acTOrd, acSCen, acRefazer });
+Object.assign(window, { acordosRender, acSel, acGrp, acSub, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acCopiar, acDesvincular, acTBusca, acSBusca, acTResto, acTOrd, acTLimpar, acRefazer });
 // Lista recolhida: lembrada neste navegador.
 try { AC.listaRecolhida = localStorage.getItem('acordos.listaRecolhida') === '1'; } catch (_) { /* sem storage */ }
