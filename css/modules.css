@@ -14390,13 +14390,14 @@ body[data-theme="light"] #page-custos, body[data-theme="sand"] #page-custos { --
 .ac-pill .ti { font-size: 12px; }
 .ac-st { font-size: 11px; padding: 2px 6px; width: auto; font-weight: 600; }
 .ac-minibar, .ac-prog-bar { background: var(--amber-bg); border: 1px solid var(--amber-border); border-radius: 99px; overflow: hidden; height: 8px; }
-.ac-minibar { display: inline-block; width: 80px; flex-shrink: 0; }
-.ac-minibar i, .ac-prog-bar i { display: block; height: 100%; background: var(--teal); }
+.ac-minibar { display: inline-flex; width: 80px; flex-shrink: 0; }
+.ac-minibar i, .ac-prog-bar i { display: block; height: 100%; background: var(--teal); flex-shrink: 0; }
+.ac-minibar i.dev, .ac-prog-bar i.dev { background: var(--gs-dev); }
 .mp-pend.ac-pend6 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 12px; }
-.ac-prog-bar { height: 14px; }
+.ac-prog-bar { height: 14px; display: flex; }
 .ac-prog-leg { display: flex; flex-wrap: wrap; gap: 14px; margin: 6px 0 12px; font-size: 12px; color: var(--text2); }
 .ac-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
-.ac-dot.teal { background: var(--teal); } .ac-dot.amber { background: var(--amber); }
+.ac-dot.teal { background: var(--teal); } .ac-dot.amber { background: var(--amber); } .ac-dot.dev { background: var(--gs-dev); }
 .ac-exc { color: var(--red); font-weight: 600; }
 .ac-curva { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
 .ac-curva-tit { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); margin-bottom: 4px; }
@@ -14452,8 +14453,8 @@ table.ac-tab tr.inativa td { opacity: .55; }
 .ac-comp-mat { max-width: 160px; }
 /* Gráficos do Resumo: roscas (físico e financeiro) e evolução por mês. Tons
    próprios, validados (brilho, saturação, daltonismo, contraste) em cada tema. */
-#page-acordos { --gs-ret: #0891b2; --gs-pen: #d97706; --gs-tot: var(--text2); }
-body[data-theme="sand"] #page-acordos { --gs-ret: #008f84; --gs-pen: #92400e; }
+#page-acordos { --gs-ret: #0891b2; --gs-pen: #d97706; --gs-tot: var(--text2); --gs-dev: #8b5cf6; }
+body[data-theme="sand"] #page-acordos { --gs-ret: #008f84; --gs-pen: #92400e; --gs-dev: #6d28d9; }
 .ac-gr-dois { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 12px; }
 .ac-ro { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
 .ac-gr-tit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
@@ -14462,7 +14463,7 @@ body[data-theme="sand"] #page-acordos { --gs-ret: #008f84; --gs-pen: #92400e; }
 .ac-ro-corpo > svg { width: 190px; height: 190px; }
 .ac-ro-fundo { fill: none; stroke: var(--bg3); }
 .ac-ro-f { fill: none; transition: opacity .15s; }
-.ac-ro-f.ret { stroke: var(--gs-ret); } .ac-ro-f.pen { stroke: var(--gs-pen); }
+.ac-ro-f.ret { stroke: var(--gs-ret); } .ac-ro-f.pen { stroke: var(--gs-pen); } .ac-ro-f.dev { stroke: var(--gs-dev); }
 .ac-ro-corpo > svg:hover .ac-ro-f:not(:hover) { opacity: .55; }
 .ac-ro-rot { text-anchor: middle; font-size: 13px; fill: var(--text2); }
 .ac-ro-tot { text-anchor: middle; font-size: 20px; font-weight: 700; fill: var(--text); }
@@ -14470,7 +14471,7 @@ body[data-theme="sand"] #page-acordos { --gs-ret: #008f84; --gs-pen: #92400e; }
 .ac-ro-l { display: grid; grid-template-columns: 11px 1fr auto; gap: 9px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text2); }
 .ac-ro-l b { font-family: var(--mono); font-size: 13.5px; color: var(--text); white-space: nowrap; }
 .ac-ro-l i, .ac-ev-leg i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
-.ac-ro i.tot { background: var(--gs-tot); } .ac-ro i.ret { background: var(--gs-ret); } .ac-ro i.pen { background: var(--gs-pen); }
+.ac-ro i.tot { background: var(--gs-tot); } .ac-ro i.ret { background: var(--gs-ret); } .ac-ro i.pen { background: var(--gs-pen); } .ac-ro i.dev { background: var(--gs-dev); }
 .ac-ev-leg { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; font-weight: 400; color: var(--text2); }
 .ac-ev-leg span { display: inline-flex; align-items: center; gap: 6px; }
 #ac-evo { min-height: 60px; overflow: hidden; }
@@ -14478,21 +14479,22 @@ body[data-theme="sand"] #page-acordos { --gs-ret: #008f84; --gs-pen: #92400e; }
 .ac-ev-gr line { stroke: var(--border); stroke-width: 1; }
 .ac-ev-gr text { font-size: 11.5px; fill: var(--text2); }
 .ac-ev-ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.ac-ev-ln.tot { stroke: var(--gs-tot); } .ac-ev-ln.ret { stroke: var(--gs-ret); } .ac-ev-ln.pen { stroke: var(--gs-pen); }
+.ac-ev-ln.tot { stroke: var(--gs-tot); } .ac-ev-ln.ret { stroke: var(--gs-ret); } .ac-ev-ln.pen { stroke: var(--gs-pen); } .ac-ev-ln.dev { stroke: var(--gs-dev); }
 #ac-evo circle { stroke: var(--bg2); stroke-width: 2; }
-#ac-evo circle.tot { fill: var(--gs-tot); } #ac-evo circle.ret { fill: var(--gs-ret); } #ac-evo circle.pen { fill: var(--gs-pen); }
+#ac-evo circle.tot { fill: var(--gs-tot); } #ac-evo circle.ret { fill: var(--gs-ret); } #ac-evo circle.pen { fill: var(--gs-pen); } #ac-evo circle.dev { fill: var(--gs-dev); }
 .ac-ev-c rect { fill: transparent; }
 .ac-ev-c line { stroke: var(--border2); opacity: 0; } .ac-ev-c circle { opacity: 0; }
 .ac-ev-c:hover line, .ac-ev-c:hover circle { opacity: 1; }
 /* Os três cards do Resumo: total, retirado e restante. */
-.ac-kcs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ac-kcs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .ac-kc { border: 1px solid var(--border); border-left: 5px solid var(--kc); border-radius: 10px; background: var(--bg3); padding: 14px 18px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.ac-kc.tot { --kc: var(--gs-tot); } .ac-kc.ret { --kc: var(--gs-ret); } .ac-kc.pen { --kc: var(--gs-pen); }
+.ac-kc.tot { --kc: var(--gs-tot); } .ac-kc.ret { --kc: var(--gs-ret); } .ac-kc.pen { --kc: var(--gs-pen); } .ac-kc.dev { --kc: var(--gs-dev); }
 .ac-kc-rot { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text2); }
 .ac-kc-rot .ti { font-size: 17px; color: var(--kc); }
 .ac-kc b { font-size: 26px; font-weight: 700; line-height: 1.25; color: var(--text); overflow-wrap: anywhere; }
 .ac-kc-r { font-size: 16px; font-weight: 600; color: var(--text2); overflow-wrap: anywhere; }
 .ac-kc small { font-size: 12.5px; color: var(--text2); margin-top: 3px; }
+@media (max-width: 1280px) { .ac-kcs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .ac-kcs { grid-template-columns: 1fr; } }
 
 /* ══════════════════════════════════════════

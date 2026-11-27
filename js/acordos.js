@@ -10,13 +10,16 @@
 //
 // Fonte: cob_sefaz (import do SEFAZ das Cobranças), só as NFs com algum item
 // de CFOP marcado no cadastro (cob_cfop.acordo): 'mae' (5922/6922, simples
-// faturamento) e 'filha' (5116/6116/5117/6117, remessa). A filha aponta a mãe
-// nas informações complementares (nº ou chave); a que não aponta vira alerta
-// "sem vínculo" e o analista vincula à mão (acordo_vinculos).
+// faturamento), 'filha' (5116/6116/5117/6117, remessa) e 'devolucao' (x201,
+// x202, x410… — SQL 20261127). A filha aponta a mãe nas informações
+// complementares (nº ou chave); a devolução aponta a mãe ou a filha que devolve
+// (parte ou tudo). A que não aponta vira "sem vínculo" e o analista vincula à
+// mão (acordo_vinculos).
 // Central: das Entradas (state.entradas) pela chave de acesso ou, sem chave,
 // por CNPJ do fornecedor + número; mãe sem Entrada herda a central das filhas.
-// Status: Autorizada (padrão), Cancelada (SEFAZ, trava), e os manuais
-// Devolvida/Inutilizada/Indevida/Recusada (acordo_nf_status).
+// Status (mães e filhas): Autorizada (padrão), Cancelada (SEFAZ, trava), e os
+// manuais Devolvida/Inutilizada/Indevida/Recusada (acordo_nf_status). Devolvida
+// também sozinha, quando as NFs de devolução zeram a nota (_acMontar).
 // Peso = VOLUME do SEFAZ em toneladas (igual à Cobrança).
 // ══════════════════════════════════════════════════════════════════════
 
@@ -31,13 +34,13 @@ const AC_GRUPOS = { fornecedor: 'Fornecedor', regional: 'Regional', central: 'Ce
 
 const AC = {
   carga: null, sujo: true, iniciado: false,
-  cfop: new Map(),            // cfop → 'mae' | 'filha'
+  cfop: new Map(),            // cfop → 'mae' | 'filha' | 'devolucao'
   forn: new Map(),            // cnpj → { cnpj, nome, modalidade }
   status: new Map(),          // chave → status manual
   vinc: new Map(),            // chave_filha → { chave_mae, numero_mae }
   regPorCen: new Map(),       // alias → regional
   nfs: [],                    // NFs do SEFAZ (mães + filhas), cruas
-  maes: [], filhas: [], porForn: new Map(),
+  maes: [], filhas: [], devs: [], porForn: new Map(),
   cenIdx: null, cenIdxRef: null, cenIdxLen: -1,
   sel: '', grp: '', aba: null, paba: 'maes', abertas: new Set(), listaRecolhida: false,
   geo: new Map(), geoBuscando: new Set(), geoErro: new Map(),   // ficha do fornecedor: endereço do CNPJ (custos_geo)
@@ -58,10 +61,12 @@ const _acNum = v => String(v ?? '').split('/')[0].replace(/\D/g, '').replace(/^0
 const _acDia = 86400000;
 
 /* ───────── carga ───────── */
+// table: nome da tabela ou função que devolve a consulta (rpc).
 async function _acFetchAll(table, cols, ordem, filtro = q => q) {
   const out = [];
   for (let de = 0; ; de += 1000) {
-    const { data, error } = await filtro(window.supabaseClient.from(table).select(cols)).order(ordem).range(de, de + 999);
+    const base = typeof table === 'function' ? table() : window.supabaseClient.from(table).select(cols);
+    const { data, error } = await filtro(base).order(ordem).range(de, de + 999);
     if (error) throw error;
     out.push(...data);
     if (data.length < 1000) return out;
@@ -88,10 +93,17 @@ async function _acCarregar() {
   AC.regPorCen = new Map();
   [...(state.filiais || []), ...filiais].forEach(f => { const a = String(f.alias || '').trim(); if (a && f.regional && !AC.regPorCen.has(a)) AC.regPorCen.set(a, String(f.regional).trim()); });
 
-  // Uma consulta por CFOP (contains no jsonb dos itens); a NF com item de mãe e de filha conta como mãe.
+  // Uma consulta só (RPC acordo_sefaz_nfs, SQL 20261127). Sem a RPC: uma por CFOP
+  // (contains no jsonb dos itens). A NF com item de mãe e de filha conta como mãe.
+  const cols = 'chave, cnpj_emitente, nome, numero, serie, emissao, status, itens, municipio, uf, transportador';
+  let lotes;
+  try { lotes = AC.cfop.size ? [await _acFetchAll(() => sb.rpc('acordo_sefaz_nfs').select(cols), cols, 'chave')] : []; }
+  catch (e) {
+    console.warn('[Acordos] RPC acordo_sefaz_nfs (rode o SQL 20261127_acordos_devolucao):', e.message || e);
+    lotes = await Promise.all([...AC.cfop.keys()].map(cfop =>
+      _acFetchAll('cob_sefaz', cols, 'chave', q => q.contains('itens', JSON.stringify([{ cfop }])))));   // string: array vira literal de array do Postgres, não JSON
+  }
   const porChave = new Map();
-  const lotes = await Promise.all([...AC.cfop.keys()].map(cfop =>
-    _acFetchAll('cob_sefaz', 'chave, cnpj_emitente, nome, numero, serie, emissao, status, itens, municipio, uf, transportador', 'chave', q => q.contains('itens', JSON.stringify([{ cfop }])))));   // string: array vira literal de array do Postgres, não JSON
   lotes.flat().forEach(s => porChave.set(s.chave, s));
   AC.nfs = [...porChave.values()];
   AC.cenIdx = null;
@@ -129,32 +141,53 @@ function _acCentrais() {
   return AC.cenIdx;
 }
 
-/* ───────── vínculo filha → mãe ───────── */
+/* ───────── vínculo filha → mãe e devolução → mãe/filha ───────── */
 // O complementar vem com muito texto junto (motorista, placas, lacres, frete…).
 // Ex.: "...[LACRES: 988545-988546] [FRETE TOTAL 1.944,99] REMESSA REFERENTE A
 // NFE 0949920 DE 24 09 2026, NF 0949920 23 09 26" → mãe 949920.
+// Cada fornecedor escreve de um jeito ("NF 123", "SIMPLES FATURAMENTO 123",
+// "NOTA 123", "NFE 000.000.123"…), então NÃO se depende da palavra antes do número
+// (Hugo, 27/11/2026): vale TODO número do texto que seja de uma nota do sistema.
 //   chaves: 44 dígitos seguidos ou em blocos de 4 (espaço/ponto entre blocos);
-//   nums:   número depois de NF / NFE / NF-E / N.F. / NOTA (FISCAL), com até
-//           4 palavras no meio (padrões dos fornecedores, Hugo 23/11/2026):
-//           "NOTA FISCAL MAE 123", "N.F. MAE N 123", "NF-E REFERENCIADA: 123",
-//           "NF DE FATURAMENTO NO 123", "NOTA FISCAL NUMERO 123"; milhar com
-//           ponto aceito ("000.949.920");
-//   soltos: qualquer outro número de 3–9 dígitos — só se nums não achar mãe.
+//   todos:  todo número com 3+ dígitos (sem os zeros à esquerda), ponto de milhar
+//           juntado ("000.949.920" → 949920);
+//   rot:    os que vêm depois de NF / NFE / N.F. / NOTA (FISCAL) / FATURAMENTO, com
+//           até 4 palavras no meio ("NOTA FISCAL MAE 123", "NF-E REFERENCIADA: 123")
+//           — só para desempatar.
 // Dígitos separados por espaço/hífen NÃO são emendados (datas, lacres).
-// ponytail: número casa com QUALQUER mãe do mesmo fornecedor com esse número;
-// número ambíguo (2 mães, séries diferentes) fica sem vínculo. Filha que cita
-// 2 mães vai para a primeira. Teto: vínculo manual.
+// ponytail: nota com nº de 1–2 dígitos não casa pelo número (seria qualquer data
+// ou peso). Teto: vínculo manual.
 const AC_RE_CHAVE = /(?<!\d)\d{4}(?:[ .]?\d{4}){10}(?!\d)/g;
-// Palavras no meio só de letras (MAE, DE, FATURAMENTO, REFERENCIADA, N, NO, Nº…):
-// número errado que escape daqui ainda precisa ser nº de uma mãe do fornecedor.
-const AC_RE_NF = /(?:^|[^A-Z])(?:N\.?\s?F\.?(?:\s?-?\s?E)?|NOTAS?(?:\s+FISCA(?:L|IS))?(?:\s+ELETRONICAS?)?)(?:[\s:.#-]+(?:[A-Z]{1,14}|N[º°])\.?){0,4}[\s:.#-]*(\d{1,3}(?:\.\d{3})+|\d{3,9})(?!\d)/g;
+const AC_RE_NF = /(?:^|[^A-Z])(?:N\.?\s?F\.?(?:\s?-?\s?E)?|NOTAS?(?:\s+FISCA(?:L|IS))?(?:\s+ELETRONICAS?)?|FATURAMENTO)(?:[\s:.#-]+(?:[A-Z]{1,14}|N[º°])\.?){0,4}[\s:.#-]*(\d+)(?!\d)/g;
 function _acCitacoes(txt) {
   const s = normalizeText(txt);
   const chaves = (s.match(AC_RE_CHAVE) || []).map(c => c.replace(/\D/g, ''));
-  const resto = s.replace(AC_RE_CHAVE, ' ');
-  const nums = [...new Set([...resto.matchAll(AC_RE_NF)].map(m => _acNum(m[1].replace(/\./g, ''))))];
-  const soltos = [...new Set((resto.match(/(?<!\d)\d{3,9}(?!\d)/g) || []).map(_acNum))];
-  return { chaves, nums, soltos };
+  const resto = s.replace(AC_RE_CHAVE, ' ').replace(/(\d)\.(?=\d{3}(?!\d))/g, '$1');
+  const nums = re => new Set([...resto.matchAll(re)].map(m => _acNum(m[1] ?? m[0])).filter(n => n.length >= 3));
+  return { chaves, rot: nums(AC_RE_NF), todos: nums(/\d+/g) };
+}
+
+// Nota citada no complementar de `n`: pela chave; senão por um número que seja de
+// uma nota de `porNum` dos CNPJs dados, não cancelada e emitida até o dia de `n`.
+// Mais de uma: devolução que cita a filha e a mãe dela fica com a filha; depois
+// vale a citada ao lado de NF/NOTA/FATURAMENTO, a do mesmo material e a da mesma
+// central. Empate que sobra → sem vínculo (recomendação / vínculo manual).
+// Devolve [nota, 'chave' | 'numero'] ou [null, ''].
+const _acDiaDe = ms => new Date(ms).setHours(0, 0, 0, 0);
+function _acAchar(n, porChave, porNum, cnpjs) {
+  const { chaves, rot, todos } = _acCitacoes(n.comp);
+  const ch = chaves.map(c => porChave.get(c)).find(x => x && x !== n);
+  if (ch) return [ch, 'chave'];
+  let cands = [];
+  for (const c of cnpjs) for (const x of todos) for (const m of porNum.get(c + '|' + x) || []) {
+    if (m !== n && m.status !== 'cancelada' && !cands.includes(m) && !(m.emissao && n.emissao && _acDiaDe(m.emissao) > _acDiaDe(n.emissao))) cands.push(m);
+  }
+  const filtra = ok => { if (cands.length > 1) { const c = cands.filter(ok); if (c.length) cands = c; } };
+  filtra(m => !cands.some(f => f.mae === m));
+  filtra(m => rot.has(m.numero));
+  filtra(m => n.mats.some(x => m.mats.some(y => _acMesmoMat(x, y))));
+  filtra(m => !!n.central && m.central === n.central);
+  return cands.length === 1 ? [cands[0], 'numero'] : [null, ''];
 }
 
 // Materiais da nota para comparar mãe × filha: [{ keys, peso }]. Com um material
@@ -185,24 +218,27 @@ function _acRec(g) {
   const dia = ms => new Date(ms).setHours(0, 0, 0, 0);
   const maes = g.maes.filter(m => m.status === 'autorizada' && m.central && m.mats.length).sort((a, b) => a.emissao - b.emissao);
   // Saldo por material da nota mãe. Um material só: toda filha vinculada conta.
+  // Filha conta pelo retirado (sem o que devolveu); devolução da mãe também abate.
   const saldos = new Map(maes.map(m => {
     const bolsas = m.mats.map(x => ({ keys: x.keys, saldo: m.mats.length === 1 ? m.peso : x.peso }));
-    m.filhas.forEach(f => {
-      if (f.status === 'cancelada') return;
-      if (bolsas.length === 1) { bolsas[0].saldo -= f.peso; return; }
-      f.mats.forEach(x => { const b = bolsas.find(y => _acMesmoMat(x, y)); if (b) b.saldo -= x.peso; });
-    });
+    const tira = (n, fator) => {
+      if (bolsas.length === 1) { bolsas[0].saldo -= n.peso * fator; return; }
+      n.mats.forEach(x => { const b = bolsas.find(y => _acMesmoMat(x, y)); if (b) b.saldo -= x.peso * fator; });
+    };
+    m.filhas.forEach(f => { if (f.ret > 0) tira(f, f.ret / f.peso); });
+    m.devs.forEach(d => tira(d, 1));
     return [m, bolsas];
   }));
   [...g.semVinc].sort((a, b) => a.emissao - b.emissao).forEach(f => {
     const man = AC.vinc.get(f.chave);
     if (man) { rec.set(f.chave, { motivo: `vinculada à NF ${man.numero_mae}, que não está no SEFAZ importado` }); return; }
+    if (f.status !== 'autorizada') { rec.set(f.chave, { motivo: `filha ${AC_STATUS[f.status][0].toLowerCase()} — não conta no saldo` }); return; }
     if (!f.central) { rec.set(f.chave, { motivo: 'filha sem central nas Entradas' }); return; }
-    if (!f.mats.length || !(f.peso > 0)) { rec.set(f.chave, { motivo: 'filha sem material ou peso' }); return; }
-    const cands = [];
+    if (!f.mats.length || !(f.ret > 0)) { rec.set(f.chave, { motivo: 'filha sem material ou peso' }); return; }
+    const fator = f.ret / f.peso, cands = [];
     for (const m of maes) {
       if (m.central !== f.central || (m.emissao && f.emissao && dia(m.emissao) > dia(f.emissao))) continue;
-      const usa = f.mats.map(x => [saldos.get(m).find(b => _acMesmoMat(x, b)), x.peso]);
+      const usa = f.mats.map(x => [saldos.get(m).find(b => _acMesmoMat(x, b)), x.peso * fator]);
       if (usa.some(([b]) => !b)) continue;
       const saldo = Math.max(0, Math.min(...usa.map(([b]) => b.saldo)));
       const excede = usa.reduce((t, [b, p]) => t + Math.max(0, p - Math.max(0, b.saldo)), 0);
@@ -229,9 +265,10 @@ function _acMontar() {
     return {
       chave: s.chave, cnpj: s.cnpj_emitente, nome: s.nome, numero: s.numero, serie: s.serie,
       emissao: s.emissao ? new Date(s.emissao).getTime() : 0,
-      tipo: tipos.includes('mae') ? 'mae' : 'filha',
-      status: cancelada ? 'cancelada' : (manual || 'autorizada'),
+      tipo: tipos.includes('mae') ? 'mae' : tipos.includes('filha') ? 'filha' : 'dev',
+      status: cancelada ? 'cancelada' : (manual || 'autorizada'), auto: false,
       itens, comp: itens.find(i => i.complementar)?.complementar || '',
+      cnpjDest: itens.find(i => i.cnpj_dest)?.cnpj_dest || '',
       peso: itens.reduce((t, i) => t + (Number(i.volume) || 0), 0),
       valor: itens.reduce((t, i) => t + (Number(i.valor_total) || 0), 0),
       materiais: [...new Set(itens.map(i => i.material).filter(Boolean))],
@@ -243,60 +280,86 @@ function _acMontar() {
   const todas = AC.nfs.map(mk);
   AC.maes = todas.filter(n => n.tipo === 'mae');
   AC.filhas = todas.filter(n => n.tipo === 'filha');
-  const maePorChave = new Map(AC.maes.map(m => [m.chave, m]));
-  const maePorNum = new Map();
-  AC.maes.forEach(m => { const k = m.cnpj + '|' + m.numero; (maePorNum.get(k) || maePorNum.set(k, []).get(k)).push(m); });
-  AC.maePorChave = maePorChave; AC.maePorNum = maePorNum;
-  AC.maes.forEach(m => { m.filhas = []; });
+  const porNumDe = lista => { const p = new Map(); lista.forEach(m => { const k = m.cnpj + '|' + m.numero; (p.get(k) || p.set(k, []).get(k)).push(m); }); return p; };
+  AC.maePorChave = new Map(AC.maes.map(m => [m.chave, m]));
+  AC.maePorNum = porNumDe(AC.maes);
+  AC.notaPorChave = new Map([...AC.maes, ...AC.filhas].map(n => [n.chave, n]));
+  AC.notaPorNum = porNumDe([...AC.maes, ...AC.filhas]);
+  AC.maes.forEach(m => { m.filhas = []; m.devs = []; });
 
+  // Filha → mãe: vínculo manual; senão a chave ou o número citado (_acAchar).
   AC.filhas.forEach(f => {
-    f.mae = null; f.vinculo = '';
+    f.mae = null; f.vinculo = ''; f.devs = [];
     const man = AC.vinc.get(f.chave);
-    if (man) { f.mae = maePorChave.get(man.chave_mae) || null; f.vinculo = 'manual'; f.maeNumero = man.numero_mae; }
-    else {
-      const { chaves, nums, soltos } = _acCitacoes(f.comp);
-      const porCh = chaves.map(c => maePorChave.get(c)).find(Boolean);
-      if (porCh) { f.mae = porCh; f.vinculo = 'chave'; }
-      else {
-        // 1º os números ao lado de "NF"; só sem nenhum deles casando, os soltos.
-        const casar = lista => { const c = new Set(); lista.forEach(n => (maePorNum.get(f.cnpj + '|' + n) || []).forEach(m => c.add(m))); return c; };
-        let cands = casar(nums);
-        if (!cands.size) cands = casar(soltos);
-        if (cands.size === 1) { f.mae = [...cands][0]; f.vinculo = 'numero'; }
-      }
-    }
+    if (man) { f.mae = AC.maePorChave.get(man.chave_mae) || null; f.vinculo = 'manual'; f.maeNumero = man.numero_mae; }
+    else [f.mae, f.vinculo] = _acAchar(f, AC.maePorChave, AC.maePorNum, [f.cnpj]);
     if (f.mae) f.mae.filhas.push(f);
   });
-  // Mãe sem Entrada: central mais frequente entre as filhas.
+
+  // Devolução → mãe ou filha. O fornecedor é o emitente (devolução de venda) ou o
+  // destinatário (devolução de compra, emitida pela Concrelagos). Devolução de quem
+  // não tem nota mãe/filha no SEFAZ é ignorada (compras comuns).
+  const temNota = new Set([...AC.maes, ...AC.filhas].map(n => n.cnpj));
+  AC.devs = [];
+  todas.forEach(d => {
+    if (d.tipo !== 'dev' || d.status === 'cancelada') return;
+    d.alvo = null; d.vinculo = '';
+    const cnpjs = [d.cnpj, d.cnpjDest].filter(Boolean);
+    const man = AC.vinc.get(d.chave);
+    if (man) { d.alvo = AC.notaPorChave.get(man.chave_mae) || null; d.vinculo = 'manual'; d.alvoNumero = man.numero_mae; }
+    else [d.alvo, d.vinculo] = _acAchar(d, AC.notaPorChave, AC.notaPorNum, cnpjs);
+    d.forn = d.alvo?.cnpj || cnpjs.find(c => temNota.has(c));
+    if (!d.forn) return;
+    if (d.alvo) d.alvo.devs.push(d);
+    AC.devs.push(d);
+  });
+  const somaDev = n => n.devs.reduce((t, d) => t + d.peso, 0);
+
+  // Filha: o que voltou por devolução sai do retirado; devolvida inteira → Devolvida.
+  // Só filha Autorizada conta como retirado (Hugo, 27/11/2026).
+  AC.filhas.forEach(f => {
+    f.devNF = somaDev(f);
+    if (f.status === 'autorizada' && f.devNF > 0 && f.devNF >= f.peso - 0.001) { f.status = 'devolvida'; f.auto = true; }
+    f.ret = f.status === 'autorizada' ? Math.max(0, f.peso - f.devNF) : 0;
+  });
+  // Mãe sem Entrada: central mais frequente entre as filhas. Devoluções que zeram o
+  // restante → Devolvida.
   AC.maes.forEach(m => {
     m.filhas.sort((a, b) => a.emissao - b.emissao);
+    m.devs.sort((a, b) => a.emissao - b.emissao);
     if (!m.central) {
       const cont = new Map();
       m.filhas.forEach(f => f.central && cont.set(f.central, (cont.get(f.central) || 0) + 1));
       m.central = [...cont.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
     }
     m.regional = AC.regPorCen.get(m.central) || '';
+    m.devNF = somaDev(m);
+    if (m.status === 'autorizada' && m.devNF > 0 && m.peso - m.filhas.reduce((t, f) => t + f.ret, 0) - m.devNF <= 0.001) { m.status = 'devolvida'; m.auto = true; }
   });
   AC.filhas.forEach(f => { if (!f.central && f.mae) f.central = f.mae.central; f.regional = AC.regPorCen.get(f.central) || ''; });
+  AC.devs.forEach(d => { if (!d.central && d.alvo) d.central = d.alvo.central; d.regional = AC.regPorCen.get(d.central) || ''; });
 
-  // Por fornecedor: mães, filhas sem vínculo e o ritmo/peso médio das filhas.
+  // Por fornecedor: mães, filhas sem vínculo, devoluções e o ritmo/peso médio das filhas.
   AC.porForn = new Map();
-  const pf = c => AC.porForn.get(c) || AC.porForn.set(c, { maes: [], semVinc: [], filhas: [] }).get(c);
+  const pf = c => AC.porForn.get(c) || AC.porForn.set(c, { maes: [], semVinc: [], filhas: [], devs: [], devSemVinc: [] }).get(c);
   AC.maes.forEach(m => { pf(m.cnpj).maes.push(m); if (!AC.forn.has(m.cnpj)) AC.forn.set(m.cnpj, { cnpj: m.cnpj, nome: m.nome || m.cnpj, modalidade: '' }); });
   AC.filhas.forEach(f => {
     const g = pf(f.cnpj);
     if (f.status === 'cancelada') return;
     if (f.mae) g.filhas.push(f); else g.semVinc.push(f);
   });
+  AC.devs.forEach(d => { const g = pf(d.forn); (d.alvo ? g.devs : g.devSemVinc).push(d); });
   for (const g of AC.porForn.values()) {
     g.filhas.sort((a, b) => a.emissao - b.emissao);
-    g.pesoMedio = g.filhas.length ? g.filhas.reduce((t, f) => t + f.peso, 0) / g.filhas.length : 0;
-    g.intervalo = _acIntervalo(g.filhas);
+    const ret = g.filhas.filter(f => f.ret > 0);
+    g.pesoMedio = ret.length ? ret.reduce((t, f) => t + f.ret, 0) / ret.length : 0;
+    g.intervalo = _acIntervalo(ret);
     g.maes.sort((a, b) => b.emissao - a.emissao);
     g.maes.forEach(m => Object.assign(m, _acKpis(m, g)));
-    g.pendT = g.maes.filter(m => m.status === 'autorizada').reduce((t, m) => t + m.pendT, 0);
-    g.pendR = g.maes.filter(m => m.status === 'autorizada').reduce((t, m) => t + m.pendR, 0);
+    g.pendT = g.maes.reduce((t, m) => t + m.pendT, 0);
+    g.pendR = g.maes.reduce((t, m) => t + m.pendR, 0);
     g.semVinc.sort((a, b) => b.emissao - a.emissao);
+    g.devSemVinc.sort((a, b) => b.emissao - a.emissao);
   }
 }
 
@@ -306,22 +369,31 @@ function _acIntervalo(fs) {
   return (fs[fs.length - 1].emissao - fs[0].emissao) / _acDia / (fs.length - 1);
 }
 
+// Valores da nota mãe conforme o status (Hugo, 27/11/2026) — todas entram no Resumo:
+//   autorizada: total = peso da NF; retirado = filhas autorizadas (sem o que elas
+//               devolveram); devolvido = NFs de devolução da mãe; restante = o resto;
+//   devolvida:  idem, mas tudo o que não foi retirado é devolvido (restante 0);
+//   cancelada, inutilizada, indevida, recusada: tudo zero (a nota não vale).
 function _acKpis(m, g) {
-  const fs = m.filhas.filter(f => f.status !== 'cancelada');
-  const retT = fs.reduce((t, f) => t + f.peso, 0);
+  const vale = m.status === 'autorizada' || m.status === 'devolvida';
+  const fs = vale ? m.filhas.filter(f => f.ret > 0) : [];
+  const retT = fs.reduce((t, f) => t + f.ret, 0);
+  const totT = vale ? m.peso : 0;
   const custoUn = m.peso > 0 ? m.valor / m.peso : (Number(m.itens[0]?.valor_unit) || 0);
-  const pendT = Math.max(0, m.peso - retT);
+  const devT = !vale ? 0 : m.status === 'devolvida' ? Math.max(0, totT - retT) : m.devNF;
+  const pendT = Math.max(0, totT - retT - devT);
   const pesoMedio = g.pesoMedio || (fs.length ? retT / fs.length : 0);
   const nfsRest = pendT > 0 && pesoMedio > 0 ? Math.ceil(pendT / pesoMedio) : (pendT > 0 ? null : 0);
   const intervalo = _acIntervalo(fs) ?? g.intervalo;
   const diasRest = nfsRest === 0 ? 0 : (nfsRest != null && intervalo != null ? nfsRest * intervalo : null);
   const base = fs.length ? Math.max(fs[fs.length - 1].emissao, Date.now()) : Date.now();
   return {
-    retT, retR: retT * custoUn, pendT, pendR: pendT * custoUn, custoUn,
+    totT, totR: vale ? m.valor : 0, retT, retR: retT * custoUn, devT, devR: devT * custoUn, pendT, pendR: pendT * custoUn, custoUn,
     nRet: fs.length, nfsRest, pesoMedio, intervalo, diasRest,
     previsao: diasRest != null && diasRest > 0 ? base + diasRest * _acDia : null,
-    excedido: retT - m.peso > 0.001 ? retT - m.peso : 0,
-    pct: m.peso > 0 ? Math.min(1, retT / m.peso) : 0,
+    excedido: retT - totT > 0.001 ? retT - totT : 0,
+    pct: totT > 0 ? Math.min(1, retT / totT) : 0,
+    pctDev: totT > 0 ? Math.min(1, devT / totT) : 0,
   };
 }
 
@@ -448,8 +520,7 @@ function _acOrdemForn(a, b) {
 // são do recorte dela (o fornecedor dentro de uma central mostra só as notas dali).
 const _acNoRecorte = (n, rec) => !rec || rec(n);
 function _acSit(maes, sv) {
-  const aut = maes.filter(m => m.status === 'autorizada');
-  const tot = aut.reduce((t, m) => t + m.peso, 0), pen = aut.reduce((t, m) => t + m.pendT, 0), penR = aut.reduce((t, m) => t + m.pendR, 0);
+  const tot = maes.reduce((t, m) => t + m.totT, 0), pen = maes.reduce((t, m) => t + m.pendT, 0), penR = maes.reduce((t, m) => t + m.pendR, 0);
   const [ic, cor] = !maes.length && !sv ? ['ti-minus', 'var(--text3)'] : sv ? ['ti-link-off', 'var(--red)'] : pen > 0.001 ? ['ti-hourglass', 'var(--amber)'] : ['ti-circle-check', 'var(--green)'];
   const selo = sv ? [`${_acNf0.format(sv)} sem vínculo`, '#f43f5e'] : pen > 0.001 ? [`Restante ${_acNf0.format(tot ? pen / tot * 100 : 0)}%`, '#f59e0b'] : maes.length ? ['Zerado', '#10b981'] : null;
   return { pen, penR, ico: `<i class="ti ${ic} mp-ico" style="color:${cor}" aria-hidden="true"></i>`, selo: selo ? `<span class="mp-prio ac-selo" style="--c:${selo[1]}">${selo[0]}</span>` : '' };
@@ -547,27 +618,29 @@ const _acRc = v => Math.abs(v) >= 1e6 ? 'R$ ' + _acNf1.format(v / 1e6) + ' mi' :
 const _acTc = v => _acNf0.format(v) + ' t';
 const _acTipG = (tit, linhas) => encodeURIComponent(`<b>${tit}</b><div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;margin-top:6px;font-family:var(--mono);font-size:13px">${linhas.map(([r, v]) => `<span style="color:var(--text2)">${r}</span><span style="text-align:right">${v}</span>`).join('')}</div>`);
 
-// Os três números do Resumo. Retirado ACIMA de uma nota mãe não abate o saldo das
-// outras: com excedido, retirado + restante passa do total (dito no card).
-function _acCardsSaldo(aut) {
-  const s = k => aut.reduce((t, m) => t + m[k], 0);
-  const tot = s('peso'), ret = s('retT'), pen = s('pendT'), exc = s('excedido');
+// Os quatro números do Resumo (todas as notas mães; os valores de cada uma seguem o
+// status, _acKpis). Retirado ACIMA de uma nota mãe não abate o saldo das outras:
+// com excedido, retirado + devolvido + restante passa do total (dito no card).
+function _acCardsSaldo(maes) {
+  const s = k => maes.reduce((t, m) => t + m[k], 0);
+  const tot = s('totT'), ret = s('retT'), dev = s('devT'), pen = s('pendT'), exc = s('excedido');
   const pct = v => tot > 0 ? _acNf1.format(v / tot * 100) + '% do peso total' : '';
   const card = (cls, ic, rot, t, r, sub) => `<div class="ac-kc ${cls}"><div class="ac-kc-rot"><i class="ti ${ic}"></i>${rot}</div><b>${_acT(t)}</b><span class="ac-kc-r">${_acR(r)}</span>${sub ? `<small>${sub}</small>` : ''}</div>`;
   return `<div class="ac-kcs">
-    ${card('tot', 'ti-stack-2', 'Saldo total', tot, s('valor'), `${_acNf0.format(aut.length)} ${aut.length === 1 ? 'nota mãe autorizada' : 'notas mães autorizadas'}`)}
+    ${card('tot', 'ti-stack-2', 'Saldo total', tot, s('totR'), `${_acNf0.format(maes.length)} ${maes.length === 1 ? 'nota mãe' : 'notas mães'}`)}
     ${card('ret', 'ti-truck-delivery', 'Saldo retirado', ret, s('retR'), pct(Math.max(0, ret - exc)) + (exc > 0.001 ? ` · mais ${_acT(exc)} acima do saldo de alguma nota mãe` : ''))}
+    ${card('dev', 'ti-arrow-back-up', 'Saldo devolvido', dev, s('devR'), pct(dev))}
     ${card('pen', 'ti-hourglass', 'Saldo restante', pen, s('pendR'), pct(pen))}</div>`;
 }
 
-function _acGraficos(aut) {
-  AC.evoNotas = aut;
-  const s = k => aut.reduce((t, m) => t + m[k], 0);
-  const excR = aut.reduce((t, m) => t + m.excedido * m.custoUn, 0);
-  const rosca = (tit, fmt, curto, total, ret, pend, exc) => {
+function _acGraficos(maes) {
+  AC.evoNotas = maes;
+  const s = k => maes.reduce((t, m) => t + m[k], 0);
+  const excR = maes.reduce((t, m) => t + m.excedido * m.custoUn, 0);
+  const rosca = (tit, fmt, curto, total, ret, dev, pend, exc) => {
     const R = 82, E = 26, C = 2 * Math.PI * R, dentro = Math.max(0, ret - exc);
     const p = v => total > 0 ? v / total : 0, pct = v => total > 0 ? _acNf1.format(p(v) * 100) + '%' : '—';
-    const fatias = [['Retirado', dentro, 'ret', ret], ['Restante', pend, 'pen', pend]].filter(x => x[1] > 0 && total > 0);
+    const fatias = [['Retirado', dentro, 'ret', ret], ['Devolvido', dev, 'dev', dev], ['Restante', pend, 'pen', pend]].filter(x => x[1] > 0 && total > 0);
     const gap = fatias.length > 1 ? 3 : 0;   // espaço na cor do fundo entre as fatias
     let pos = 0;
     const arcos = fatias.map(([r, v, cls, cheio]) => {
@@ -577,38 +650,44 @@ function _acGraficos(aut) {
     }).join('');
     const leg = (r, cls, pc) => `<div class="ac-ro-l"><i class="${cls}"></i><span>${r}</span><b>${pc}</b></div>`;
     return `<div class="ac-ro"><div class="ac-gr-tit">${tit}</div><div class="ac-ro-corpo">
-      <svg viewBox="0 0 220 220" role="img" aria-label="${_acE(`${tit}: saldo total ${fmt(total)}, retirado ${fmt(ret)}, restante ${fmt(pend)}`)}">
+      <svg viewBox="0 0 220 220" role="img" aria-label="${_acE(`${tit}: saldo total ${fmt(total)}, retirado ${fmt(ret)}, devolvido ${fmt(dev)}, restante ${fmt(pend)}`)}">
         <circle class="ac-ro-fundo" r="${R}" cx="110" cy="110" stroke-width="${E}"/><g transform="rotate(-90 110 110)">${arcos}</g>
         <text x="110" y="103" class="ac-ro-rot">Saldo total</text><text x="110" y="126" class="ac-ro-tot">${curto(total)}</text></svg>
-      <div class="ac-ro-leg">${leg('Retirado', 'ret', pct(dentro))}${leg('Restante', 'pen', pct(pend))}</div></div></div>`;
+      <div class="ac-ro-leg">${leg('Retirado', 'ret', pct(dentro))}${leg('Devolvido', 'dev', pct(dev))}${leg('Restante', 'pen', pct(pend))}</div></div></div>`;
   };
-  return `<div class="ac-gr-dois">${rosca('Físico', _acT, _acTc, s('peso'), s('retT'), s('pendT'), s('excedido'))}${rosca('Financeiro', _acR, _acRc, s('valor'), s('retR'), s('pendR'), excR)}</div>
+  return `<div class="ac-gr-dois">${rosca('Físico', _acT, _acTc, s('totT'), s('retT'), s('devT'), s('pendT'), s('excedido'))}${rosca('Financeiro', _acR, _acRc, s('totR'), s('retR'), s('devR'), s('pendR'), excR)}</div>
     <div class="ac-ro ac-ev"><div class="ac-gr-tit">Evolução por mês
-      <span class="ac-ev-leg"><span><i class="tot"></i>Saldo total</span><span><i class="ret"></i>Retirado</span><span><i class="pen"></i>Restante</span></span>
+      <span class="ac-ev-leg"><span><i class="tot"></i>Saldo total</span><span><i class="ret"></i>Retirado</span><span><i class="dev"></i>Devolvido</span><span><i class="pen"></i>Restante</span></span>
       <span class="mp-modo" role="group" aria-label="Unidade da evolução">${[['t', 'Físico'], ['r', 'Financeiro']].map(([k, r]) => `<button data-evo="${k}" class="${AC.evo === k ? 'on' : ''}" aria-pressed="${AC.evo === k}" onclick="acEvo('${k}')">${r}</button>`).join('')}</span></div>
       <div id="ac-evo"></div></div>`;
 }
 
-// Saldo total, retirado e restante ACUMULADOS no fim de cada mês; o último mês
-// bate com as roscas. Nota mãe entra no mês da emissão; a filha, no mês dela.
+// Saldo total, retirado, devolvido e restante ACUMULADOS no fim de cada mês; o
+// último mês bate com as roscas. Nota mãe entra no mês da emissão; filha e NF de
+// devolução, no mês delas. Mãe Devolvida: o que faltava devolver entra no mês da
+// última nota. Nota que não vale (cancelada…) fica de fora (valores zero).
 // ponytail: no máximo 36 meses na tela (o acumulado anterior entra no 1º).
-function _acEvolucao(aut, modo) {
+function _acEvolucao(maes, modo) {
   const mes = ms => { const d = new Date(ms); return d.getFullYear() * 12 + d.getMonth(); };
+  const vale = maes.filter(m => m.totT > 0);
   let ini = Infinity, fim = -Infinity;
   const ve = ms => { if (ms > 0) { const k = mes(ms); if (k < ini) ini = k; if (k > fim) fim = k; } };
-  aut.forEach(m => { ve(m.emissao); m.filhas.forEach(f => { if (f.status !== 'cancelada') ve(f.emissao); }); });
+  vale.forEach(m => { ve(m.emissao); m.filhas.forEach(f => { if (f.ret > 0) ve(f.emissao); }); m.devs.forEach(d => ve(d.emissao)); });
   if (ini > fim) return [];
   ini = Math.max(ini, fim - 35);
   const n = fim - ini + 1, idx = ms => Math.max(0, (ms > 0 ? mes(ms) : ini) - ini);
-  const out = Array.from({ length: n }, (_, i) => ({ mes: ini + i, tot: 0, ret: 0, pen: 0 }));
-  aut.forEach(m => {
-    const u = modo === 'r' ? m.custoUn : 1, por = new Float64Array(n);
-    m.filhas.forEach(f => { if (f.status !== 'cancelada') por[idx(f.emissao)] += f.peso; });
-    let ret = 0;
+  const out = Array.from({ length: n }, (_, i) => ({ mes: ini + i, tot: 0, ret: 0, dev: 0, pen: 0 }));
+  vale.forEach(m => {
+    const u = modo === 'r' ? m.custoUn : 1, pr = new Float64Array(n), pd = new Float64Array(n);
+    let ult = m.emissao;
+    m.filhas.forEach(f => { if (f.ret > 0) { pr[idx(f.emissao)] += f.ret; ult = Math.max(ult, f.emissao); } });
+    m.devs.forEach(d => { pd[idx(d.emissao)] += d.peso; ult = Math.max(ult, d.emissao); });
+    if (m.devT > m.devNF) pd[idx(ult)] += m.devT - m.devNF;
+    let ret = 0, dev = 0;
     for (let i = 0, e = idx(m.emissao); i < n; i++) {
-      ret += por[i];
-      out[i].ret += ret * u;
-      if (i >= e) { out[i].tot += modo === 'r' ? m.valor : m.peso; out[i].pen += Math.max(0, m.peso - ret) * u; }
+      ret += pr[i]; dev = Math.min(m.devT, dev + pd[i]);
+      out[i].ret += ret * u; out[i].dev += dev * u;
+      if (i >= e) { out[i].tot += modo === 'r' ? m.totR : m.totT; out[i].pen += Math.max(0, m.totT - ret - dev) * u; }
     }
   });
   return out;
@@ -621,7 +700,7 @@ function _acEvoDesenhar() {
   const pts = _acEvolucao(AC.evoNotas || [], AC.evo), fmt = AC.evo === 'r' ? _acR : _acT, curto = AC.evo === 'r' ? _acRc : _acTc;
   if (!pts.length) { el.innerHTML = '<p class="mo-hint">Sem notas mães para mostrar.</p>'; return; }
   const W = Math.max(320, Math.round(el.clientWidth)), H = 250, P = { l: 74, r: 16, t: 14, b: 26 }, n = pts.length;
-  const max = Math.max(...pts.flatMap(p => [p.tot, p.ret, p.pen])) || 1;
+  const max = Math.max(...pts.flatMap(p => [p.tot, p.ret, p.dev, p.pen])) || 1;
   const bruto = max / 4, mag = 10 ** Math.floor(Math.log10(bruto)), passo = [1, 2, 2.5, 5, 10].map(k => k * mag).find(k => k >= bruto);
   const topo = passo * Math.ceil(max / passo - 1e-9), larg = (W - P.l - P.r) / n;
   const x = i => P.l + larg * (i + 0.5), y = v => P.t + (1 - v / topo) * (H - P.t - P.b);
@@ -632,12 +711,12 @@ function _acEvoDesenhar() {
   const cada = Math.ceil(n / Math.max(1, Math.floor((W - P.l - P.r) / 56)));
   const rotX = pts.map((p, i) => (n - 1 - i) % cada ? '' : `<text x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${nome(p.mes)}</text>`).join('');
   const linha = k => n > 1 ? `<path class="ac-ev-ln ${k}" d="${pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(p[k]).toFixed(1)).join('')}"/>` : '';
-  const pontos = (p, i) => ['tot', 'ret', 'pen'].map(k => `<circle class="${k}" cx="${x(i).toFixed(1)}" cy="${y(p[k]).toFixed(1)}" r="4.5"/>`).join('');
+  const pontos = (p, i) => ['tot', 'ret', 'dev', 'pen'].map(k => `<circle class="${k}" cx="${x(i).toFixed(1)}" cy="${y(p[k]).toFixed(1)}" r="4.5"/>`).join('');
   const fim = pts[n - 1];
-  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${_acE(`Evolução até ${nome(fim.mes)}: saldo total ${curto(fim.tot)}, retirado ${curto(fim.ret)}, restante ${curto(fim.pen)}`)}">
-    <g class="ac-ev-gr">${grade}${rotX}</g>${linha('tot')}${linha('ret')}${linha('pen')}
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${_acE(`Evolução até ${nome(fim.mes)}: saldo total ${curto(fim.tot)}, retirado ${curto(fim.ret)}, devolvido ${curto(fim.dev)}, restante ${curto(fim.pen)}`)}">
+    <g class="ac-ev-gr">${grade}${rotX}</g>${linha('tot')}${linha('ret')}${linha('dev')}${linha('pen')}
     <g class="ac-ev-fim">${pontos(fim, n - 1)}</g>
-    ${pts.map((p, i) => `<g class="ac-ev-c" data-tip="${_acTipG(nome(p.mes) + ' · acumulado', [['Saldo total', fmt(p.tot)], ['Retirado', fmt(p.ret)], ['Restante', fmt(p.pen)]])}"><rect x="${(x(i) - larg / 2).toFixed(1)}" y="${P.t}" width="${larg.toFixed(1)}" height="${H - P.t - P.b}"/><line x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${P.t}" y2="${H - P.b}"/>${pontos(p, i)}</g>`).join('')}
+    ${pts.map((p, i) => `<g class="ac-ev-c" data-tip="${_acTipG(nome(p.mes) + ' · acumulado', [['Saldo total', fmt(p.tot)], ['Retirado', fmt(p.ret)], ['Devolvido', fmt(p.dev)], ['Restante', fmt(p.pen)]])}"><rect x="${(x(i) - larg / 2).toFixed(1)}" y="${P.t}" width="${larg.toFixed(1)}" height="${H - P.t - P.b}"/><line x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${P.t}" y2="${H - P.b}"/>${pontos(p, i)}</g>`).join('')}
   </svg>`;
 }
 function acEvo(k) {
@@ -648,13 +727,14 @@ function acEvo(k) {
 let _acEvoT = null;
 window.addEventListener('resize', () => { clearTimeout(_acEvoT); _acEvoT = setTimeout(_acEvoDesenhar, 150); });
 
-// Números secundários, em texto: notas fora da conta e o ritmo das filhas.
-function _acResumoTxt(aut, maes, g) {
-  const fora = maes.length - aut.length, partes = [];
-  if (fora) partes.push(`${_acNf0.format(fora)} nota${fora === 1 ? '' : 's'} mãe${fora === 1 ? '' : 's'} não autorizada${fora === 1 ? '' : 's'} fora da conta`);
+// Números secundários, em texto: notas por status e o ritmo das filhas.
+function _acResumoTxt(maes, g) {
+  const cont = new Map(), partes = [];
+  maes.forEach(m => { if (m.status !== 'autorizada') cont.set(m.status, (cont.get(m.status) || 0) + 1); });
+  cont.forEach((n, st) => partes.push(`${_acNf0.format(n)} ${AC_STATUS[st][0].toLowerCase()}${n === 1 ? '' : 's'}${st === 'devolvida' ? '' : ' (valores zero)'}`));
   if (g?.pesoMedio) partes.push(`filha de ${_acT(g.pesoMedio)} em média`);
   if (g?.intervalo > 0) partes.push(g.intervalo >= 1 ? `uma a cada ${_acNf1.format(g.intervalo)} dias` : `${_acNf1.format(1 / g.intervalo)} por dia`);
-  return partes.join(' · ') || 'notas mães autorizadas';
+  return partes.join(' · ') || 'todas autorizadas';
 }
 
 function _acPainelHtml() {
@@ -664,8 +744,7 @@ function _acPainelHtml() {
   const forns = _acFornDaAba(true);
   const doGrupo = m => (!AC.grp || AC.F.grupo === 'fornecedor' || AC.grp === 'Sem nota mãe' || _acGrupoDe[AC.F.grupo](m).includes(AC.grp)) && (!AC.sub || (m.central || 'Sem central') === AC.sub);
   const maes = forns.flatMap(x => _acMaesDe(x.cnpj)).filter(doGrupo);
-  const aut = maes.filter(m => m.status === 'autorizada');
-  const soma = k => aut.reduce((t, m) => t + m[k], 0);
+  const soma = k => maes.reduce((t, m) => t + m[k], 0);
   const sv = forns.reduce((t, x) => t + (AC.porForn.get(x.cnpj)?.semVinc.length || 0), 0);
   const rot = AC_ABAS.find(a => a[0] === AC.aba)[2];
   const mig = [AC.grp ? `<button class="mo-link" onclick="acGrp('')">Geral</button>` : '<span>Geral</span>'];
@@ -674,9 +753,9 @@ function _acPainelHtml() {
   const top = forns.map(x => [x, AC.porForn.get(x.cnpj)]).filter(([, g]) => g?.pendT > 0).sort((a, b) => b[1].pendR - a[1].pendR).slice(0, 8);
   const maxR = top[0]?.[1].pendR || 1;
   const semV = forns.map(x => [x, AC.porForn.get(x.cnpj)?.semVinc.length || 0]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  return _acCab(mig, _acE(AC.sub || AC.grp || 'Acordos · ' + rot), `${forns.length} fornecedor${forns.length === 1 ? '' : 'es'} nesta aba · ${AC.maes.length} notas mães e ${AC.filhas.length} filhas no SEFAZ importado`, soma('pendT'), soma('pendR'))
+  return _acCab(mig, _acE(AC.sub || AC.grp || 'Acordos · ' + rot), `${forns.length} fornecedor${forns.length === 1 ? '' : 'es'} nesta aba · ${AC.maes.length} notas mães, ${AC.filhas.length} filhas e ${AC.devs.length} devoluções no SEFAZ importado`, soma('pendT'), soma('pendR'))
     + (AC.cfop.size ? '' : '<div class="mp-card"><p class="mo-hint">Nenhum CFOP marcado como nota mãe/filha (Configurações → CFOP → Acordo).</p></div>')
-    + `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(aut, maes)}</span></h4>${_acCardsSaldo(aut)}${_acGraficos(aut)}</div>
+    + `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(maes)}</span></h4>${_acCardsSaldo(maes)}${_acGraficos(maes)}</div>
     <div class="mp-dois">
       <div class="mp-card"><h4 class="mp-tit">O que mais pesa <span class="mo-hint">saldo restante em R$</span></h4>${top.length ? top.map(([x, g]) => `<button class="mp-rank" style="grid-template-columns:minmax(0,1fr) 90px 150px" onclick="acSel('${x.cnpj}')">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_acE(x.nome)}</span><span class="mp-rank-bar"><i style="width:${g.pendR / maxR * 100}%;background:var(--amber)"></i></span><span class="mono" style="text-align:right">${_acR(g.pendR)}<small class="mo-hint" style="display:block">${_acT(g.pendT)}</small></span></button>`).join('') : '<p class="mo-hint">Nenhum saldo restante.</p>'}</div>
@@ -685,10 +764,10 @@ function _acPainelHtml() {
 }
 
 function _acPainelForn(f) {
-  const g = AC.porForn.get(f.cnpj) || { maes: [], semVinc: [], filhas: [] };
+  const g = AC.porForn.get(f.cnpj) || { maes: [], semVinc: [], filhas: [], devs: [], devSemVinc: [] };
   const maes = g.maes.filter(_acPassaMae);
-  const aut = maes.filter(m => m.status === 'autorizada');
-  const soma = k => aut.reduce((t, m) => t + m[k], 0);
+  const soma = k => maes.reduce((t, m) => t + m[k], 0);
+  const nSv = g.semVinc.length + g.devSemVinc.length;
   const mig = [`<button class="mo-link" onclick="acSel('')">Geral</button>`];
   if (AC.grp) mig.push(`<button class="mo-link" onclick="acSel('')">${_acE(AC.grp)}</button>`);
   mig.push('<span>Fornecedor</span>');
@@ -701,8 +780,8 @@ function _acPainelForn(f) {
       ? `Escolha a modalidade acima.${g.maes.length ? ` Há <b>${g.maes.length}</b> nota${g.maes.length > 1 ? 's' : ''} mãe deste fornecedor no SEFAZ — escolha <b>Nota mãe</b> para ver o saldo.` : ''}`
       : `A tela de <b>${_acE(AC_MODALIDADES[f.modalidade])}</b> ainda não foi feita — por enquanto só Nota mãe.`}</p></div>`;
   } else {
-    corpo = `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(aut, maes, g)}</span></h4>${_acCardsSaldo(aut)}${_acGraficos(aut)}</div>
-      <div class="mp-subabas ac-subabas" role="tablist">${[['maes', 'ti-file-dollar', 'Notas mães', maes.length, ''], ['semvinc', 'ti-link-off', 'Sem vínculo', g.semVinc.length, g.semVinc.length ? 'var(--red)' : '']].map(([k, ic, rot, n, cor]) =>
+    corpo = `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(maes, g)}</span></h4>${_acCardsSaldo(maes)}${_acGraficos(maes)}</div>
+      <div class="mp-subabas ac-subabas" role="tablist">${[['maes', 'ti-file-dollar', 'Notas mães', maes.length, ''], ['semvinc', 'ti-link-off', 'Sem vínculo', nSv, nSv ? 'var(--red)' : '']].map(([k, ic, rot, n, cor]) =>
         `<button class="mo-aba${AC.paba === k ? ' on' : ''}" role="tab" aria-selected="${AC.paba === k}" onclick="acPaba('${k}')"><i class="ti ${ic}"${cor ? ` style="color:${cor}"` : ''}></i>${rot} <b${cor ? ` style="color:${cor}"` : ''}>${n}</b></button>`).join('')}</div>
       <div class="ac-maes">${AC.paba === 'semvinc' ? _acAlertaSemVinc(f, g) : _acCardsMaes(maes)}</div>`;
   }
@@ -792,49 +871,69 @@ function _acRecHtml(s, r) {
     ${r.excede ? `<small class="ac-exc"><i class="ti ti-alert-triangle"></i> passa ${_acT(r.excede)} do saldo</small>` : ''}</div>
     <button class="btn btn-sm" onclick="acVincularRecs('${s.cnpj}','${s.chave}')" title="Vincular à recomendada"><i class="ti ti-check"></i></button></div>`;
 }
-// Subaba "Sem vínculo": filhas cujo complementar não cita a nota mãe — vincular à mão.
+// Status da nota (mãe ou filha): Cancelada vem do SEFAZ e trava; os outros são
+// escolhidos à mão. Devolvida automática (pelas NFs de devolução) é dita no título.
+function _acStHtml(n, quem) {
+  const st = AC_STATUS[n.status];
+  if (n.status === 'cancelada') return `<span class="badge ${st[1]}" title="Cancelada no SEFAZ">${st[0]}</span>`;
+  const tit = `Status da nota ${quem}${n.auto ? ' — Devolvida automaticamente pelas NFs de devolução' : ''}`;
+  return `<select class="form-select ac-st ${st[1]}" onclick="event.stopPropagation()" onchange="acStatus('${n.chave}', this.value)" title="${tit}">${AC_STATUS_MANUAIS.map(k => `<option value="${k}"${n.status === k ? ' selected' : ''}>${AC_STATUS[k][0]}${n.auto && k === 'devolvida' ? ' (auto)' : ''}</option>`).join('')}</select>`;
+}
+const _acVincHtml = (n, ph, lista) => `<div class="ac-vinc"><input class="form-input" id="ac-v-${n.chave}" placeholder="${ph}" list="${lista}" onkeydown="if(event.key==='Enter')acVincular('${n.chave}')"><button class="btn btn-sm" onclick="acVincular('${n.chave}')" title="Vincular"><i class="ti ti-link"></i></button></div>`;
+const _acMatTd = n => `<td class="ac-comp ac-comp-mat" title="${_acE(n.materiais.join(', '))}">${_acE(n.materiais.join(', ') || '—')}</td>`;
+
+// Subaba "Sem vínculo": filhas cujo complementar não cita a nota mãe e devoluções que
+// não citam a mãe/filha devolvida — vincular à mão.
 function _acAlertaSemVinc(f, g) {
-  if (!g.semVinc.length) return '<div class="mp-card"><p class="mo-hint"><i class="ti ti-circle-check" style="color:var(--green)"></i> Todas as notas filhas deste fornecedor estão vinculadas a uma nota mãe.</p></div>';
+  if (!g.semVinc.length && !g.devSemVinc.length) return '<div class="mp-card"><p class="mo-hint"><i class="ti ti-circle-check" style="color:var(--green)"></i> Todas as notas filhas e devoluções deste fornecedor estão vinculadas.</p></div>';
   const rec = _acRec(g), lote = g.semVinc.filter(s => _acNoLote(rec.get(s.chave)));
   const avisos = g.semVinc.filter(s => rec.get(s.chave)?.excede).length;
-  return `<div class="mp-card ac-semvinc">
+  const filhas = !g.semVinc.length ? '' : `<div class="mp-card ac-semvinc">
     <h4 class="mp-tit">${g.semVinc.length} nota${g.semVinc.length > 1 ? 's' : ''} filha${g.semVinc.length > 1 ? 's' : ''} sem vínculo <span class="mo-hint">${_acT(g.semVinc.reduce((t, s) => t + s.peso, 0))} · o complementar não cita a nota mãe</span></h4>
     ${lote.length ? `<div class="ac-rec-lote"><button class="btn btn-sm btn-primary" onclick="acVincularRecs('${f.cnpj}')"><i class="ti ti-link"></i> Vincular ${lote.length} recomendada${lote.length > 1 ? 's' : ''}</button><span class="mo-hint">a nota mãe mais antiga com saldo, da mesma central e material${avisos ? ` · ${avisos} com aviso de saldo fica${avisos > 1 ? 'm' : ''} fora do lote` : ''}</span></div>` : ''}
-    <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Número</th><th>Emissão</th><th>Central</th><th>Material</th><th class="num">Peso</th><th>Complementar</th><th>Recomendada</th><th>Vincular à nota mãe</th></tr></thead><tbody>
-    ${g.semVinc.map(s => `<tr>
-      <td class="mono">${_acE(s.numero)}</td><td>${_acData(s.emissao)}</td><td>${_acE(s.central || '—')}</td><td class="ac-comp ac-comp-mat" title="${_acE(s.materiais.join(', '))}">${_acE(s.materiais.join(', ') || '—')}</td><td class="num mono">${_acT(s.peso)}</td>
+    <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Número</th><th>Status</th><th>Emissão</th><th>Central</th><th>Material</th><th class="num">Peso</th><th>Complementar</th><th>Recomendada</th><th>Vincular à nota mãe</th></tr></thead><tbody>
+    ${g.semVinc.map(s => `<tr${s.status === 'autorizada' ? '' : ' class="inativa"'}>
+      <td class="mono">${_acE(s.numero)}</td><td>${_acStHtml(s, 'filha')}</td><td>${_acData(s.emissao)}</td><td>${_acE(s.central || '—')}</td>${_acMatTd(s)}<td class="num mono">${_acT(s.peso)}${s.devNF ? `<small class="mo-hint" style="display:block">${_acT(s.devNF)} devolvido</small>` : ''}</td>
       <td class="ac-comp" title="${_acE(s.comp)}">${_acE(s.comp || '—')}</td>
       <td>${_acRecHtml(s, rec.get(s.chave))}</td>
-      <td><div class="ac-vinc"><input class="form-input" id="ac-v-${s.chave}" placeholder="Nº ou chave da mãe" list="ac-dl-${f.cnpj}-${_acDlId(s.central)}" onkeydown="if(event.key==='Enter')acVincular('${s.chave}')"><button class="btn btn-sm" onclick="acVincular('${s.chave}')" title="Vincular"><i class="ti ti-link"></i></button></div></td>
+      <td>${_acVincHtml(s, 'Nº ou chave da mãe', `ac-dl-${f.cnpj}-${_acDlId(s.central)}`)}</td>
     </tr>`).join('')}
-    </tbody></table></div>
-    ${[...new Set(g.semVinc.map(s => s.central))].map(c => {
+    </tbody></table></div></div>`;
+  const devs = !g.devSemVinc.length ? '' : `<div class="mp-card ac-semvinc">
+    <h4 class="mp-tit">${g.devSemVinc.length} devoluç${g.devSemVinc.length > 1 ? 'ões' : 'ão'} sem vínculo <span class="mo-hint">${_acT(g.devSemVinc.reduce((t, s) => t + s.peso, 0))} · o complementar não cita uma nota mãe ou filha deste fornecedor (pode ser de compra comum)</span></h4>
+    <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Devolução</th><th>Emissão</th><th>Emitente</th><th>Material</th><th class="num">Peso</th><th>Complementar</th><th>Vincular à nota mãe ou filha</th></tr></thead><tbody>
+    ${g.devSemVinc.map(d => `<tr>
+      <td class="mono">${_acE(d.numero)}</td><td>${_acData(d.emissao)}</td><td>${d.cnpj === d.forn ? 'Fornecedor' : 'Concrelagos'}</td>${_acMatTd(d)}<td class="num mono">${_acT(d.peso)}</td>
+      <td class="ac-comp" title="${_acE(d.comp)}">${_acE(d.comp || '—')}</td>
+      <td>${d.vinculo === 'manual' ? `<span class="mo-hint ac-rec-nao">vinculada à NF ${_acE(d.alvoNumero)}, que não está no SEFAZ importado</span>` : _acVincHtml(d, 'Nº ou chave da mãe/filha', `ac-dl-${f.cnpj}-${_acDlId('')}`)}</td>
+    </tr>`).join('')}
+    </tbody></table></div></div>`;
+  return `${filhas}${devs}
+    ${[...new Set([...g.semVinc.map(s => s.central), ...(g.devSemVinc.length ? [''] : [])])].map(c => {
       // Sugestões só com as mães da central da filha (Hugo, 23/11/2026); filha
       // sem central (ou central sem mãe conhecida) vê todas as do fornecedor.
       const daCen = c ? g.maes.filter(m => m.central === c) : [];
       return `<datalist id="ac-dl-${f.cnpj}-${_acDlId(c)}">${(daCen.length ? daCen : g.maes).map(m => `<option value="${_acE(m.numero)}">${_acE(m.numero)} · ${_acE(m.central || 'sem central')} · ${_acData(m.emissao)} · ${m.status === 'autorizada' ? 'saldo ' + _acT(m.pendT) : AC_STATUS[m.status][0].toLowerCase()} · ${_acE(m.materiais.join(', ') || 'sem material')}</option>`).join('')}</datalist>`;
     }).join('')}
-  </div>`;
+  `;
 }
 
 function _acCardsMaes(maes) {
   if (!maes.length) return `<div class="mp-card"><p class="mo-hint">Nenhuma nota mãe deste fornecedor no SEFAZ importado${_acTemFiltro() ? ' para o filtro' : ''}.</p></div>`;
   return `<div class="micro-section-title" style="margin:6px 2px 0"><i class="ti ti-file-dollar"></i> Notas mães (${maes.length})</div>` + maes.map(m => {
-    const st = AC_STATUS[m.status], ab = AC.abertas.has(m.chave);
-    const stHtml = m.status === 'cancelada'
-      ? `<span class="badge ${st[1]}" title="Cancelada no SEFAZ">${st[0]}</span>`
-      : `<select class="form-select ac-st ${st[1]}" onclick="event.stopPropagation()" onchange="acStatus('${m.chave}', this.value)" title="Status da nota mãe">${AC_STATUS_MANUAIS.map(k => `<option value="${k}"${m.status === k ? ' selected' : ''}>${AC_STATUS[k][0]}</option>`).join('')}</select>`;
+    const ab = AC.abertas.has(m.chave);
     return `<div class="micro-filial-card ac-mcard${m.status !== 'autorizada' ? ' ac-inativa' : ''}" data-ac="${m.chave}">
       <div class="micro-filial-header-wrap${ab ? ' open' : ''}">
         <div class="micro-filial-header" onclick="acToggle(this.closest('.micro-filial-header-wrap'))">
           <div class="micro-filial-name"><i class="ti ti-file-dollar"></i> NF ${_acE(m.numero)}<span class="ac-mcard-sub">${_acE(m.central || 'sem central')} · ${_acData(m.emissao)}</span></div>
-          <div class="micro-filial-summary">${stHtml}
+          <div class="micro-filial-summary">${_acStHtml(m, 'mãe')}
             ${_acPill('Restante: ' + _acT(m.pendT), m.pendT > 0 ? 'var(--amber)' : 'var(--text3)', 'ti-hourglass')}
             ${_acPill('Retirado ' + _acNf0.format(m.pct * 100) + '%', 'var(--teal)', 'ti-truck-delivery')}
+            ${m.devT > 0.001 ? _acPill('Devolvido ' + _acT(m.devT), 'var(--gs-dev)', 'ti-arrow-back-up') : ''}
             ${m.excedido ? _acPill('Excedido ' + _acT(m.excedido), 'var(--red)', 'ti-alert-triangle') : ''}
             <span class="summary-sep"></span>
             <span class="ac-mcard-mat" title="${_acE(m.materiais.join(', '))}">${_acE(m.materiais.join(', ') || '—')}</span>
-            <span class="ac-minibar" title="${_acNf0.format(m.pct * 100)}% retirado"><i style="width:${m.pct * 100}%"></i></span>
+            <span class="ac-minibar" title="${_acNf0.format(m.pct * 100)}% retirado${m.devT > 0.001 ? ` · ${_acNf0.format(m.pctDev * 100)}% devolvido` : ''}"><i style="width:${m.pct * 100}%"></i><i class="dev" style="width:${m.pctDev * 100}%"></i></span>
           </div>
         </div>
         <div class="micro-filial-actions">${_acChev(ab)}</div>
@@ -844,33 +943,47 @@ function _acCardsMaes(maes) {
   }).join('');
 }
 
-// Relatório da nota mãe (corpo do card): KPIs, barra, curva do saldo, dados da nota e filhas.
+const AC_VINC = { manual: ['Manual', 'badge-purple'], chave: ['Pela chave', 'badge-teal'], numero: ['Pelo número', 'badge-teal'] };
+const _acVincTd = n => `<td><span class="badge ${AC_VINC[n.vinculo][1]}">${AC_VINC[n.vinculo][0]}</span></td>
+      <td class="mono ac-chave" title="${n.chave}">${n.chave}</td>
+      <td>${n.vinculo === 'manual' ? `<button class="btn-icon danger" title="Desfazer vínculo manual" onclick="event.stopPropagation();acDesvincular('${n.chave}')"><i class="ti ti-link-off"></i></button>` : ''}</td>`;
+
+// Relatório da nota mãe (corpo do card): KPIs, barra, curva do saldo, dados da nota,
+// filhas e devoluções.
 function _acRelatorio(m) {
   const tempo = m.diasRest == null ? '—' : m.diasRest === 0 ? 'Zerado' : `${_acNf0.format(Math.ceil(m.diasRest))} dias`;
   const tempoSub = m.previsao ? `até acabar · previsão ${_acData(m.previsao)}` : m.diasRest === 0 ? 'saldo zerado' : 'até acabar · sem ritmo de retiradas';
-  let s = m.peso;
-  const filhas = m.filhas.map(f => {
-    const ok = f.status !== 'cancelada'; if (ok) s -= f.peso;
-    return `<tr${ok ? '' : ' class="inativa"'}>
-      <td class="mono">${_acE(f.numero)}${ok ? '' : ' <span class="badge badge-red">Cancelada</span>'}</td><td>${_acData(f.emissao)}</td><td>${_acE(f.central || '—')}</td>
-      <td class="num mono">${_acT(f.peso)}</td><td class="num mono">${ok ? _acT(s) : '—'}</td>
-      <td><span class="badge ${f.vinculo === 'manual' ? 'badge-purple' : 'badge-teal'}">${{ manual: 'Manual', chave: 'Pela chave', numero: 'Pelo número' }[f.vinculo]}</span></td>
-      <td class="mono ac-chave" title="${f.chave}">${f.chave}</td>
-      <td>${f.vinculo === 'manual' ? `<button class="btn-icon danger" title="Desfazer vínculo manual" onclick="event.stopPropagation();acDesvincular('${f.chave}')"><i class="ti ti-link-off"></i></button>` : ''}</td>
-    </tr>`;
-  }).join('');
+  // Saldo depois de cada nota, na ordem das datas: filha (o retirado) e devolução da mãe.
+  const depois = new Map();
+  let s = m.totT;
+  _acEventos(m).forEach(([, p, n]) => { s -= p; depois.set(n.chave, s); });
+  const sd = n => depois.has(n.chave) ? _acT(depois.get(n.chave)) : '—';
+  const filhas = m.filhas.map(f => `<tr${f.ret > 0 ? '' : ' class="inativa"'}>
+      <td class="mono">${_acE(f.numero)}</td><td>${_acStHtml(f, 'filha')}</td><td>${_acData(f.emissao)}</td><td>${_acE(f.central || '—')}</td>
+      <td class="num mono">${_acT(f.peso)}</td><td class="num mono">${f.devNF ? _acT(f.devNF) : '—'}</td><td class="num mono">${sd(f)}</td>
+      ${_acVincTd(f)}
+    </tr>`).join('');
+  const devs = [...m.devs, ...m.filhas.flatMap(f => f.devs)].sort((a, b) => a.emissao - b.emissao);
+  const devRows = devs.map(d => `<tr>
+      <td class="mono">${_acE(d.numero)}</td><td>${_acData(d.emissao)}</td><td>${d.cnpj === d.forn ? 'Fornecedor' : 'Concrelagos'}</td>
+      <td>${d.alvo === m ? 'Nota mãe' : `Filha ${_acE(d.alvo.numero)}`}</td>
+      <td class="num mono">${_acT(d.peso)}</td><td class="num mono">${d.alvo === m ? sd(d) : '—'}</td>
+      ${_acVincTd(d)}
+    </tr>`).join('');
   return `<div class="micro-body-section">
       <div class="micro-section-title"><i class="ti ti-report-analytics"></i> Saldo da nota mãe</div>
       <div class="mp-pend ac-pend6">
         ${_acCx(_acT(m.retT), 'retirado · ' + _acR(m.retR), 'var(--teal)')}
+        ${_acCx(_acT(m.devT), 'devolvido · ' + _acR(m.devR), 'var(--gs-dev)')}
         ${_acCx(_acT(m.pendT), 'restante · ' + _acR(m.pendR), 'var(--amber)')}
-        ${_acCx(_acNf0.format(m.nRet), `NFs retiradas de ${_acT(m.peso)}`)}
+        ${_acCx(_acNf0.format(m.nRet), `NFs retiradas de ${_acT(m.totT)}`)}
         ${_acCx(m.nfsRest == null ? '—' : _acNf0.format(m.nfsRest), 'NFs até acabar (peso médio)')}
         ${_acCx(tempo, tempoSub, 'var(--purple)')}
         ${_acCx(m.pesoMedio ? _acT(m.pesoMedio) : '—', 'peso médio das filhas do fornecedor')}
       </div>
-      <div class="ac-prog"><div class="ac-prog-bar"><i style="width:${m.pct * 100}%"></i></div>
-        <div class="ac-prog-leg"><span><b class="ac-dot teal"></b>Retirado ${_acNf0.format(m.pct * 100)}%</span><span><b class="ac-dot amber"></b>Restante ${_acNf0.format((1 - m.pct) * 100)}%</span>
+      ${m.totT > 0 ? '' : `<p class="mo-hint"><i class="ti ti-info-circle"></i> Nota ${_acE(AC_STATUS[m.status][0].toLowerCase())}: não entra nos valores${m.filhas.length ? ` — mas tem ${m.filhas.length} filha${m.filhas.length > 1 ? 's' : ''} vinculada${m.filhas.length > 1 ? 's' : ''}` : ''}.</p>`}
+      <div class="ac-prog"><div class="ac-prog-bar"><i style="width:${m.pct * 100}%"></i><i class="dev" style="width:${m.pctDev * 100}%"></i></div>
+        <div class="ac-prog-leg"><span><b class="ac-dot teal"></b>Retirado ${_acNf0.format(m.pct * 100)}%</span>${m.devT > 0.001 ? `<span><b class="ac-dot dev"></b>Devolvido ${_acNf0.format(m.pctDev * 100)}%</span>` : ''}<span><b class="ac-dot amber"></b>Restante ${_acNf0.format(m.totT > 0 ? m.pendT / m.totT * 100 : 0)}%</span>
         ${m.excedido ? `<span class="ac-exc"><i class="ti ti-alert-triangle"></i> Retirado ${_acT(m.excedido)} acima da nota mãe</span>` : ''}</div></div>
       ${_acCurva(m)}
     </div>
@@ -893,22 +1006,33 @@ function _acRelatorio(m) {
     </div>
     <div class="micro-body-section"><div class="micro-section-title"><i class="ti ti-truck-delivery"></i> Notas filhas (${m.filhas.length})</div>
       ${m.filhas.length ? '' : '<p class="mo-hint">Nenhuma nota filha vinculada a esta nota mãe ainda.</p>'}</div>
-    ${m.filhas.length ? `<div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Nota filha</th><th>Emissão</th><th>Central</th><th class="num">Peso</th><th class="num">Saldo depois</th><th>Vínculo</th><th>Chave de acesso</th><th></th></tr></thead><tbody>${filhas}</tbody></table></div>` : ''}`;
+    ${m.filhas.length ? `<div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Nota filha</th><th>Status</th><th>Emissão</th><th>Central</th><th class="num">Peso</th><th class="num">Devolvido</th><th class="num">Saldo depois</th><th>Vínculo</th><th>Chave de acesso</th><th></th></tr></thead><tbody>${filhas}</tbody></table></div>` : ''}
+    ${devs.length ? `<div class="micro-body-section"><div class="micro-section-title"><i class="ti ti-arrow-back-up"></i> Devoluções (${devs.length})</div></div>
+    <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Devolução</th><th>Emissão</th><th>Emitente</th><th>Devolve</th><th class="num">Peso</th><th class="num">Saldo depois</th><th>Vínculo</th><th>Chave de acesso</th><th></th></tr></thead><tbody>${devRows}</tbody></table></div>` : ''}`;
 }
 
-// Curva do saldo restante (degrau a cada filha) + projeção tracejada até zerar.
+// Abatimentos do saldo da mãe na ordem das datas: [data, peso, nota] — o retirado de
+// cada filha e cada devolução da mãe; na Devolvida, o que faltava devolver no fim.
+function _acEventos(m) {
+  if (!(m.totT > 0)) return [];
+  const ev = [...m.filhas.filter(f => f.ret > 0).map(f => [f.emissao, f.ret, f]), ...m.devs.map(d => [d.emissao, d.peso, d])].sort((a, b) => a[0] - b[0]);
+  if (m.devT - m.devNF > 0.001) ev.push([ev.length ? ev[ev.length - 1][0] : m.emissao, m.devT - m.devNF, m]);
+  return ev;
+}
+
+// Curva do saldo restante (degrau a cada filha e devolução) + projeção tracejada até zerar.
 function _acCurva(m) {
-  const fs = m.filhas.filter(f => f.status !== 'cancelada');
-  if (!fs.length || !(m.peso > 0)) return '';
+  const ev = _acEventos(m);
+  if (!ev.length) return '';
   const W = 640, H = 150, P = { l: 52, r: 12, t: 12, b: 22 };
-  const t0 = Math.min(m.emissao || fs[0].emissao, fs[0].emissao);
-  const tFim = Math.max(m.previsao || 0, fs[fs.length - 1].emissao, t0 + _acDia);
-  const yMax = Math.max(m.peso, m.retT);
+  const t0 = Math.min(m.emissao || ev[0][0], ev[0][0]);
+  const tFim = Math.max(m.previsao || 0, ev[ev.length - 1][0], t0 + _acDia);
+  const yMax = Math.max(m.totT, m.retT);
   const x = t => P.l + (t - t0) / (tFim - t0) * (W - P.l - P.r);
   const y = v => P.t + (1 - Math.max(0, v) / yMax) * (H - P.t - P.b);
-  let s = m.peso, d = `M${x(t0)},${y(s)}`;
-  fs.forEach(f => { d += ` H${x(f.emissao)}`; s -= f.peso; d += ` V${y(s)}`; });
-  const ult = fs[fs.length - 1].emissao;
+  let s = m.totT, d = `M${x(t0)},${y(s)}`;
+  ev.forEach(([t, p]) => { d += ` H${x(t)}`; s -= p; d += ` V${y(s)}`; });
+  const ult = ev[ev.length - 1][0];
   const proj = m.previsao && s > 0 ? `<path d="M${x(ult)},${y(s)} L${x(m.previsao)},${y(0)}" class="ac-proj"/>` : '';
   const ticks = [0, 0.5, 1].map(k => `<text x="${P.l - 6}" y="${y(yMax * k) + 3}" text-anchor="end">${_acNf0.format(yMax * k)} t</text><line x1="${P.l}" x2="${W - P.r}" y1="${y(yMax * k)}" y2="${y(yMax * k)}"/>`).join('');
   return `<div class="ac-curva"><div class="ac-curva-tit">Saldo restante ao longo do tempo</div>
@@ -1016,27 +1140,32 @@ async function acStatus(chave, st) {
   acordosRender();
 }
 
-async function acVincular(chaveFilha) {
-  const inp = document.getElementById('ac-v-' + chaveFilha);
+// Vínculo manual: filha → mãe, ou devolução → mãe/filha (a mesma tabela
+// acordo_vinculos: chave_filha = a nota que aponta, chave_mae = a apontada).
+async function acVincular(chave) {
+  const inp = document.getElementById('ac-v-' + chave);
   const v = String(inp?.value || '').replace(/\D/g, '');
-  const filha = AC.filhas.find(f => f.chave === chaveFilha);
-  if (!v || !filha) { toast('Informe o número ou a chave de acesso da nota mãe.', 'error'); return; }
-  let mae = null;
+  const filha = AC.filhas.find(f => f.chave === chave), dev = !filha && AC.devs.find(d => d.chave === chave);
+  const n = filha || dev, oQue = filha ? 'nota mãe' : 'nota mãe ou filha';
+  if (!v || !n) { toast(`Informe o número ou a chave de acesso da ${oQue}.`, 'error'); return; }
+  const porChave = filha ? AC.maePorChave : AC.notaPorChave, porNum = filha ? AC.maePorNum : AC.notaPorNum;
+  let alvo = null;
   if (v.length === 44) {
-    mae = AC.maePorChave.get(v);
-    if (!mae) { toast('Essa chave não é de uma nota mãe do SEFAZ importado.', 'error'); return; }
+    alvo = porChave.get(v);
+    if (!alvo) { toast(`Essa chave não é de uma ${oQue} do SEFAZ importado.`, 'error'); return; }
   } else {
-    const cands = AC.maePorNum.get(filha.cnpj + '|' + _acNum(v)) || [];
-    if (cands.length > 1) { toast('Há mais de uma nota mãe com esse número — informe a chave de acesso.', 'error'); return; }
-    mae = cands[0];
-    if (!mae) { toast(`Nenhuma nota mãe nº ${_acNum(v)} deste fornecedor no SEFAZ importado.`, 'error'); return; }
+    const cands = [...new Set((filha ? [filha.cnpj] : [dev.cnpj, dev.cnpjDest].filter(Boolean)).flatMap(c => porNum.get(c + '|' + _acNum(v)) || []))];
+    if (cands.length > 1) { toast(`Há mais de uma ${oQue} com esse número — informe a chave de acesso.`, 'error'); return; }
+    alvo = cands[0];
+    if (!alvo) { toast(`Nenhuma ${oQue} nº ${_acNum(v)} deste fornecedor no SEFAZ importado.`, 'error'); return; }
   }
-  if (mae.cnpj !== filha.cnpj && !confirm(`A nota mãe ${mae.numero} é de outro fornecedor (${mae.nome}). Vincular mesmo assim?`)) return;
+  const forn = filha ? filha.cnpj : dev.forn;
+  if (alvo.cnpj !== forn && !confirm(`A nota ${alvo.numero} é de outro fornecedor (${alvo.nome}). Vincular mesmo assim?`)) return;
   const { error } = await window.supabaseClient.from('acordo_vinculos')
-    .upsert({ chave_filha: chaveFilha, chave_mae: mae.chave, numero_mae: mae.numero, ..._acQuem() });
+    .upsert({ chave_filha: chave, chave_mae: alvo.chave, numero_mae: alvo.numero, ..._acQuem() });
   if (error) { toast('Falha ao vincular: ' + error.message, 'error'); return; }
-  AC.vinc.set(chaveFilha, { chave_mae: mae.chave, numero_mae: mae.numero });
-  toast(`Nota filha ${filha.numero} vinculada à nota mãe ${mae.numero}.`, 'success');
+  AC.vinc.set(chave, { chave_mae: alvo.chave, numero_mae: alvo.numero });
+  toast(`${filha ? 'Nota filha' : 'Devolução'} ${n.numero} vinculada à nota ${alvo.tipo === 'mae' ? 'mãe' : 'filha'} ${alvo.numero}.`, 'success');
   acordosRender();
 }
 
@@ -1076,7 +1205,7 @@ function acCopiar(txt) {
 }
 
 async function acDesvincular(chaveFilha) {
-  if (!confirm('Desfazer o vínculo manual desta nota filha? Ela volta para os alertas se o complementar não citar a nota mãe.')) return;
+  if (!confirm('Desfazer o vínculo manual desta nota? Ela volta para "Sem vínculo" se o complementar não citar a nota.')) return;
   const { error } = await window.supabaseClient.from('acordo_vinculos').delete().eq('chave_filha', chaveFilha);
   if (error) { toast('Falha ao desfazer: ' + error.message, 'error'); return; }
   AC.vinc.delete(chaveFilha);

@@ -72,7 +72,7 @@ const COB_CADS = {
       { k: 'resumo', rot: 'Resumo', w: '170px', lista: true },
       { k: 'descricao', rot: 'Descrição' },
       // Aba Acordos (acordos.js): nota mãe / nota filha da entrega futura.
-      { k: 'acordo', rot: 'Acordo', w: '170px', padrao: '', opcoes: { '': '—', mae: 'Nota mãe', filha: 'Nota filha' } },
+      { k: 'acordo', rot: 'Acordo', w: '170px', padrao: '', opcoes: { '': '—', mae: 'Nota mãe', filha: 'Nota filha', devolucao: 'Devolução' } },
     ],
     ordem: (a, b) => a.cfop.localeCompare(b.cfop),
     validar(r) {
@@ -511,10 +511,12 @@ const COB_IMPORTS = {
       // Nº/chave da nota mãe (acordos.js). Nomes por prioridade: "DESCRICAO"
       // sozinha é o último recurso; sem cabeçalho nenhum, coluna W (índice 22).
       complementar: ['DESCRICAO COMPLEMENTAR', 'CAMPO COMPLEMENTAR', 'INFORMACOES COMPLEMENTARES', 'INF. COMPLEMENTAR', 'INF COMPLEMENTAR', 'COMPLEMENTAR', 'DESCRICAO'],
+      // Devolução emitida pela Concrelagos: o fornecedor é o destinatário (acordos.js).
+      cnpj_dest: ['CNPJ DESTINATARIO', 'CNPJ DO DESTINATARIO', 'CPF/CNPJ DESTINATARIO'],
     },
     ordem: ['complementar'],
     posicao: { complementar: 22 },
-    opcionais: ['municipio', 'uf', 'valor_unit', 'evento_dest', 'transportador', 'cnpj_transportador', 'placa', 'complementar'],
+    opcionais: ['municipio', 'uf', 'valor_unit', 'evento_dest', 'transportador', 'cnpj_transportador', 'placa', 'complementar', 'cnpj_dest'],
     // Uma linha por ITEM no relatório → uma NF por chave, com os itens em lista.
     montar(linhas) {
       const porChave = new Map();
@@ -543,6 +545,7 @@ const COB_IMPORTS = {
           // ponytail: vai no 1º item (é da NF, repete em toda linha) pra não
           // mexer na tabela cob_sefaz nem na RPC cob_substituir; virar coluna se precisar filtrar no banco.
           complementar: nf.itens.length ? undefined : _cobTxt(c.complementar) || undefined,
+          cnpj_dest: nf.itens.length ? undefined : _cobCnpj(c.cnpj_dest) || undefined,
         });
       });
       return { rows: [...porChave.values()], invalidas };
