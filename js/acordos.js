@@ -44,7 +44,7 @@ const AC = {
   maes: [], filhas: [], devs: [], porForn: new Map(),
   cit: new Map(), citFalta: new Set(),   // motivo das devoluções sem vínculo: notas citadas buscadas em cob_sefaz
   cenIdx: null, cenIdxRef: null, cenIdxLen: -1,
-  sel: '', grp: '', aba: null, paba: 'maes', abertas: new Set(), listaRecolhida: false,
+  sel: '', selCen: '', selMat: '', grp: '', aba: null, paba: 'maes', abertas: new Set(), listaRecolhida: false,
   geo: new Map(), geoBuscando: new Set(), geoErro: new Map(),   // ficha do fornecedor: endereço do CNPJ (custos_geo)
   fAberto: null, fPend: null, fBusca: '', evo: 't', evoNotas: [],
   F: { q: '', regs: new Set(), cens: new Set(), mats: new Set(), grupo: 'regional' },
@@ -259,12 +259,25 @@ function _acRec(g) {
   return rec;
 }
 
+// Nome do material na tela: o grupo padronizado do cadastro (Configurações →
+// Materiais, o mesmo normalizarMaterial do resto do sistema; Hugo 27/11/2026). Sem
+// cadastro: o da Entrada da nota (já padronizado) se a nota tem um material só;
+// senão o nome do SEFAZ. A comparação mãe × filha (mats) continua pelos dois nomes.
+function _acGrupoMat(nome, daEnt, um) {
+  const f = typeof findMaterialMatch === 'function' ? findMaterialMatch(nome) : null;
+  if (f?.alias) return f.alias;
+  if (um && daEnt?.size === 1) return [...daEnt][0];
+  return nome;
+}
+
 function _acMontar() {
   const idx = _acCentrais();
   const chaveMat = new Map();   // nome do SEFAZ → chaves de comparação (o nome e o padronizado)
   const chavesDe = n => chaveMat.get(n) || chaveMat.set(n, [normalizeLooseText(n), normalizeLooseText(normalizarMaterial(n))]).get(n);
   const mk = s => {
     const itens = Array.isArray(s.itens) ? s.itens : [];
+    const daEnt = idx.mat.get(s.chave) || idx.mat.get(s.cnpj_emitente + '|' + s.numero);
+    const nomes = [...new Set(itens.map(i => i.material).filter(Boolean))];
     const tipos = itens.map(i => AC.cfop.get(String(i.cfop || '')));
     const cancelada = /cancel/i.test(s.status || '');
     const manual = AC.status.get(s.chave);
@@ -277,8 +290,8 @@ function _acMontar() {
       cnpjDest: itens.find(i => i.cnpj_dest)?.cnpj_dest || '',
       peso: itens.reduce((t, i) => t + (Number(i.volume) || 0), 0),
       valor: itens.reduce((t, i) => t + (Number(i.valor_total) || 0), 0),
-      materiais: [...new Set(itens.map(i => i.material).filter(Boolean))],
-      mats: _acMats(itens, chavesDe, idx.mat.get(s.chave) || idx.mat.get(s.cnpj_emitente + '|' + s.numero)),
+      materiais: [...new Set(nomes.map(n => _acGrupoMat(n, daEnt, nomes.length === 1)))], matsSefaz: nomes,
+      mats: _acMats(itens, chavesDe, daEnt),
       municipio: s.municipio || '', uf: s.uf || '', transp: s.transportador || '',
       central: idx.porCh.get(s.chave) || idx.porNf.get(s.cnpj_emitente + '|' + s.numero) || '',
     };
@@ -517,13 +530,14 @@ function _acSit(maes, sv) {
   const selo = sv ? [`${_acNf0.format(sv)} sem vínculo`, '#f43f5e'] : pen > 0 ? [`Restante ${_acNf0.format(tot ? pen / tot * 100 : 0)}%`, '#f59e0b'] : maes.length ? ['Zerado', '#10b981'] : null;
   return { pen, penR, ico: `<i class="ti ${ic} mp-ico" style="color:${cor}" aria-hidden="true"></i>`, selo: selo ? `<span class="mp-prio ac-selo" style="--c:${selo[1]}">${selo[0]}</span>` : '' };
 }
-function _acLinhaForn(f, recuo, rec) {
+// chev (só no Por Fornecedor): a linha abre as centrais; fica marcada sem central escolhida.
+function _acLinhaForn(f, recuo, rec, chev) {
   const g = AC.porForn.get(f.cnpj);
   const maes = _acMaesDe(f.cnpj).filter(m => _acNoRecorte(m, rec)), sv = (g?.semVinc || []).filter(s => _acNoRecorte(s, rec)).length;
-  const s = _acSit(maes, sv), sel = AC.sel === f.cnpj;
+  const s = _acSit(maes, sv), sel = AC.sel === f.cnpj && !(chev && AC.selCen);
   const sub = maes.length ? `${_acNf0.format(maes.length)} nota${maes.length > 1 ? 's' : ''} mãe${maes.length > 1 ? 's' : ''} · ${_acCnpjFmt(f.cnpj)}` : _acCnpjFmt(f.cnpj);
-  return `<button class="mp-row mp-item ${recuo}${sel ? ' sel' : AC.sel ? ' apagado' : ''}" onclick="acSel('${f.cnpj}')">
-    ${s.ico}<span class="mp-nome"><b title="${_acE(f.nome)}">${_acE(f.nome)}</b><small>${sub}</small></span>
+  return `<button class="mp-row mp-item ${recuo}${sel ? ' sel' : AC.sel && AC.sel !== f.cnpj ? ' apagado' : ''}" onclick="acSel('${f.cnpj}')">
+    ${chev === undefined ? '' : `<i class="ti ti-chevron-${chev ? 'down' : 'right'} mp-chev"></i>`}${s.ico}<span class="mp-nome"><b title="${_acE(f.nome)}">${_acE(f.nome)}</b><small>${sub}</small></span>
     <span class="mp-dir"><span class="mp-v">${s.pen > 0.001 ? _acT(s.pen) : '—'}</span>${s.selo}</span></button>`;
 }
 // Linha de grupo (regional, central ou material): mesmos números, somados.
@@ -535,6 +549,32 @@ function _acLinhaGrupo(nivel, k, fs, rec, aberta, sel, apagado, sub, onclick) {
     <i class="ti ti-chevron-${aberta ? 'down' : 'right'} mp-chev"></i>${s.ico}
     <span class="mp-nome"><b>${_acE(k)}</b><small>${sub}${sv ? ` · <span style="color:var(--red)">${_acNf0.format(sv)} sem vínculo</span>` : ''}</small></span>
     <span class="mp-v">${s.pen > 0.001 ? _acT(s.pen) : '—'}</span></button>`;
+}
+// Por Fornecedor (Hugo, 27/11/2026): o fornecedor aberto mostra as centrais; a central
+// aberta, os materiais. Clicar filtra o painel do fornecedor (AC.selCen / AC.selMat).
+const _acMatsDe = n => n.materiais.length ? n.materiais : ['Sem material'];
+const _acNoSel = n => AC.F.grupo !== 'fornecedor' || ((!AC.selCen || _acCenSv(n) === AC.selCen) && (!AC.selMat || _acMatsDe(n).includes(AC.selMat)));
+const _acQtdM = n => `${_acNf0.format(n)} nota${n === 1 ? '' : 's'} mãe${n === 1 ? '' : 's'}`;
+function _acArvoreForn(f) {
+  const g = AC.porForn.get(f.cnpj), maes = _acMaesDe(f.cnpj), notas = [...maes, ...(g?.semVinc || [])];
+  const cens = [...new Set(notas.map(_acCenSv))].map(c => [c, _acSit(maes.filter(m => _acCenSv(m) === c), 0).pen])
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+  let h = '<div class="mp-bloco aberto">' + _acLinhaForn(f, 'mp-item-1', null, true);
+  cens.forEach(([c]) => {
+    const rc = n => _acCenSv(n) === c, cab = AC.selCen === c;
+    h += `<div class="mp-sub${cab ? ' aberto' : ''}">` + _acLinhaGrupo('mp-cen', c, [f], rc, cab, cab && !AC.selMat, !!AC.selCen && !cab, _acQtdM(maes.filter(rc).length), 'acSelCen(this.dataset.k)');
+    if (cab) {
+      const mats = [...new Set(notas.filter(rc).flatMap(_acMatsDe))].map(mt => {
+        const rm = n => rc(n) && _acMatsDe(n).includes(mt), ms = maes.filter(rm), sv = (g?.semVinc || []).filter(rm).length;
+        return [mt, ms, sv, _acSit(ms, sv)];
+      }).sort((a, b) => b[3].pen - a[3].pen || a[0].localeCompare(b[0], 'pt-BR'));
+      h += mats.map(([mt, ms, sv, st]) => `<button class="mp-row mp-item${AC.selMat === mt ? ' sel' : AC.selMat ? ' apagado' : ''}" onclick="acSelMat(this.dataset.k)" data-k="${_acE(mt)}">
+        ${st.ico}<span class="mp-nome"><b title="${_acE(mt)}">${_acE(mt)}</b><small>${_acQtdM(ms.length)}${sv ? ` · <span style="color:var(--red)">${_acNf0.format(sv)} sem vínculo</span>` : ''}</small></span>
+        <span class="mp-dir"><span class="mp-v">${st.pen > 0 ? _acT(st.pen) : '—'}</span>${st.selo}</span></button>`).join('');
+    }
+    h += '</div>';
+  });
+  return h + '</div>';
 }
 const _acQtdF = n => `${_acNf0.format(n)} fornecedor${n === 1 ? '' : 'es'}`;
 function _acListaHtml() {
@@ -555,7 +595,7 @@ function _acListaHtml() {
   const com = forns.filter(f => !sem.includes(f));
   const G = AC.F.grupo, chave = _acGrupoDe[G];
   let linhas = '';
-  if (G === 'fornecedor') linhas = forns.map(f => _acLinhaForn(f, 'mp-item-1')).join('');
+  if (G === 'fornecedor') linhas = forns.map(f => AC.sel === f.cnpj ? _acArvoreForn(f) : _acLinhaForn(f, 'mp-item-1', null, false)).join('');
   else {
     linhas = agrupa(com, chave).map(([k, fs]) => {
       const rec = n => chave(n).includes(k), aberta = AC.grp === k;
@@ -757,12 +797,16 @@ function _acPainelHtml() {
 
 function _acPainelForn(f) {
   const g = AC.porForn.get(f.cnpj) || { maes: [], semVinc: [], filhas: [], devs: [], devSemVinc: [] };
-  const maes = g.maes.filter(_acPassaMae);
+  const maes = g.maes.filter(m => _acPassaMae(m) && _acNoSel(m));
   const soma = k => maes.reduce((t, m) => t + m[k], 0);
-  const nSv = g.semVinc.length + g.devSemVinc.length;
+  const nSv = g.semVinc.filter(_acNoSel).length + g.devSemVinc.filter(_acNoSel).length;
   const mig = [`<button class="mo-link" onclick="acSel('')">Geral</button>`];
   if (AC.grp) mig.push(`<button class="mo-link" onclick="acSel('')">${_acE(AC.grp)}</button>`);
-  mig.push('<span>Fornecedor</span>');
+  if (AC.selCen && AC.F.grupo === 'fornecedor') {
+    mig.push(`<button class="mo-link" onclick="acSelCen('')">Fornecedor</button>`);
+    mig.push(AC.selMat ? `<button class="mo-link" onclick="acSelMat('')">${_acE(AC.selCen)}</button>` : `<span>${_acE(AC.selCen)}</span>`);
+    if (AC.selMat) mig.push(`<span>${_acE(AC.selMat)}</span>`);
+  } else mig.push('<span>Fornecedor</span>');
   const mod = `<div class="mp-card"><h4 class="mp-tit">Modalidade do acordo <span class="mo-hint">vale para todas as centrais</span></h4><div class="mp-chips">${[['', 'Sem acordo'], ...Object.entries(AC_MODALIDADES)].map(([k, r]) =>
     `<button class="mp-chip${(f.modalidade || '') === k ? ' ac-chip-on' : ''}" onclick="acModalidade('${f.cnpj}','${k}')">${(f.modalidade || '') === k ? '<i class="ti ti-check"></i>' : ''}${r}</button>`).join('')}</div></div>`;
   const ehMae = f.modalidade === 'nota_mae';
@@ -1043,24 +1087,24 @@ function _acBarraMaes(maes) {
 
 function _acFiltraSv(lista, filhas) {
   const q = normalizeText(AC.S.q), d = _acDig(AC.S.q);
-  return lista.filter(n => (!filhas || !AC.S.st.size || AC.S.st.has(n.status)) && (!AC.S.cen.size || AC.S.cen.has(_acCenSv(n)))
+  return lista.filter(n => _acNoSel(n) && (!filhas || !AC.S.st.size || AC.S.st.has(n.status)) && (!AC.S.cen.size || AC.S.cen.has(_acCenSv(n)))
     && (!q || (d && (n.numero.includes(d) || n.chave.includes(d))) || normalizeText(n.comp).includes(q)));
 }
 function _acBarraSv(g) {
-  const todas = [...g.semVinc, ...g.devSemVinc];
+  const todas = [...g.semVinc, ...g.devSemVinc].filter(_acNoSel);
   if (!todas.length) return '';
   const cens = [...new Set(todas.map(_acCenSv))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const cc = new Map(); todas.forEach(n => cc.set(_acCenSv(n), (cc.get(_acCenSv(n)) || 0) + 1));
   const tem = AC.S.q || AC.S.st.size || AC.S.cen.size;
   return `<div class="micro-filter-bar mo-filter-bar ac-tbar">${_acBuscaHtml('ac-sq', AC.S.q, 'Nº, chave ou texto do complementar…', 'acSBusca')}
-    <div class="micro-filter-divider"></div>${g.semVinc.length ? _acFgSt('sst', g.semVinc) : ''}${_acFgHtml('scen', 'Central', 'ti-building-warehouse', cens, v => v, cc)}
+    <div class="micro-filter-divider"></div>${g.semVinc.some(_acNoSel) ? _acFgSt('sst', g.semVinc.filter(_acNoSel)) : ''}${_acFgHtml('scen', 'Central', 'ti-building-warehouse', cens, v => v, cc)}
     ${tem ? `<button class="btn btn-sm mo-limpar" onclick="acTLimpar('S')"><i class="ti ti-filter-off"></i> Limpar filtros</button>` : ''}</div>`;
 }
 
 function _acTabCorpo() {
   const el = document.getElementById('ac-tcorpo'), f = AC.forn.get(AC.sel), g = AC.porForn.get(AC.sel);
   if (!el || !f || !g) { _acDesenhar(); return; }
-  const maes = g.maes.filter(_acPassaMae);
+  const maes = g.maes.filter(m => _acPassaMae(m) && _acNoSel(m));
   el.innerHTML = AC.paba === 'semvinc' ? _acAlertaSemVinc(f, g) : _acCardsMaes(_acFiltraMaes(maes), maes.length);
   _acFoco();
 }
@@ -1091,7 +1135,7 @@ function _acCardsMaes(maes, total = maes.length) {
             ${_acUltRet(m)}
             ${m.excedido ? _acPill('Excedido ' + _acT(m.excedido), 'var(--red)', 'ti-alert-triangle') : ''}
             <span class="summary-sep"></span>
-            <span class="ac-mcard-mat" title="${_acE(m.materiais.join(', '))}">${_acE(m.materiais.join(', ') || '—')}</span>
+            <span class="ac-mcard-mat" title="${_acE(m.matsSefaz.join(', '))} (nome no SEFAZ)">${_acE(m.materiais.join(', ') || '—')}</span>
             <span class="ac-minibar" title="${_acNf0.format(m.pct * 100)}% retirado${m.devT > 0.001 ? ` · ${_acNf0.format(m.pctDev * 100)}% devolvido` : ''}"><i style="width:${m.pct * 100}%"></i><i class="dev" style="width:${m.pctDev * 100}%"></i></span>
           </div>
         </div>
@@ -1217,12 +1261,18 @@ function _acCurva(m) {
 }
 
 /* ───────── ações de tela ───────── */
-function acSel(cnpj) { AC.sel = AC.sel === cnpj ? '' : cnpj; AC.paba = 'maes'; AC.abertas.clear(); AC.T.q = AC.S.q = ''; AC.S.cen = new Set(); AC.fAberto = null; _acDesenhar(); }
+function acSel(cnpj) {
+  // Fornecedor aberto com central escolhida: o clique volta ao fornecedor inteiro.
+  if (AC.sel === cnpj && AC.selCen && AC.F.grupo === 'fornecedor') { AC.selCen = AC.selMat = ''; AC.abertas.clear(); _acDesenhar(); return; }
+  AC.selCen = AC.selMat = '';
+  AC.sel = AC.sel === cnpj ? '' : cnpj; AC.paba = 'maes'; AC.abertas.clear(); AC.T.q = AC.S.q = ''; AC.S.cen = new Set(); AC.fAberto = null; _acDesenhar(); }
 function acGrp(k) { AC.grp = AC.grp === k ? '' : k; AC.sub = ''; AC.sel = ''; _acDesenhar(); }
 function acSub(k) { AC.sub = AC.sub === k ? '' : k; AC.sel = ''; _acDesenhar(); }
-function acGrupo(g) { AC.F.grupo = g; AC.grp = ''; AC.sub = ''; _acDesenhar(); }
-function acAba(k) { AC.aba = k; AC.sel = ''; AC.grp = ''; AC.sub = ''; _acDesenhar(); }
+function acGrupo(g) { AC.F.grupo = g; AC.grp = ''; AC.sub = ''; AC.selCen = AC.selMat = ''; _acDesenhar(); }
+function acAba(k) { AC.aba = k; AC.sel = ''; AC.grp = ''; AC.sub = ''; AC.selCen = AC.selMat = ''; _acDesenhar(); }
 function acPaba(k) { AC.paba = k; _acDesenhar(); }
+function acSelCen(c) { AC.selCen = AC.selCen === c ? '' : c; AC.selMat = ''; AC.abertas.clear(); _acDesenhar(); }
+function acSelMat(m) { AC.selMat = AC.selMat === m ? '' : m; AC.abertas.clear(); _acDesenhar(); }
 let _acBuscaT = null;
 // Só a lista muda: o painel resume a aba e os filtros, não o texto da busca.
 function acBusca(q) {
@@ -1456,6 +1506,6 @@ function _acRealtime() {
     }).subscribe();
 }
 
-Object.assign(window, { acordosRender, acSel, acGrp, acSub, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acCopiar, acDesvincular, acTBusca, acSBusca, acTResto, acTOrd, acTLimpar, acRefazer });
+Object.assign(window, { acordosRender, acSel, acGrp, acSub, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acCopiar, acDesvincular, acTBusca, acSBusca, acTResto, acTOrd, acTLimpar, acRefazer, acSelCen, acSelMat });
 // Lista recolhida: lembrada neste navegador.
 try { AC.listaRecolhida = localStorage.getItem('acordos.listaRecolhida') === '1'; } catch (_) { /* sem storage */ }
