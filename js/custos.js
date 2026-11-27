@@ -62,6 +62,8 @@ const _cuU = m => CU.unMat.get(m) || 't';
 const _cuPn = (m, p) => (_cuU(m) === 'kg' ? _cuNf4 : _cuNf2).format(p);     // número do preço
 const _cuP = (m, p) => 'R$ ' + _cuPn(m, p) + '/' + _cuU(m);                  // preço com unidade
 const _cuQ = (m, q) => _cuNf0.format(q) + ' ' + _cuU(m);
+// Quantidade como veio na NF (na UN da nota).
+const _cuNfQ = n => n.nq ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(n.nq) + ' ' + _cuUnLbl(n.un) : _cuQ(n.mat, n.qtd);
 const _cuTon = kg => _cuNf0.format(kg / 1000) + ' t';
 const _cuCss = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || getComputedStyle(document.body).getPropertyValue(n).trim();
 const _cuDataNf = d => String(d % 100).padStart(2, '0') + '/' + String(Math.floor(d / 100) % 100).padStart(2, '0') + '/' + Math.floor(d / 10000);
@@ -203,6 +205,10 @@ async function _cuCalcular(ents) {
   const t0 = performance.now(), N = ents.length;
   let pausa = t0; // cede a thread a cada ~50 ms de trabalho
   const dRow = new Int32Array(N), kgRow = new Float64Array(N), valRow = new Float64Array(N), pkgRow = new Float64Array(N);
+  // UN que o fornecedor emitiu na NF e a quantidade como veio na nota: a tela mostra o preço nessa UN
+  // (valor ÷ quantidade da nota, sem fator). t/kg convertidos ficam só para comparar entre fornecedores.
+  const nqRow = new Float64Array(N), unRow = new Int8Array(N).fill(-1);
+  CU.unList = []; const unIdx = new Map(), unDe = um => { const c = (typeof _normalizarUM === 'function' ? _normalizarUM(um) : String(um || '').toUpperCase()) || 'KG'; let i = unIdx.get(c); if (i === undefined) { i = CU.unList.length; CU.unList.push(c); unIdx.set(c, i); } return i; };
   const diaCache = new Map(), kgUnCache = new Map(), fkPorNome = new Map(), pares = new Map(), lista = [], nfFr = new Map();
   CU.unMat = new Map(); CU.catMat = new Map(); CU.nomeForn = new Map(); CU.fornMats = new Map(); CU.cenComCompra = new Set();
   for (let i = 0; i < N; i++) {
@@ -224,7 +230,7 @@ async function _cuCalcular(ents) {
     const custo = Math.abs(num(r.custo));
     const val = Math.abs(num(r.valorTotal)) || peso * custo; if (!val) continue;
     const kg = peso * kgUn;
-    dRow[i] = d; kgRow[i] = kg; valRow[i] = val; pkgRow[i] = custo ? custo / kgUn : val / kg;
+    dRow[i] = d; kgRow[i] = kg; valRow[i] = val; pkgRow[i] = custo ? custo / kgUn : val / kg; nqRow[i] = peso; unRow[i] = unDe(um);
     if (!CU.unMat.has(mat)) { CU.unMat.set(mat, _cuUnidade(r.categoria, mat)); CU.catMat.set(mat, _cuCategoria(r.categoria, mat)); }
     let fk = r.cnpjFornecedor;
     if (!fk || fk.length !== 14) {
@@ -256,21 +262,22 @@ async function _cuCalcular(ents) {
     rows.sort((a, b) => dRow[a] - dRow[b] || (nfDe(a) < nfDe(b) ? -1 : nfDe(a) > nfDe(b) ? 1 : a - b));
     const un = CU.unMat.get(p.mat), f = un === 'kg' ? 1 : 1000, dec = un === 'kg' ? 1e4 : 100;
     const D = new Int32Array(n), Q = new Float64Array(n), T = new Float64Array(n), PR = new Float64Array(n), MN = new Float64Array(n), MX = new Float64Array(n);
-    const AL = new Int8Array(n), BS = new Int8Array(n), RI = new Int32Array(n), TR = new Int32Array(n);
+    const AL = new Int8Array(n), BS = new Int8Array(n), RI = new Int32Array(n), TR = new Int32Array(n), NQ = new Float64Array(n), UN = new Int8Array(n);
     let FR = null; // frete real por NF — só nos pares que têm frete nas Entradas
     let m = 0;
     for (let j = 0; j < n;) {
       // Itens da mesma NF (mesmo número e data) viram uma NF só.
       const i0 = rows[j], nf = nfDe(i0);
-      let kg = 0, val = 0, pk = 0, tr = -1, jj = j, kgF = 0, frSem = 0;
+      let kg = 0, val = 0, pk = 0, tr = -1, jj = j, kgF = 0, frSem = 0, nq = 0, un = unRow[i0];
       do {
         const i = rows[jj], r = ents[i];
         kg += kgRow[i]; val += valRow[i]; pk += pkgRow[i] * kgRow[i];
+        if (unRow[i] === un) nq += nqRow[i]; else un = -2; // itens da mesma NF em UNs diferentes (raro)
         if (tr < 0 && r.centralCompra && r.centralDestino && r.centralCompra !== r.centralDestino) tr = i;
         if (r.freteTotal > 0) { kgF += kgRow[i]; if (!nf && r.freteTotal > frSem) frSem = r.freteTotal; } // sem nº de NF: maior valor do item
         jj++;
       } while (jj < n && nf && dRow[rows[jj]] === dRow[i0] && nfDe(rows[jj]) === nf);
-      D[m] = dRow[i0]; Q[m] = kg / f; T[m] = val; PR[m] = Math.round(pk / kg * f * dec) / dec; RI[m] = i0; TR[m] = tr;
+      D[m] = dRow[i0]; Q[m] = kg / f; T[m] = val; NQ[m] = un >= 0 ? nq : 0; UN[m] = un >= 0 ? un : -1; PR[m] = Math.round(pk / kg * f * dec) / dec; RI[m] = i0; TR[m] = tr;
       // Frete da NF (todos os materiais) dividido pelo peso deste material: antes o frete inteiro do CTe
       // caía em cada material da NF e um aditivo de poucos kg ficava com o frete do caminhão todo.
       let fr = frSem;
@@ -297,7 +304,7 @@ async function _cuCalcular(ents) {
         hist.push(u);
       }
     }
-    Object.assign(p, { n: m, D, Q, T, PR, MN, MX, AL, BS, RI, TR, FR, ACL, CMN, CMX, CBS, dec, rows: null });
+    Object.assign(p, { n: m, D, Q, T, PR, MN, MX, AL, BS, RI, TR, FR, ACL, CMN, CMX, CBS, NQ, UN, dec, rows: null });
     total += m;
     (CU.fornMats.get(p.forn) || CU.fornMats.set(p.forn, new Set()).get(p.forn)).add(p.mat);
     CU.cenComCompra.add(p.cen);
@@ -340,6 +347,7 @@ function _cuNfObj(p, k, ym) {
     if (p.CBS[k]) { o.cMin = p.CMN[k]; o.cMax = p.CMX[k]; o.cBase = p.CBS[k]; }
     const ac = p.ACL[k]; if (ac) { o.alertaCte = ac === 1 ? 'acima' : 'abaixo'; o.cteDif = (o.frUn - (ac === 1 ? o.cMax : o.cMin)) * qtd; }
   }
+  if (p.NQ && p.NQ[k] > 0) { o.nq = p.NQ[k]; o.un = CU.unList[p.UN[k]]; }
   _cuAplicaFrete(o);
   return o;
 }
@@ -385,10 +393,23 @@ function _cuNfsF() {
 }
 // g/pm = valor e preço da NF; ge/pe = custo entregue (NF + frete); d = alertas de NF; dc = alertas de CTe.
 function _cuAgg(arr) {
-  let g = 0, q = 0, d = 0, dr = 0, ge = 0, dc = 0, dcr = 0; const mats = new Set();
-  arr.forEach(n => { g += n.tot; q += n.qtd; ge += n.te; mats.add(n.mat); if (n.isDiv) { d++; if (n.dif > 0) dr += n.dif; } if (n.isCte) { dc++; if (n.cteDif > 0) dcr += n.cteDif; } });
-  return { g, q, n: arr.length, d, dr, ge, dc, dcr, mats, pm: q ? g / q : 0, pe: q ? ge / q : 0, fu: q ? (ge - g) / q : 0 };
+  let g = 0, q = 0, d = 0, dr = 0, ge = 0, dc = 0, dcr = 0, nq = 0, un; const mats = new Set();
+  arr.forEach(n => { g += n.tot; q += n.qtd; ge += n.te; mats.add(n.mat); nq += n.nq || 0; un = un === undefined ? (n.un || null) : un === n.un ? un : null; if (n.isDiv) { d++; if (n.dif > 0) dr += n.dif; } if (n.isCte) { dc++; if (n.cteDif > 0) dcr += n.cteDif; } });
+  return { g, q, n: arr.length, d, dr, ge, dc, dcr, mats, pm: q ? g / q : 0, pe: q ? ge / q : 0, fu: q ? (ge - g) / q : 0, un: mats.size === 1 && un ? un : null, nq };
 }
+// ── Preço na UN da NF ──
+// Todas as NFs do grupo na mesma UN: valor ÷ quantidade da nota (exato, sem fator). UNs misturadas (ex.: média
+// de uma central com fornecedores em m³ e em t): fica na unidade de comparação (t/kg via fator), marcado "conv.".
+const _cuUnLbl = u => ({ TO: 't', T: 't', KG: 'kg', M3: 'm³', L: 'L', LT: 'L', UN: 'un', SC: 'sc' })[u] || String(u || '').toLowerCase();
+function _cuVa(s, campo) { if (s.un && s.nq > 0) { const b = campo === 'pm' ? s.g : campo === 'pe' ? s.ge : s.ge - s.g; return b / s.nq; } return s[campo]; }
+function _cuUa(m, s) { return s.un && s.nq > 0 ? _cuUnLbl(s.un) : _cuU(m) + ' conv.'; }
+const _cuNfA = s => (s.un && s.nq > 0 ? ({ kg: 1, L: 1 })[_cuUnLbl(s.un)] : _cuU(s.mats ? [...s.mats][0] : '') === 'kg') ? _cuNf4 : _cuNf2;
+function _cuPna(m, s, campo) { return _cuNfA(s).format(_cuVa(s, campo)); }
+function _cuPa(m, s, campo) { return 'R$ ' + _cuPna(m, s, campo) + '/' + _cuUa(m, s); }
+// Valor por unidade de comparação de UMA NF → na UN dessa NF (faixa das últimas 5, frete do CTe…).
+function _cuNfUn(n, v) { return n.nq ? v * n.qtd / n.nq : v; }
+function _cuNfP(n, v) { const s = { un: n.un, nq: n.nq, mats: new Set([n.mat]) }; return 'R$ ' + _cuNfA(s).format(_cuNfUn(n, v)) + '/' + (n.nq ? _cuUnLbl(n.un) : _cuU(n.mat)); }
+function _cuNfPn(n, v) { return _cuNfA({ un: n.un, nq: n.nq, mats: new Set([n.mat]) }).format(_cuNfUn(n, v)); }
 // Índice de preço (rotas coloridas, calor) sobre o custo ENTREGUE.
 function _cuRef(arr) { const m = {}; arr.forEach(n => { (m[n.mat] || (m[n.mat] = { g: 0, q: 0 })).g += n.te; m[n.mat].q += n.qtd; }); Object.values(m).forEach(o => o.p = o.g / o.q); return m; }
 function _cuIdx(arr, ref) { let s = 0, w = 0; arr.forEach(n => { const r = ref[n.mat]; if (!r || !r.p) return; s += (n.ent - r.p) / r.p * n.te; w += n.te; }); return w ? s / w : 0; }
@@ -420,7 +441,10 @@ function _cuFreteCad(forn, mat, cen, d) {
   return melhor;
 }
 function _cuAplicaFrete(o) {
-  const cad = _cuFreteCad(o.forn, o.mat, o.cen, o.d), esperado = cad ? (cad.modalidade === 'cif' ? 0 : (+cad.valor || 0)) : null;
+  // Frete cadastrado: com `unidade` (cadastros novos) é por UN da NF (R$/m³, R$/t, R$/kg…) e vira R$ por unidade de
+  // comparação; sem `unidade` (cadastros antigos) já está em R$/t ou R$/kg, como era digitado antes.
+  const cad = _cuFreteCad(o.forn, o.mat, o.cen, o.d), rb = cad?.unidade && o.nq ? o.nq / o.qtd : 1;
+  const esperado = cad ? (cad.modalidade === 'cif' ? 0 : (+cad.valor || 0) * rb) : null;
   o.cad = cad;
   o.frete = o.fr > 0 ? o.frUn : (esperado || 0);
   o.freteFonte = o.fr > 0 ? 'nf' : cad ? cad.modalidade : '';
@@ -896,7 +920,7 @@ function _cuDesenhar() {
     .style('opacity', l => nivel === 'cen' && sel && (sel.t === 'forn' || sel.t === 'rota') ? (foco(l) ? 1 : .2) : .9)
     .each(l => { l.w = (foco(l) ? 1.4 : 1) + 3.2 * Math.sqrt(l.val / vmax); });
   _cuGr.hit.selectAll('path').data(vis, l => l.c + '|' + l.f).join('path').attr('class', 'rthit').attr('d', curva)
-    .on('mousemove', (e, l) => { const km = _cuKmPar(l.c, l.f); _cuTip(e, `<b>${_cuE(_cuNomeF(l.f))}</b> → <b>${_cuE(_cuSigla(CU.cen.get(l.c)))}</b><br><span class="mono">${l.mats.map(_cuE).join(', ')}<br>${km ? (_cuRota(l.c, l.f) ? _cuNf0.format(km) + ' km pela estrada · ' + _cuPedTxt(_cuRota(l.c, l.f)) + ' · ' : '~' + _cuNf0.format(km) + ' km estimados · ') : ''}${_cuBrlc(l.s.g)}${l.mats.length === 1 ? ' · ' + _cuP(l.mats[0], l.s.pm) : ''}<br>frete ${l.mats.length === 1 ? _cuP(l.mats[0], l.s.fu) : _cuBrlc(l.s.ge - l.s.g)}${l.fkm && l.mats.length === 1 ? ' · ' + _cuPn(l.mats[0], l.fkm) + '/' + _cuU(l.mats[0]) + '·km' : ''}<br>preço vs média: ${_cuPct(l.ix)}${l.s.d ? ` · ${l.s.d} alerta${l.s.d > 1 ? 's' : ''}` : ''}</span>`); })
+    .on('mousemove', (e, l) => { const km = _cuKmPar(l.c, l.f); _cuTip(e, `<b>${_cuE(_cuNomeF(l.f))}</b> → <b>${_cuE(_cuSigla(CU.cen.get(l.c)))}</b><br><span class="mono">${l.mats.map(_cuE).join(', ')}<br>${km ? (_cuRota(l.c, l.f) ? _cuNf0.format(km) + ' km pela estrada · ' + _cuPedTxt(_cuRota(l.c, l.f)) + ' · ' : '~' + _cuNf0.format(km) + ' km estimados · ') : ''}${_cuBrlc(l.s.g)}${l.mats.length === 1 ? ' · ' + _cuPa(l.mats[0], l.s, 'pm') : ''}<br>frete ${l.mats.length === 1 ? _cuPa(l.mats[0], l.s, 'fu') : _cuBrlc(l.s.ge - l.s.g)}${l.fkm && l.mats.length === 1 && l.km ? ' · ' + _cuNfA(l.s).format(_cuVa(l.s, 'fu') / l.km) + '/' + _cuUa(l.mats[0], l.s) + '·km' : ''}<br>preço vs média: ${_cuPct(l.ix)}${l.s.d ? ` · ${l.s.d} alerta${l.s.d > 1 ? 's' : ''}` : ''}</span>`); })
     .on('mouseenter', (e, l) => _cuRealca({ rota: l })).on('mouseleave', () => { _cuTipOff(); _cuRealceOff(); })
     .on('click', (e, l) => { CU.sel = { t: 'rota', cen: l.c, forn: l.f }; CU.tab = 'nfs'; _cuUpdate(false); });
   // fornecedores: os das rotas visíveis + (nível central) alternativas em cinza
@@ -937,7 +961,7 @@ function _cuDesenhar() {
   const peds = new Map();
   if (CU.ped) vis.forEach(l => (_cuRota(l.c, l.f)?.pedagios || []).forEach(id => { const p = CU.ped.get(id); if (p) (peds.get(p) || peds.set(p, []).get(p)).push(l); }));
   _cuPontos(_cuGr.pd.selectAll('circle.pt').data([...peds.keys()], p => p.id), 'ped')
-    .each(function (p) { this._xy = CU.proj(p.ll); this._r = 3.2; })
+    .each(function (p) { this._xy = CU.proj(p.ll); this._r = 5.5; })
     .on('mousemove', (e, p) => { const ls = peds.get(p) || []; _cuTip(e, `<b>Pedágio</b>${p.op || p.nome ? ' · ' + _cuE([p.op, p.nome].filter(Boolean).join(' · ')) : ''}<br><span class="mono">${ls.length} rota${ls.length > 1 ? 's' : ''} passa${ls.length > 1 ? 'm' : ''} aqui: ${ls.slice(0, 4).map(l => _cuE(_cuNomeF(l.f))).join(', ')}${ls.length > 4 ? '…' : ''}</span>`); })
     .on('mouseenter', (e, p) => _cuRealca({ forns: new Set((peds.get(p) || []).map(l => l.f)) })).on('mouseleave', () => { _cuTipOff(); _cuRealceOff(); });
   if (!CU.ped && vis.length) _cuPedagios().then(() => _cuDesenhar());
@@ -1218,9 +1242,10 @@ function _cuEscopoNfs() {
 }
 function _cuBarras(items, fmt, act) { const mx = d3.max(items, i => i.v) || 1; return `<div class="cu-bars">${items.map(it => `<div class="cu-bar" data-k="${_cuE(it.k)}" data-act="${act}"><span class="t">${_cuE(it.t)}</span><span class="v">${fmt(it)}</span><span class="tr"><i style="width:${it.v / mx * 100}%"></i></span></div>`).join('')}</div>`; }
 function _cuMesesSerie() { const out = []; let y = Math.floor(CU.mes / 100), m = CU.mes % 100; for (let i = 0; i < 6; i++) { out.unshift(y * 100 + m); if (--m === 0) { m = 12; y--; } } return out; }
-function _cuSerie(filtro) {
+function _cuSerie(filtro, base = false) {
   // Últimos 6 meses até o mês escolhido, no mesmo recorte de fornecedor/material/central.
-  return _cuMesesSerie().map((ym, i) => { const a = _cuMes(ym).filter(filtro); const g = _cuAgg(a); return { x: i, ym, y: g.q ? g.pm : null }; });
+  // Na UN da NF; base = true (fornecedores em UNs diferentes no mesmo gráfico) usa a unidade de comparação.
+  return _cuMesesSerie().map((ym, i) => { const a = _cuMes(ym).filter(filtro); const g = _cuAgg(a); return { x: i, ym, y: g.q ? (base ? g.pm : _cuVa(g, 'pm')) : null }; });
 }
 function _cuGrafico(series, mat, h = 150) {
   const w = 380, m = { l: 52, r: 8, t: 8, b: 20 }, all = series.flatMap(s => s.pts.filter(p => p.y != null).map(p => p.y));
@@ -1248,9 +1273,9 @@ function _cuTabelaForn(arr, mats) {
     const rows = Object.entries(_cuGroup(am, 'forn')).map(([f, a]) => ({ f, a, s: _cuAgg(a), km: kmDe(f, a) })).sort((a, b) => a.s.pe - b.s.pe);
     const best = rows[0]?.s.pe;
     // NF + frete e alertas numa 2ª linha sob o nome: a gaveta tem 420 px.
-    const det = r => [`NF ${_cuPn(m, r.s.pm)} + frete ${_cuPn(m, r.s.fu)} (${_cuFonteFrete(r.a)})`, r.s.d ? `<span class="cu-worse">${r.s.d} alerta${r.s.d > 1 ? 's' : ''} NF</span>` : '', r.s.dc ? `<span class="cu-worse">${r.s.dc} CTe</span>` : ''].filter(Boolean).join(' · ');
+    const det = r => [`NF ${_cuPna(m, r.s, 'pm')} + frete ${_cuPna(m, r.s, 'fu')}/${_cuUa(m, r.s)} (${_cuFonteFrete(r.a)})`, r.s.d ? `<span class="cu-worse">${r.s.d} alerta${r.s.d > 1 ? 's' : ''} NF</span>` : '', r.s.dc ? `<span class="cu-worse">${r.s.dc} CTe</span>` : ''].filter(Boolean).join(' · ');
     return `<div class="cu-sec"><h3>${_cuE(m)}</h3><div style="overflow-x:auto"><table><thead><tr><th>Fornecedor</th><th class="n" title="Custo entregue = preço da NF + frete">Entregue</th><th class="n" title="Diferença para o melhor custo entregue">Dif.</th><th class="n" title="${CU.F.cen ? 'Distância estimada até a central' : 'Distância média das rotas, ponderada pelo volume'}">km</th><th class="n">Vol.</th><th></th></tr></thead><tbody>${
-      rows.map((r, i) => `<tr class="cl" data-forn="${_cuE(r.f)}"><td>${_cuE(_cuNomeF(r.f))}<br><span style="font-size:11px;color:var(--text3)">${det(r)}</span></td><td class="n">${_cuPn(m, r.s.pe)}</td><td class="n ${i ? 'cu-worse' : 'cu-best'}">${i ? _cuPct(r.s.pe / best - 1) : 'melhor'}</td><td class="n">${r.km ? _cuNf0.format(r.km) : '–'}</td><td class="n">${_cuNf0.format(r.s.q / tq * 100)}%</td><td>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`, true)}</td></tr>`).join('')}</tbody></table></div></div>`;
+      rows.map((r, i) => `<tr class="cl" data-forn="${_cuE(r.f)}"><td>${_cuE(_cuNomeF(r.f))}<br><span style="font-size:11px;color:var(--text3)">${det(r)}</span></td><td class="n" title="ranking pelo custo convertido (fator de conversão)">${_cuPna(m, r.s, 'pe')}<span class="cu-semloc">/${_cuUa(m, r.s)}</span></td><td class="n ${i ? 'cu-worse' : 'cu-best'}">${i ? _cuPct(r.s.pe / best - 1) : 'melhor'}</td><td class="n">${r.km ? _cuNf0.format(r.km) : '–'}</td><td class="n">${_cuNf0.format(r.s.q / tq * 100)}%</td><td>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`, true)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
 function _cuListaNfs(arr) {
@@ -1260,7 +1285,7 @@ function _cuListaNfs(arr) {
   const c = d3.rollup(d, v => v.length, n => n.alerta), tot = d3.sum(d.filter(n => n.dif > 0), n => n.dif);
   const ini = CU.minYm ? `Base começa em ${_cuYmTxt(CU.minYm)}: nesse mês não há "fornecedor novo".` : '';
   return `<div class="cu-note">Alerta quando o preço da NF fica acima ou abaixo de todas as últimas 5 NFs do mesmo fornecedor, material e central, ou quando é a primeira NF do fornecedor naquela central. ${ini}<br><b>${c.get('acima') || 0}</b> acima · <b>${c.get('abaixo') || 0}</b> abaixo · <b>${c.get('novo') || 0}</b> fornecedor novo · pago acima da faixa: <b>${_cuBrl(tot)}</b>${tr ? ` · ${tr} NF${tr > 1 ? 's' : ''} de transferência no recorte` : ''}</div>` +
-    d.slice(0, 80).map(n => `<div class="cu-nf ${n.alerta}"><span><b>NF ${_cuE(n.nf)}</b> · ${_cuDataNf(n.d)} <span class="cu-pill ${n.alerta === 'acima' ? 'up' : n.alerta === 'abaixo' ? 'dn' : 'nv'}">${CU_ALERTA[n.alerta]}</span>${n.transf ? ` <span class="cu-pill tr" title="Comprada por ${_cuE(CU.cen.get(n.compra)?.nome || n.compra)}">Transferência</span>` : ''}<br><span class="m">${_cuE(_cuNomeF(n.forn))} → ${_cuE(CU.cen.get(n.cen).nome)}${n.transf ? ` (comprada por ${_cuE(CU.cen.get(n.compra)?.nome || n.compra)})` : ''}<br>${_cuE(n.mat)} · ${_cuQ(n.mat, n.qtd)} · NF ${_cuP(n.mat, n.pr)}${n.alerta === 'novo' ? ' · primeira NF nesta central' : ` · últimas ${n.base}: ${n.min === n.max ? _cuP(n.mat, n.min) : _cuPn(n.mat, n.min) + ' a ' + _cuP(n.mat, n.max)}`}</span></span><span class="d">${n.alerta !== 'novo' ? `<span class="cu-pill ${n.dif > 0 ? 'up' : 'dn'}">${_cuPct(n.pr / (n.dif > 0 ? n.max : n.min) - 1)}</span><br>${n.dif > 0 ? '+' : ''}${_cuBrl(n.dif)}` : ''}<br>${_cuComBtn(n.forn, n.mat, n.cen, n.nf, `NF ${n.nf} · ${_cuNomeF(n.forn)} → ${CU.cen.get(n.cen).nome}`)}</span></div>`).join('') +
+    d.slice(0, 80).map(n => `<div class="cu-nf ${n.alerta}"><span><b>NF ${_cuE(n.nf)}</b> · ${_cuDataNf(n.d)} <span class="cu-pill ${n.alerta === 'acima' ? 'up' : n.alerta === 'abaixo' ? 'dn' : 'nv'}">${CU_ALERTA[n.alerta]}</span>${n.transf ? ` <span class="cu-pill tr" title="Comprada por ${_cuE(CU.cen.get(n.compra)?.nome || n.compra)}">Transferência</span>` : ''}<br><span class="m">${_cuE(_cuNomeF(n.forn))} → ${_cuE(CU.cen.get(n.cen).nome)}${n.transf ? ` (comprada por ${_cuE(CU.cen.get(n.compra)?.nome || n.compra)})` : ''}<br>${_cuE(n.mat)} · ${_cuNfQ(n)} · NF ${_cuNfP(n, n.pr)}${n.alerta === 'novo' ? ' · primeira NF nesta central' : ` · últimas ${n.base}: ${n.min === n.max ? _cuNfP(n, n.min) : _cuNfPn(n, n.min) + ' a ' + _cuNfP(n, n.max)}`}</span></span><span class="d">${n.alerta !== 'novo' ? `<span class="cu-pill ${n.dif > 0 ? 'up' : 'dn'}">${_cuPct(n.pr / (n.dif > 0 ? n.max : n.min) - 1)}</span><br>${n.dif > 0 ? '+' : ''}${_cuBrl(n.dif)}` : ''}<br>${_cuComBtn(n.forn, n.mat, n.cen, n.nf, `NF ${n.nf} · ${_cuNomeF(n.forn)} → ${CU.cen.get(n.cen).nome}`)}</span></div>`).join('') +
     (d.length > 80 ? `<div class="cu-note">+ ${d.length - 80} NFs — filtre por central ou fornecedor para ver todas.</div>` : '');
 }
 // Endereço completo + CEP (BrasilAPI, guardado em custos_geo).
@@ -1280,13 +1305,14 @@ function _cuFretePainel(s) {
   const mats = [...new Set(pares.map(p => p.mat))].sort();
   const regPadrao = s.t === 'rota' ? CU.cen.get(s.cen)?.regional : regs[0];
   const hoje = new Date(), dHoje = hoje.getFullYear() * 10000 + (hoje.getMonth() + 1) * 100 + hoje.getDate();
-  const unid = m => m ? _cuU(m) : mats.every(x => _cuU(x) === 'kg') ? 'kg' : 't';
+  // Frete cadastrado por unidade da NF do fornecedor (R$/m³, R$/t, R$/kg…).
+  const unid = m => _cuUnForn(fk, m || null) || 'UN da NF';
   // Situação vigente hoje por regional (e por central atendida, quando houver valor próprio).
   const linhas = regs.map(r => {
     const cr = cens.filter(c => c.regional === r);
     const vig = _cuFreteCad(fk, null, cr[0]?.alias, dHoje);
     const porCen = cr.map(c => ({ c, v: _cuFreteCad(fk, null, c.alias, dHoje) })).filter(x => x.v && x.v.central);
-    const txt = v => v ? `${CU_MODAL[v.modalidade]}${v.modalidade === 'cif' ? '' : v.valor != null ? ' · R$ ' + _cuNf2.format(v.valor) + '/' + unid(v.material) : ' · sem custo'}${v.material ? ' · ' + _cuE(v.material) : ''} <span class="cu-semloc">desde ${v.vigencia.split('-').reverse().join('/')}</span>` : '<span class="cu-worse">sem frete cadastrado</span>';
+    const txt = v => v ? `${CU_MODAL[v.modalidade]}${v.modalidade === 'cif' ? '' : v.valor != null ? ' · R$ ' + _cuNf2.format(v.valor) + '/' + (v.unidade || (v.material ? _cuU(v.material) : 't')) : ' · sem custo'}${v.material ? ' · ' + _cuE(v.material) : ''} <span class="cu-semloc">desde ${v.vigencia.split('-').reverse().join('/')}</span>` : '<span class="cu-worse">sem frete cadastrado</span>';
     return `<tr><td><b>${_cuE(r)}</b>${porCen.map(x => `<br><span class="cu-semloc">↳ ${_cuE(x.c.nome)}</span>`).join('')}</td><td>${vig && !vig.central ? txt(vig) : txt(null)}${porCen.map(x => `<br>${txt(x.v)}`).join('')}</td></tr>`;
   }).join('');
   const hist = (CU.frete || []).filter(r => r.fornecedor === fk).sort((a, b) => a.regional.localeCompare(b.regional) || (a.central || '').localeCompare(b.central || '') || b.vigencia.localeCompare(a.vigencia));
@@ -1304,7 +1330,7 @@ function _cuFretePainel(s) {
       <label class="larga">Observação<input class="form-input" id="cu-fr-obs" placeholder="nº do contrato, tabela, combinado com…"></label>
       <div class="larga cu-mact"><button type="submit" class="cu-btn cu-pri">Salvar frete</button></div>
     </form></div>
-    <div class="cu-sec"><h3>Histórico</h3>${hist.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Região</th><th>Frete</th><th>Vigência</th><th></th></tr></thead><tbody>${hist.map(r => `<tr><td>${_cuE(r.regional)}${r.central ? `<br><span class="cu-semloc">${_cuE(CU.cen.get(r.central)?.nome || r.central)}</span>` : ''}${r.material ? `<br><span class="cu-semloc">${_cuE(r.material)}</span>` : ''}</td><td>${CU_MODAL[r.modalidade]}${r.modalidade === 'cif' ? '' : r.valor != null ? '<br>R$ ' + _cuNf2.format(r.valor) + '/' + unid(r.material) : '<br>sem custo'}${r.obs ? `<br><span class="cu-semloc">${_cuE(r.obs)}</span>` : ''}</td><td class="n">${r.vigencia.split('-').reverse().join('/')}<br><span class="cu-semloc">${_cuE(r.autor_nome || '')}</span></td><td><button type="button" class="cu-cbtn" data-frdel="${r.id}">Apagar</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="cu-note">Nenhum frete cadastrado para este fornecedor.</div>'}</div>`;
+    <div class="cu-sec"><h3>Histórico</h3>${hist.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Região</th><th>Frete</th><th>Vigência</th><th></th></tr></thead><tbody>${hist.map(r => `<tr><td>${_cuE(r.regional)}${r.central ? `<br><span class="cu-semloc">${_cuE(CU.cen.get(r.central)?.nome || r.central)}</span>` : ''}${r.material ? `<br><span class="cu-semloc">${_cuE(r.material)}</span>` : ''}</td><td>${CU_MODAL[r.modalidade]}${r.modalidade === 'cif' ? '' : r.valor != null ? '<br>R$ ' + _cuNf2.format(r.valor) + '/' + (r.unidade || (r.material ? _cuU(r.material) : 't')) : '<br>sem custo'}${r.obs ? `<br><span class="cu-semloc">${_cuE(r.obs)}</span>` : ''}</td><td class="n">${r.vigencia.split('-').reverse().join('/')}<br><span class="cu-semloc">${_cuE(r.autor_nome || '')}</span></td><td><button type="button" class="cu-cbtn" data-frdel="${r.id}">Apagar</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="cu-note">Nenhum frete cadastrado para este fornecedor.</div>'}</div>`;
 }
 function _cuFreteLigar(el, s) {
   const fk = s.t === 'rota' ? s.forn : s.id, $ = id => el.querySelector('#' + id);
@@ -1312,7 +1338,7 @@ function _cuFreteLigar(el, s) {
   const ajusta = () => {
     const mod = $('cu-fr-mod').value, m = $('cu-fr-mat').value;
     $('cu-fr-val').disabled = mod === 'cif'; if (mod === 'cif') $('cu-fr-val').value = '';
-    $('cu-fr-un').textContent = 'R$/' + (m ? _cuU(m) : 't');
+    $('cu-fr-un').textContent = 'R$/' + (_cuUnForn(fk, m || null) || 'UN da NF');
   };
   $('cu-fr-reg').onchange = () => {
     const r = $('cu-fr-reg').value, cs = [...new Set((CU.pares || []).filter(p => p.forn === fk).map(p => p.cen))].map(a => CU.cen.get(a)).filter(c => c && c.regional === r);
@@ -1325,6 +1351,7 @@ function _cuFreteLigar(el, s) {
     if (mod === 'cte' && v === '') { toast('Informe o valor do CTe por unidade.', 'error'); $('cu-fr-val').focus(); return; }
     const row = { fornecedor: fk, regional: $('cu-fr-reg').value, central: $('cu-fr-cen').value || null, material: $('cu-fr-mat').value || null, modalidade: mod,
       valor: mod === 'cif' || v === '' ? null : num(v), vigencia: $('cu-fr-vig').value, obs: $('cu-fr-obs').value.trim() || null,
+      unidade: _cuUnForn(fk, $('cu-fr-mat').value || null) || null,
       autor_nome: typeof _ocNomeAtor === 'function' ? _ocNomeAtor() : (window.currentUser?.name || null) };
     if (!row.regional || !row.vigencia) { toast('Escolha a regional e a data de vigência.', 'error'); return; }
     const { error } = await window.supabaseClient.from('custos_frete').insert(row);
@@ -1355,9 +1382,9 @@ function _cuListaCte(arr) {
     d.slice(0, 80).map(n => {
       const ref = n.alertaCte ? (n.alertaCte === 'acima' ? n.cMax : n.cMin) : n.cteEsperado;
       const pills = (n.alertaCte ? `<span class="cu-pill ${n.alertaCte === 'acima' ? 'up' : 'dn'}">${CU_ALERTA_CTE[n.alertaCte]}</span> ` : '') + (n.divCte ? `<span class="cu-pill nv">Divergente do cadastro</span>` : '');
-      const faixa = n.alertaCte ? ` · últimos ${n.cBase}: ${n.cMin === n.cMax ? _cuP(n.mat, n.cMin) : _cuPn(n.mat, n.cMin) + ' a ' + _cuP(n.mat, n.cMax)}` : '';
-      const cad = n.divCte ? ` · cadastro: ${CU_MODAL[n.cad.modalidade]}${n.cad.modalidade === 'cif' ? '' : ' ' + _cuP(n.mat, n.cteEsperado)}` : '';
-      return `<div class="cu-nf ${n.cteDif > 0 ? 'acima' : 'abaixo'}"><span><b>NF ${_cuE(n.nf)}</b> · ${_cuDataNf(n.d)} ${pills}<br><span class="m">${_cuE(_cuNomeF(n.forn))} → ${_cuE(CU.cen.get(n.cen).nome)}<br>${_cuE(n.mat)} · ${_cuQ(n.mat, n.qtd)} · frete ${_cuBrl(n.fr)} = ${_cuP(n.mat, n.frUn)}${faixa}${cad}</span></span><span class="d">${ref ? `<span class="cu-pill ${n.cteDif > 0 ? 'up' : 'dn'}">${_cuPct(n.frUn / ref - 1)}</span><br>` : ''}${n.cteDif > 0 ? '+' : ''}${_cuBrl(n.cteDif || 0)}<br>${_cuComBtn(n.forn, n.mat, n.cen, 'cte:' + n.nf, `CTe da NF ${n.nf} · ${_cuNomeF(n.forn)} → ${CU.cen.get(n.cen).nome}`)}</span></div>`;
+      const faixa = n.alertaCte ? ` · últimos ${n.cBase}: ${n.cMin === n.cMax ? _cuNfP(n, n.cMin) : _cuNfPn(n, n.cMin) + ' a ' + _cuNfP(n, n.cMax)}` : '';
+      const cad = n.divCte ? ` · cadastro: ${CU_MODAL[n.cad.modalidade]}${n.cad.modalidade === 'cif' ? '' : ' ' + _cuNfP(n, n.cteEsperado)}` : '';
+      return `<div class="cu-nf ${n.cteDif > 0 ? 'acima' : 'abaixo'}"><span><b>NF ${_cuE(n.nf)}</b> · ${_cuDataNf(n.d)} ${pills}<br><span class="m">${_cuE(_cuNomeF(n.forn))} → ${_cuE(CU.cen.get(n.cen).nome)}<br>${_cuE(n.mat)} · ${_cuNfQ(n)} · frete ${_cuBrl(n.fr)} = ${_cuNfP(n, n.frUn)}${faixa}${cad}</span></span><span class="d">${ref ? `<span class="cu-pill ${n.cteDif > 0 ? 'up' : 'dn'}">${_cuPct(n.frUn / ref - 1)}</span><br>` : ''}${n.cteDif > 0 ? '+' : ''}${_cuBrl(n.cteDif || 0)}<br>${_cuComBtn(n.forn, n.mat, n.cen, 'cte:' + n.nf, `CTe da NF ${n.nf} · ${_cuNomeF(n.forn)} → ${CU.cen.get(n.cen).nome}`)}</span></div>`;
     }).join('') + (d.length > 80 ? `<div class="cu-note">+ ${d.length - 80} — filtre por central ou fornecedor para ver todas.</div>` : '');
 }
 function _cuForaDoMapa(arr) {
@@ -1407,10 +1434,16 @@ function _cuCenCusto(c, mat) {
   ped *= mult;
   const comb = p.consumo > 0 ? c.km * mult / p.consumo * (p.diesel || 0) : 0;
   const outros = (p.outros || []).reduce((s, o) => s + (Number(o.v) || 0) * (o.tipo === 'km' ? c.km * mult : 1), 0);
-  const total = ped + comb + outros, unid = (p.carga || 0) * (mat && _cuU(mat) === 'kg' ? 1000 : 1);
+  const total = ped + comb + outros, unid = p.carga || 0; // carga já na UN da NF
   const fv = p.frete?.v != null && p.frete.v !== '' ? Number(p.frete.v) : null;
   const freteViagem = fv == null ? null : p.frete.tipo === 't' ? fv * (p.carga || 0) : fv;
   return { p, pagas, semTar, ped, comb, outros, total, unid, porU: unid ? total / unid : null, freteViagem, fretePorU: freteViagem != null && unid ? freteViagem / unid : null };
+}
+// UN da NF que o fornecedor usa para o material (mais frequente na base); '' se não houver.
+function _cuUnForn(fk, mat) {
+  const c = new Map(); (CU.pares || []).forEach(p => { if (p.forn !== fk || (mat && p.mat !== mat) || !p.UN) return; for (let k = 0; k < p.n; k++) { const u = p.UN[k]; if (u >= 0) c.set(u, (c.get(u) || 0) + 1); } });
+  let best = -1, bn = 0; c.forEach((n, u) => { if (n > bn) { bn = n; best = u; } });
+  return best >= 0 ? _cuUnLbl(CU.unList[best]) : '';
 }
 const _cuMatDaRota = arr => { const g = _cuGroup(arr, 'mat'); return Object.keys(g).sort((x, y) => _cuAgg(g[y]).g - _cuAgg(g[x]).g); };
 
@@ -1421,9 +1454,9 @@ function _cuTrajetoPainel(s) {
   const arr = _cuEscopoNfs(), mats = _cuMatDaRota(arr), m = mats.includes(CU.trMat) ? CU.trMat : mats[0];
   const auto = CU.rotas.get(k), cens = CU.cenPar?.get(k) || [];
   const card = r => {
-    const c = _cuCenCusto(r, m), u = m ? _cuU(m) : 't';
+    const c = _cuCenCusto(r, m), u = _cuUnForn(s.forn, m) || 'un';
     return `<div class="cu-cen${r.oficial ? ' of' : ''}"><div class="cu-cen-top"><b>${_cuE(r.nome)}</b>${r.oficial ? '<span class="cu-pill ok">oficial</span>' : ''}</div>
-      <div class="cu-cen-num"><span>${_cuNf0.format(r.km)} km</span><span>${c.pagas.length} pedágio${c.pagas.length === 1 ? '' : 's'}</span><span>${_cuBrl(c.total)}/viagem</span>${c.porU != null ? `<span>${m ? _cuP(m, c.porU) : _cuBrl(c.porU) + '/' + u}</span>` : ''}</div>
+      <div class="cu-cen-num"><span>${_cuNf0.format(r.km)} km</span><span>${c.pagas.length} pedágio${c.pagas.length === 1 ? '' : 's'}</span><span>${_cuBrl(c.total)}/viagem</span>${c.porU != null ? `<span>R$ ${_cuNf2.format(c.porU)}/${u}</span>` : ''}</div>
       <div class="cu-semloc">${_cuE(r.autor_nome || '')} · ${(r.updated_at || r.created_at || '').slice(0, 10).split('-').reverse().join('/')}${c.semTar ? ` · <span style="color:var(--mp-medio)">${c.semTar} praça${c.semTar > 1 ? 's' : ''} sem tarifa</span>` : ''}</div>
       <div class="cu-cen-act"><button type="button" class="cu-btn" data-cen-ed="${r.id}">Editar</button><button type="button" class="cu-btn" data-cen-of="${r.id}">${r.oficial ? 'Deixar de ser oficial' : 'Tornar oficial'}</button><button type="button" class="cu-btn" data-cen-del="${r.id}" title="Excluir cenário">Excluir</button></div></div>`;
   };
@@ -1467,6 +1500,8 @@ function _cuEdAbrir(s, r) {
   CU.ed = { k, id: r?.id || null, cen: s.cen, forn: s.forn, nome: r?.nome || '', oficial: !!r?.oficial || !(CU.cenPar?.get(k) || []).length,
     pontos: (r?.pontos || []).map(p => p.slice()), geometria: base?.geometria || null, km: base?.km || 0, minutos: base?.minutos || 0,
     pedagios: (base?.pedagios || []).slice(), fora: new Set(r?.pedagios_fora || []), params: JSON.parse(JSON.stringify(r?.params ? { ...CU_CEN_PADRAO, ...r.params } : { ...pdr, outros: [], frete: { v: null, tipo: 't' } })) };
+  // Carga na UN da NF do fornecedor: padrão e última usada por UN (32 t, 32.000 kg, 23 m³…).
+  if (!r) { const un = _cuUnForn(s.forn, null) || 't'; CU.ed.params.carga = pdr.cargas?.[un] ?? ({ kg: 32000, 'm³': 23, L: 30000 })[un] ?? 32; }
   CU.tab = 'trajeto'; _cuSvg.classed('editando', true);
   if (!CU.ed.geometria) _cuEdRota(); else { _cuPainel(); _cuDesenhar(); }
 }
@@ -1479,12 +1514,12 @@ function _cuEdHtml(s) {
       <div class="cu-tr-status" id="cu-ed-status"></div></div>
     <div class="cu-sec"><h3>Praças no trajeto</h3><div id="cu-ed-pracas"></div></div>
     <div class="cu-sec"><h3>Caminhão e combustível</h3><div class="cu-fr-form">
-      ${num('cu-ed-eixos', p.eixos, 1, 'Eixos', '')}${num('cu-ed-carga', p.carga, 0.1, 'Carga por viagem', 't')}
+      ${num('cu-ed-eixos', p.eixos, 1, 'Eixos', '')}${num('cu-ed-carga', p.carga, 0.1, 'Carga por viagem', _cuUnForn(e.forn, m) || 'UN da NF')}
       ${num('cu-ed-consumo', p.consumo, 0.1, 'Consumo', 'km/l')}${num('cu-ed-diesel', p.diesel, 0.01, 'Diesel', 'R$/l')}
       <label class="larga cu-tog"><input type="checkbox" id="cu-ed-volta"${p.volta ? ' checked' : ''}> Contar a volta (dobra combustível, pedágios e custos por km)</label></div></div>
     <div class="cu-sec"><h3>Outros custos da viagem</h3><div id="cu-ed-outros"></div><button type="button" class="cu-btn" id="cu-ed-outro-add">+ Adicionar custo</button></div>
     <div class="cu-sec"><h3>Frete contratado</h3><div class="cu-fr-form">${num('cu-ed-frete', p.frete?.v, 0.01, 'Valor', 'R$')}
-      <label>Cobrado por<select class="form-select" id="cu-ed-frete-tipo"><option value="t"${p.frete?.tipo !== 'viagem' ? ' selected' : ''}>tonelada</option><option value="viagem"${p.frete?.tipo === 'viagem' ? ' selected' : ''}>viagem</option></select></label></div></div>
+      <label>Cobrado por<select class="form-select" id="cu-ed-frete-tipo"><option value="t"${p.frete?.tipo !== 'viagem' ? ' selected' : ''}>${_cuE(_cuUnForn(e.forn, m) || 'UN da NF')}</option><option value="viagem"${p.frete?.tipo === 'viagem' ? ' selected' : ''}>viagem</option></select></label></div></div>
     ${mats.length > 1 ? `<div class="cu-sec"><h3>Material da carga</h3><select class="form-select" id="cu-tr-mat">${mats.map(x => `<option value="${_cuE(x)}"${x === m ? ' selected' : ''}>${_cuE(x)}</option>`).join('')}</select></div>` : ''}
     <div class="cu-sec"><h3>Custo até o destino</h3><div id="cu-ed-res"></div></div>
     <div class="cu-sec cu-tr-salvar"><label class="cu-tog"><input type="checkbox" id="cu-ed-oficial"${e.oficial ? ' checked' : ''}> Oficial (vale no mapa)</label>
@@ -1526,7 +1561,7 @@ function _cuEdParcial() {
   const e = CU.ed; if (!e) return;
   const st = document.getElementById('cu-ed-status'), pr = document.getElementById('cu-ed-pracas'), rs = document.getElementById('cu-ed-res');
   if (!st || !pr || !rs) return;
-  const arr = _cuEscopoNfs(), mats = _cuMatDaRota(arr), m = mats.includes(CU.trMat) ? CU.trMat : mats[0], u = m ? _cuU(m) : 't';
+  const arr = _cuEscopoNfs(), mats = _cuMatDaRota(arr), m = mats.includes(CU.trMat) ? CU.trMat : mats[0], u = _cuUnForn(e.forn, m) || 'un';
   st.innerHTML = e.calc ? '<span class="cu-semloc">Calculando o trajeto…</span>' : e.erro ? `<span style="color:var(--mp-ruim)">${_cuE(e.erro)}</span>`
     : `<b>${_cuNf1.format(e.km)} km</b> · ${_cuNf0.format(e.minutos)} min · ${e.pontos.length} ponto${e.pontos.length === 1 ? '' : 's'} de passagem${e.pontos.length ? ' · <button type="button" class="cu-lnk" id="cu-ed-limpa">limpar pontos</button>' : ''}`;
   const lp = document.getElementById('cu-ed-limpa'); if (lp) lp.onclick = () => { e.pontos = []; _cuEdRota(); };
@@ -1539,15 +1574,16 @@ function _cuEdParcial() {
   pr.querySelectorAll('[data-pg]').forEach(c => c.onchange = () => { const id = Number(c.dataset.pg); c.checked ? e.fora.delete(id) : e.fora.add(id); _cuEdParcial(); _cuEdDesenhar(); });
   pr.querySelectorAll('[data-tar]').forEach(i => i.onchange = () => _cuTarSalvar(Number(i.dataset.tar), i.value));
   const c = _cuCenCusto({ km: e.km, pedagios: e.pedagios, fora: e.fora, params: e.params }, m);
-  const am = arr.filter(n => n.mat === m), ag = _cuAgg(am), preco = ag.q ? ag.pm : null, freteNf = ag.q && ag.ge > ag.g ? ag.fu : null;
+  // Preço e frete das NFs na UN da nota (mesma UN da carga do caminhão).
+  const am = arr.filter(n => n.mat === m), ag = _cuAgg(am), preco = ag.q ? _cuVa(ag, 'pm') : null, freteNf = ag.q && ag.ge > ag.g ? _cuVa(ag, 'fu') : null;
   const lin = (r, v, x = '') => `<tr${x ? ` class="${x}"` : ''}><td>${r}</td><td class="n">${v}</td></tr>`;
-  const pu = v => v == null ? '–' : m ? _cuP(m, v) : _cuBrl(v) + '/' + u;
+  const pu = v => v == null ? '–' : 'R$ ' + _cuNfA(ag).format(v) + '/' + u;
   rs.innerHTML = `<table><tbody>
     ${lin(`Pedágios (${c.pagas.length} praça${c.pagas.length === 1 ? '' : 's'}${c.p.volta ? ', ida e volta' : ''})${c.semTar ? ` <span style="color:var(--mp-medio)">· ${c.semTar} sem tarifa</span>` : ''}`, _cuBrl(c.ped))}
     ${lin(`Combustível (${_cuNf0.format(e.km * (c.p.volta ? 2 : 1))} km ÷ ${_cuNf1.format(c.p.consumo || 0)} km/l × ${_cuBrl(c.p.diesel || 0)})`, _cuBrl(c.comb))}
     ${c.p.outros.length ? lin('Outros custos', _cuBrl(c.outros)) : ''}
     ${lin('<b>Total por viagem</b>', `<b>${_cuBrl(c.total)}</b>`, 'cu-tr-tot')}
-    ${lin(`Transporte por ${u} (carga de ${_cuNf1.format(c.p.carga || 0)} t)`, pu(c.porU))}
+    ${lin(`Transporte por ${u} (carga de ${_cuNf1.format(c.p.carga || 0)} ${u})`, pu(c.porU))}
     ${lin('Preço do material na NF (média da rota)', pu(preco))}
     ${lin('<b>Custo final entregue</b>', `<b>${preco != null && c.porU != null ? pu(preco + c.porU) : '–'}</b>`, 'cu-tr-tot')}
     ${c.fretePorU != null ? lin(`Frete contratado (${_cuBrl(c.freteViagem)}/viagem)`, `${pu(c.fretePorU)} <span class="${c.porU != null && c.fretePorU > c.porU ? 'cu-worse' : 'cu-best'}">${c.porU ? _cuPct(c.fretePorU / c.porU - 1) + ' vs calculado' : ''}</span>`) : ''}
@@ -1593,7 +1629,7 @@ async function _cuEdSalvar() {
   if (id) ({ error } = await sb.from('custos_cenarios').update(row).eq('id', id));
   else { id = crypto.randomUUID(); ({ error } = await sb.from('custos_cenarios').insert({ ...row, id })); }
   if (error) { toast('Não foi possível salvar o cenário: ' + error.message, 'error'); return; }
-  try { const { outros, frete, ...pp } = e.params; localStorage.setItem('custos.cenParams', JSON.stringify(pp)); } catch (_) { /* sem storage */ }
+  try { const { outros, frete, ...pp } = e.params, un = _cuUnForn(e.forn, null) || 't', ant = JSON.parse(localStorage.getItem('custos.cenParams') || '{}'); pp.cargas = { ...(ant.cargas || {}), [un]: pp.carga }; localStorage.setItem('custos.cenParams', JSON.stringify(pp)); } catch (_) { /* sem storage */ }
   const salvo = { ...row, id };
   if (e.oficial) await _cuCenOficial(salvo, true); else { toast('Cenário salvo.'); await _cuCenRecarregar(); }
   CU.ed = null; if (_cuSvg) _cuSvg.classed('editando', false); _cuUpdate(false);
@@ -1655,7 +1691,7 @@ function _cuComparaHtml(s) {
   const tabMat = mats.map(m => {
     const sa = _cuAgg(na.filter(n => n.mat === m)), sb = _cuAgg(nb.filter(n => n.mat === m)), ma = melhor(na, m), mb = melhor(nb, m);
     const va = sa.q ? sa.pe : null, vb = sb.q ? sb.pe : null, d = va && vb ? vb / va - 1 : null;
-    return `<tr><td><b>${_cuE(m)}</b><br><span class="cu-semloc">${ma ? 'A: ' + _cuE(_cuNomeF(ma.f)) : 'A: –'}<br>${mb ? 'B: ' + _cuE(_cuNomeF(mb.f)) : 'B: –'}</span></td><td class="n${va && vb && va < vb ? ' cu-best' : ''}">${va ? _cuPn(m, va) : '–'}</td><td class="n${va && vb && vb < va ? ' cu-best' : ''}">${vb ? _cuPn(m, vb) : '–'}</td><td class="n ${d > 0 ? 'cu-worse' : d < 0 ? 'cu-best' : ''}">${d == null ? '–' : _cuPct(d)}</td></tr>`;
+    return `<tr><td><b>${_cuE(m)}</b><br><span class="cu-semloc">${ma ? 'A: ' + _cuE(_cuNomeF(ma.f)) : 'A: –'}<br>${mb ? 'B: ' + _cuE(_cuNomeF(mb.f)) : 'B: –'}</span></td><td class="n${va && vb && va < vb ? ' cu-best' : ''}">${va ? _cuPna(m, sa, 'pe') + '<span class="cu-semloc">/' + _cuUa(m, sa) + '</span>' : '–'}</td><td class="n${va && vb && vb < va ? ' cu-best' : ''}">${vb ? _cuPna(m, sb, 'pe') + '<span class="cu-semloc">/' + _cuUa(m, sb) + '</span>' : '–'}</td><td class="n ${d > 0 ? 'cu-worse' : d < 0 ? 'cu-best' : ''}">${d == null ? '–' : _cuPct(d)}</td></tr>`;
   }).join('');
   return `<div class="cu-ph"><div><div class="ey">Comparação</div><h2>${_cuE(_cuSigla(A))} × ${_cuE(_cuSigla(B))}</h2><p>A: ${_cuE(A.nome)} · ${_cuE(A.regional)}<br>B: ${_cuE(B.nome)} · ${_cuE(B.regional)}</p></div><button type="button" class="cu-x" id="cu-px" title="Fechar a comparação">×</button></div>
     <div class="cu-pb">
@@ -1703,16 +1739,16 @@ function _cuPainel() {
     }
     if (s.t === 'forn') {
       const rows = Object.entries(_cuGroup(arr, n => n.cen + '\u0001' + n.mat)).map(([k, v]) => { const [c, m] = k.split('\u0001'); return { c, m, s: _cuAgg(v), km: _cuKmPar(c, s.id) }; }).sort((x, y) => x.m.localeCompare(y.m) || x.s.pm - y.s.pm);
-      body += `<div class="cu-sec"><h3>Centrais atendidas</h3><div style="overflow-x:auto"><table><thead><tr><th>Central</th><th>Material</th><th class="n">Preço</th><th class="n">km</th></tr></thead><tbody>${rows.map(r => `<tr class="cl" data-rota="${_cuE(r.c)}"><td>${_cuE(CU.cen.get(r.c).nome)}</td><td>${_cuE(r.m)}</td><td class="n">${_cuP(r.m, r.s.pm)}</td><td class="n">${r.km ? _cuNf0.format(r.km) : '–'}</td></tr>`).join('')}</tbody></table></div></div>`;
+      body += `<div class="cu-sec"><h3>Centrais atendidas</h3><div style="overflow-x:auto"><table><thead><tr><th>Central</th><th>Material</th><th class="n">Preço</th><th class="n">km</th></tr></thead><tbody>${rows.map(r => `<tr class="cl" data-rota="${_cuE(r.c)}"><td>${_cuE(CU.cen.get(r.c).nome)}</td><td>${_cuE(r.m)}</td><td class="n">${_cuPa(r.m, r.s, 'pm')}</td><td class="n">${r.km ? _cuNf0.format(r.km) : '–'}</td></tr>`).join('')}</tbody></table></div></div>`;
     }
     if (s.t === 'rota') {
       const m = mats[0], am = arr.filter(n => n.mat === m).sort((x, y) => x.d - y.d), last = am[am.length - 1], km = _cuKmPar(s.cen, s.forn), med = ref[m]?.p, ixr = _cuIdx(arr, ref);
-      body += `<div class="cu-facts"><div><span>Distância ${_cuRota(s.cen, s.forn) ? 'pela estrada' : 'estimada'}</span><b>${km ? _cuNf0.format(km) + ' km' : '–'}</b></div>${(() => { const r = _cuRota(s.cen, s.forn); if (!r) return ''; const ps = r.pedagios.map(id => CU.ped?.get(id)).filter(Boolean); return `<div title="${_cuE(ps.map(p => [p.op, p.nome].filter(Boolean).join(' · ') || 'praça sem nome').join(' / '))}"><span>Pedágios no trajeto</span><b>${ps.length || 'nenhum'}</b></div>`; })()}<div><span>R$/${_cuU(m)} por 100 km</span><b>${km && umMat ? _cuPn(m, a.pm / km * 100) : '–'}</b></div><div><span>Última NF</span><b>${_cuP(m, last.pr)}</b></div><div><span>Faixa das últimas 5</span><b>${last.min == null ? '–' : last.min === last.max ? _cuPn(m, last.min) : _cuPn(m, last.min) + ' a ' + _cuPn(m, last.max)}</b></div><div><span>Média do material</span><b>${med ? _cuP(m, med) : '–'}</b></div><div><span>Rota vs média</span><b class="${ixr > .02 ? 'cu-worse' : ''}">${_cuPct(ixr)}</b></div><div><span>Frete (${_cuFonteFrete(am)})</span><b>${_cuP(m, _cuAgg(am).fu)}</b></div><div><span>Custo entregue</span><b>${_cuP(m, _cuAgg(am).pe)}</b></div></div>
-        <div class="cu-sec"><h3>Preço por mês · ${_cuE(m)} (R$/${_cuU(m)})</h3>${_cuGrafico([{ n: 'Preço médio das NFs', pts: _cuSerie(n => n.mat === m && n.cen === s.cen && n.forn === s.forn) }], m)}</div>`;
+      body += `<div class="cu-facts"><div><span>Distância ${_cuRota(s.cen, s.forn) ? 'pela estrada' : 'estimada'}</span><b>${km ? _cuNf0.format(km) + ' km' : '–'}</b></div>${(() => { const r = _cuRota(s.cen, s.forn); if (!r) return ''; const ps = r.pedagios.map(id => CU.ped?.get(id)).filter(Boolean); return `<div title="${_cuE(ps.map(p => [p.op, p.nome].filter(Boolean).join(' · ') || 'praça sem nome').join(' / '))}"><span>Pedágios no trajeto</span><b>${ps.length || 'nenhum'}</b></div>`; })()}<div><span>Frete por 100 km</span><b>${km && umMat && _cuAgg(am).ge > _cuAgg(am).g ? 'R$ ' + _cuNfA(_cuAgg(am)).format(_cuVa(_cuAgg(am), 'fu') / km * 100) + '/' + _cuUa(m, _cuAgg(am)) : '–'}</b></div><div><span>Última NF</span><b>${_cuNfP(last, last.pr)}</b></div><div><span>Faixa das últimas 5</span><b>${last.min == null ? '–' : last.min === last.max ? _cuNfPn(last, last.min) : _cuNfPn(last, last.min) + ' a ' + _cuNfPn(last, last.max)}</b></div><div><span>Média do material</span><b>${med ? _cuPa(m, _cuAgg(_cuNfsF().filter(n => n.mat === m)), 'pe') : '–'}</b></div><div><span>Rota vs média</span><b class="${ixr > .02 ? 'cu-worse' : ''}">${_cuPct(ixr)}</b></div><div><span>Frete (${_cuFonteFrete(am)})</span><b>${_cuPa(m, _cuAgg(am), 'fu')}</b></div><div><span>Custo entregue</span><b>${_cuPa(m, _cuAgg(am), 'pe')}</b></div></div>
+        <div class="cu-sec"><h3>Preço por mês · ${_cuE(m)} (R$/${_cuUa(m, _cuAgg(am))})</h3>${_cuGrafico([{ n: 'Preço médio das NFs', pts: _cuSerie(n => n.mat === m && n.cen === s.cen && n.forn === s.forn) }], m)}</div>`;
     }
     if (s.t !== 'rota') {
       const items = Object.entries(_cuGroup(arr, 'mat')).map(([k, v]) => ({ k, t: k, v: _cuAgg(v).g, s: _cuAgg(v) })).sort((x, y) => y.v - x.v);
-      body += `<div class="cu-sec"><h3>Gasto por material</h3>${_cuBarras(items, i => `${_cuBrlc(i.v)} · ${_cuP(i.k, i.s.pm)}`, 'mat')}</div>`;
+      body += `<div class="cu-sec"><h3>Gasto por material</h3>${_cuBarras(items, i => `${_cuBrlc(i.v)} · ${_cuPa(i.k, i.s, 'pm')}`, 'mat')}</div>`;
     }
     if (s.t === 'cen') {
       const tr = arr.filter(n => n.transf);
@@ -1732,10 +1768,10 @@ function _cuPainel() {
     const top = Object.entries(_cuGroup(am, 'forn')).sort((x, y) => _cuAgg(y[1]).q - _cuAgg(x[1]).q).slice(0, 5).map(([f]) => f);
     const noEscopo = n => { const c = CU.cen.get(n.cen); if (s.t === 'cen' && n.cen !== s.id) return false; if (s.t === 'rota' && n.cen !== s.cen) return false; if (s.t === 'reg' && c.regional !== s.reg) return false; if (s.t === 'uf' && _cuUfCen(c) !== s.uf) return false; return true; };
     body = `<div class="cu-chips">${mats.map(m => `<button type="button" class="cu-chip${m === pm ? ' on' : ''}" data-pmat="${_cuE(m)}">${_cuE(m)}</button>`).join('')}</div>
-      <div class="cu-sec"><h3>R$/${_cuU(pm)} por mês, por fornecedor</h3>${_cuGrafico(top.map(f => ({ n: _cuNomeF(f), pts: _cuSerie(n => n.mat === pm && n.forn === f && noEscopo(n)) })), pm)}</div>`;
+      <div class="cu-sec"><h3>R$/${_cuUa(pm, _cuAgg(am.filter(n => top.includes(n.forn))))} por mês, por fornecedor</h3>${_cuGrafico(top.map(f => ({ n: _cuNomeF(f), pts: _cuSerie(n => n.mat === pm && n.forn === f && noEscopo(n), !_cuAgg(am.filter(n => top.includes(n.forn))).un) })), pm)}</div>`;
     if (s.t !== 'cen' && s.t !== 'rota') {
-      const med = _cuAgg(am).pm, bc = Object.entries(_cuGroup(am, 'cen')).map(([k, v]) => ({ k, t: CU.cen.get(k).nome, v: _cuAgg(v).pm })).sort((x, y) => y.v - x.v);
-      body += `<div class="cu-sec"><h3>Preço pago por central · média ${_cuP(pm, med)}</h3>${_cuBarras(bc, i => `${_cuPn(pm, i.v)} <span class="cu-pill ${i.v / med - 1 > .02 ? 'up' : i.v / med - 1 < -.02 ? 'dn' : 'ok'}">${_cuPct(i.v / med - 1)}</span>`, 'cen')}</div>`;
+      const med = _cuAgg(am).pm, bc = Object.entries(_cuGroup(am, 'cen')).map(([k, v]) => ({ k, t: CU.cen.get(k).nome, s: _cuAgg(v), v: _cuAgg(v).pm })).sort((x, y) => y.v - x.v);
+      body += `<div class="cu-sec"><h3>Preço pago por central · média ${_cuPa(pm, _cuAgg(am), 'pm')}</h3>${_cuBarras(bc, i => `${_cuPa(pm, i.s, 'pm')} <span class="cu-pill ${i.v / med - 1 > .02 ? 'up' : i.v / med - 1 < -.02 ? 'dn' : 'ok'}">${_cuPct(i.v / med - 1)}</span>`, 'cen')}</div>`;
     }
   } else {
     // Alertas em duas abinhas: NF (preço da nota) e CTe (frete).
@@ -1744,9 +1780,9 @@ function _cuPainel() {
   }
   el.innerHTML = `<div class="cu-ph"><div><div class="ey ${eyc}">${ey}</div><h2>${_cuE(ttl)}</h2><p>${_cuE(sub)}</p>${end ? `<p class="end"><i class="ti ti-map-pin"></i> ${_cuE(end)}</p>` : (s.t === 'cen' || s.t === 'forn') ? '<p class="end">Endereço ainda não localizado (veja o Diagnóstico)</p>' : ''}</div><button type="button" class="cu-x" id="cu-px" title="Fechar">×</button></div>
     <div class="cu-pk">
-      <div><span>Gasto NF</span><b>${_cuBrlc(a.g)}</b><em>${umMat ? _cuQ(m1, a.q) : _cuTon(d3.sum(arr, n => n.qtd * (_cuU(n.mat) === 'kg' ? 1 : 1000)))}</em></div>
+      <div><span>Gasto NF</span><b>${_cuBrlc(a.g)}</b><em>${umMat ? (a.un && a.nq ? _cuNf0.format(a.nq) + ' ' + _cuUnLbl(a.un) : _cuQ(m1, a.q)) : _cuTon(d3.sum(arr, n => n.qtd * (_cuU(n.mat) === 'kg' ? 1 : 1000)))}</em></div>
       <div><span>Frete</span><b>${a.ge > a.g ? _cuBrlc(a.ge - a.g) : '—'}</b><em>${a.ge > a.g && a.g ? _cuNf1.format((a.ge - a.g) / a.g * 100) + '% do gasto' : 'sem frete no recorte'}</em></div>
-      <div><span>${umMat ? 'Custo entregue' : 'Custo vs média'}</span><b>${umMat ? _cuP(m1, a.pe) : _cuPct(_cuIdx(arr, ref))}</b><em>${umMat ? 'NF ' + _cuPn(m1, a.pm) + ' + frete ' + _cuPn(m1, a.fu) : 'índice do custo entregue'}</em></div>
+      <div><span>${umMat ? 'Custo entregue' : 'Custo vs média'}</span><b>${umMat ? _cuPa(m1, a, 'pe') : _cuPct(_cuIdx(arr, ref))}</b><em>${umMat ? 'NF ' + _cuPna(m1, a, 'pm') + ' + frete ' + _cuPna(m1, a, 'fu') : 'índice do custo entregue'}</em></div>
       <div><span>Alertas</span><b class="${a.d + a.dc ? 'red' : ''}">${a.d + a.dc}</b><em>NF ${a.d} · CTe ${a.dc}${a.dr + a.dcr ? ' · +' + _cuBrlc(a.dr + a.dcr) : ''}</em></div>
     </div>
     <div class="cu-tabs" role="tablist">${tabs.map(([k, t, n]) => `<button type="button" role="tab" class="${k === CU.tab ? 'on' : ''}" data-tab="${k}">${t}${n != null ? `<span class="n ${n ? 'red' : ''}">${n}</span>` : ''}</button>`).join('')}</div>
@@ -1813,9 +1849,12 @@ function _cuStrip() {
   const rowsV = [...velhos].map(([f, v]) => ({ f, s: _cuAgg([v.o]), ser: serie(f), velho: true, ym: v.ym, meses: mesesEntre(v.ym, fimYm) })).sort((x, y) => x.s.pe - y.s.pe);
   const best = rows[0]?.s.pe ?? rowsV[0]?.s.pe, tq = _cuAgg(am).q;
   const mesTxt = ym => String(ym % 100).padStart(2, '0') + '/' + Math.floor(ym / 100);
+  // Fornecedores em UNs diferentes: cada cartão mostra a UN da própria NF; ranking e % usam o fator de conversão.
+  const uns = new Set([...rows, ...rowsV].map(r => r.s.un || '?')), misto = uns.size > 1;
+  const fatorTxt = r => r.s.un && r.s.nq && _cuUnLbl(r.s.un) !== _cuU(m) ? `1 ${_cuUnLbl(r.s.un)} ≈ ${new Intl.NumberFormat('pt-BR', { maximumSignificantDigits: 4 }).format(r.s.q / r.s.nq)} ${_cuU(m)} (fator de conversão)` : '';
   const spark = ser => { const p = ser.filter(q => q.y != null); if (p.length < 2) return '<svg viewBox="0 0 186 22" width="100%" height="22"></svg>'; const x = d3.scaleLinear().domain([0, 5]).range([2, 184]), ex = d3.extent(p, q => q.y), y = d3.scaleLinear().domain(ex[0] === ex[1] ? [ex[0] * .98, ex[1] * 1.02] : ex).range([20, 3]); return `<svg viewBox="0 0 186 22" width="100%" height="22"><path d="${d3.line().x(q => x(q.x)).y(q => y(q.y))(p)}" style="fill:none;stroke:var(--amber);stroke-width:1.5"/></svg>`; };
-  el.innerHTML = `<div class="sh"><button type="button" class="cu-cmp-tg" title="Recolher o comparador"><i class="ti ti-chevron-down"></i></button><b>Comparador · ${_cuE(_cuEscopoNome(esc))}</b><label class="cu-cmp-sel">Material <select class="form-select" id="cu-cmp-mat">${_cuOpcoesMat(mats, m, arr, paresEsc)}</select></label></div>
-    <div class="cu-cards">${[...rows, ...rowsV].map((r, i) => r.velho ? `<div class="cu-card velho" data-cf="${_cuE(r.f)}"><span class="nm" title="${_cuE(_cuNomeF(r.f))}">${_cuE(_cuNomeF(r.f))}</span><span class="pr" title="Custo entregue da última NF (${mesTxt(r.ym)})">R$ ${_cuPn(m, r.s.pe)}<span style="font-size:11px;color:var(--text3)">/${_cuU(m)} entregue</span></span><span class="sub"><span>NF ${_cuPn(m, r.s.pm)} + frete ${_cuPn(m, r.s.fu)}</span></span><span class="sub"><span class="${best && r.s.pe < best ? 'cu-best' : 'cu-worse'}">${best ? _cuPct(r.s.pe / best - 1) + ' vs melhor' : ''}</span><span>sem entrega no período</span></span><span class="cu-velho-al" title="Preço da última NF, de ${mesTxt(r.ym)}: pode estar desatualizado"><i class="ti ti-clock-exclamation"></i> Não entrega há ${r.meses} ${r.meses === 1 ? 'mês' : 'meses'} · preço de ${mesTxt(r.ym)}</span><span class="sub"><span></span>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`)}</span></div>` : `<div class="cu-card" data-cf="${_cuE(r.f)}"><span class="nm" title="${_cuE(_cuNomeF(r.f))}">${_cuE(_cuNomeF(r.f))}</span><span class="pr" title="Custo entregue = NF + frete">R$ ${_cuPn(m, r.s.pe)}<span style="font-size:11px;color:var(--text3)">/${_cuU(m)} entregue</span></span><span class="sub"><span>NF ${_cuPn(m, r.s.pm)} + frete ${_cuPn(m, r.s.fu)}</span></span><span class="sub"><span class="${i ? 'cu-worse' : 'cu-best'}">${i ? _cuPct(r.s.pe / best - 1) : 'melhor custo'}</span><span>${_cuNf0.format(r.s.q / tq * 100)}% do vol.</span></span>${spark(r.ser)}<span class="sub"><span class="${r.s.d ? 'cu-worse' : ''}">${r.s.d ? r.s.d + ' alerta' + (r.s.d > 1 ? 's' : '') : 'sem alerta'}</span>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`)}</span></div>`).join('') || '<div class="cu-note">Sem NFs no período.</div>'}</div>`;
+  el.innerHTML = `<div class="sh"><button type="button" class="cu-cmp-tg" title="Recolher o comparador"><i class="ti ti-chevron-down"></i></button><b>Comparador · ${_cuE(_cuEscopoNome(esc))}</b>${misto ? `<span class="cu-cmp-conv" title="Cada cartão mostra o preço na UN da NF do fornecedor; o ranking e o % comparam pelo fator de conversão das Configurações">UNs diferentes · comparados pelo fator de conversão</span>` : ''}<label class="cu-cmp-sel">Material <select class="form-select" id="cu-cmp-mat">${_cuOpcoesMat(mats, m, arr, paresEsc)}</select></label></div>
+    <div class="cu-cards">${[...rows, ...rowsV].map((r, i) => r.velho ? `<div class="cu-card velho" data-cf="${_cuE(r.f)}"><span class="nm" title="${_cuE(_cuNomeF(r.f))}">${_cuE(_cuNomeF(r.f))}</span><span class="pr" title="Custo entregue da última NF (${mesTxt(r.ym)})">R$ ${_cuPna(m, r.s, 'pe')}<span style="font-size:11px;color:var(--text3)">/${_cuUa(m, r.s)} entregue</span></span><span class="sub"><span>NF ${_cuPna(m, r.s, 'pm')} + frete ${_cuPna(m, r.s, 'fu')}</span></span><span class="sub"><span class="${best && r.s.pe < best ? 'cu-best' : 'cu-worse'}">${best ? _cuPct(r.s.pe / best - 1) + ' vs melhor' : ''}</span><span>sem entrega no período</span></span><span class="cu-velho-al" title="Preço da última NF, de ${mesTxt(r.ym)}: pode estar desatualizado"><i class="ti ti-clock-exclamation"></i> Não entrega há ${r.meses} ${r.meses === 1 ? 'mês' : 'meses'} · preço de ${mesTxt(r.ym)}</span><span class="sub"><span></span>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`)}</span></div>` : `<div class="cu-card" data-cf="${_cuE(r.f)}"><span class="nm" title="${_cuE(_cuNomeF(r.f))}">${_cuE(_cuNomeF(r.f))}</span><span class="pr" title="Custo entregue = NF + frete${misto && fatorTxt(r) ? ' · ' + fatorTxt(r) : ''}">R$ ${_cuPna(m, r.s, 'pe')}<span style="font-size:11px;color:var(--text3)">/${_cuUa(m, r.s)} entregue</span></span><span class="sub"><span>NF ${_cuPna(m, r.s, 'pm')} + frete ${_cuPna(m, r.s, 'fu')}</span></span><span class="sub"><span class="${i ? 'cu-worse' : 'cu-best'}">${i ? _cuPct(r.s.pe / best - 1) : 'melhor custo'}</span><span>${_cuNf0.format(r.s.q / tq * 100)}% do vol.</span></span>${spark(r.ser)}<span class="sub"><span class="${r.s.d ? 'cu-worse' : ''}">${r.s.d ? r.s.d + ' alerta' + (r.s.d > 1 ? 's' : '') : 'sem alerta'}</span>${_cuComBtn(r.f, m, esc, '', `${_cuNomeF(r.f)} · ${m} · ${_cuEscopoNome(esc)}`)}</span></div>`).join('') || '<div class="cu-note">Sem NFs no período.</div>'}</div>`;
   el.querySelector('#cu-cmp-mat').onchange = e => { CU.cmpMat = e.target.value; _cuStrip(); };
   el.querySelector('.cu-cmp-tg').onclick = alterna;
   el.querySelectorAll('[data-cf]').forEach(b => b.onclick = () => { CU.sel = { t: 'forn', id: b.dataset.cf }; CU.tab = 'forn'; _cuUpdate(false); });

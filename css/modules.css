@@ -14698,3 +14698,5 @@ body[data-theme="light"] #cu-mapwrap .cu-zoom button.on, body[data-theme="sand"]
 .cu-card.velho { border-style: dashed; background: transparent; }
 .cu-card.velho .pr { color: var(--text2); }
 .cu-velho-al { font-size: 11px; color: var(--amber, #e0a020); display: flex; gap: 4px; align-items: center; line-height: 1.25; }
+.cu-cmp-conv { font-size: 11px; color: var(--amber, #e0a020); margin-left: 8px; }
+#cu-map .pt-ped { stroke: #fff; stroke-width: 1.6px; }
