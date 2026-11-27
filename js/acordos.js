@@ -47,6 +47,8 @@ const AC = {
   geo: new Map(), geoBuscando: new Set(), geoErro: new Map(),   // ficha do fornecedor: endereço do CNPJ (custos_geo)
   fAberto: null, fPend: null, fBusca: '', evo: 't', evoNotas: [],
   F: { q: '', regs: new Set(), cens: new Set(), mats: new Set(), grupo: 'regional' },
+  T: { q: '', st: new Set(), resto: false, ord: 'emissao' },   // filtros da lista de notas mães do fornecedor
+  S: { q: '', st: new Set(), cen: null },                      // filtros da sub-aba Sem vínculo (cen null = todas)
 };
 
 /* ───────── formatação ───────── */
@@ -356,6 +358,8 @@ function _acMontar() {
     const ret = g.filhas.filter(f => f.ret > 0);
     g.pesoMedio = ret.length ? ret.reduce((t, f) => t + f.ret, 0) / ret.length : 0;
     g.intervalo = _acIntervalo(ret);
+    // NFs por dia EM QUE HOUVE entrega (Hugo, 27/11/2026): os dias parados não contam.
+    g.porDia = ret.length ? ret.length / new Set(ret.map(f => _acDiaDe(f.emissao))).size : 0;
     g.maes.sort((a, b) => b.emissao - a.emissao);
     g.maes.forEach(m => {
       Object.assign(m, _acKpis(m, g));
@@ -392,11 +396,12 @@ function _acKpis(m, g) {
   const pesoMedio = g.pesoMedio || (fs.length ? retT / fs.length : 0);
   const nfsRest = pendT > 0 && pesoMedio > 0 ? Math.ceil(pendT / pesoMedio) : (pendT > 0 ? null : 0);
   const intervalo = _acIntervalo(fs) ?? g.intervalo;
-  const diasRest = nfsRest === 0 ? 0 : (nfsRest != null && intervalo != null ? nfsRest * intervalo : null);
+  const diasRest = nfsRest === 0 ? 0 : (nfsRest != null && intervalo != null ? nfsRest * intervalo : null);   // corridos, no ritmo atual (com os dias parados)
+  const diasEnt = nfsRest === 0 ? 0 : (nfsRest != null && g.porDia > 0 ? Math.ceil(nfsRest / g.porDia) : null);   // só dias de entrega
   const base = fs.length ? Math.max(fs[fs.length - 1].emissao, Date.now()) : Date.now();
   return {
     totT, totR: vale ? m.valor : 0, retT, retR: retT * custoUn, devT, devR: devT * custoUn, pendT, pendR: pendT * custoUn, custoUn,
-    nRet: fs.length, nfsRest, pesoMedio, intervalo, diasRest,
+    nRet: fs.length, nfsRest, pesoMedio, intervalo, diasRest, diasEnt, ultRet: fs.length ? fs[fs.length - 1].emissao : 0,
     previsao: diasRest != null && diasRest > 0 ? base + diasRest * _acDia : null,
     excedido: retT - totT > 0.001 ? retT - totT : 0,
     pct: totT > 0 ? Math.min(1, retT / totT) : 0,
@@ -502,7 +507,7 @@ function _acDesenhar() {
   const foco = document.activeElement?.id;
   root.innerHTML = `<div class="mp-root">${_acFiltrosHtml()}<div class="mp">${_acListaHtml()}<section class="mp-painel">${_acPainelHtml()}</section></div></div>`;
   const c2 = root.querySelector('.mp-lista-corpo'); if (c2) c2.scrollTop = sc;
-  if (foco === 'ac-busca' || foco?.startsWith('acf-busca')) { const i = document.getElementById(foco); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+  if (foco === 'ac-busca' || foco === 'ac-tq' || foco === 'ac-sq' || foco?.startsWith('acf-busca')) { const i = document.getElementById(foco); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
   _acFoco();
   _acEvoDesenhar();
 }
@@ -762,7 +767,7 @@ function _acPainelHtml() {
   const semV = forns.map(x => [x, AC.porForn.get(x.cnpj)?.semVinc.length || 0]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 8);
   return _acCab(mig, _acE(AC.sub || AC.grp || 'Acordos · ' + rot), `${forns.length} fornecedor${forns.length === 1 ? '' : 'es'} nesta aba · ${AC.maes.length} notas mães, ${AC.filhas.length} filhas e ${AC.devs.length} devoluções no SEFAZ importado`, soma('pendT'), soma('pendR'))
     + (AC.cfop.size ? '' : '<div class="mp-card"><p class="mo-hint">Nenhum CFOP marcado como nota mãe/filha (Configurações → CFOP → Acordo).</p></div>')
-    + `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(maes)}</span></h4>${_acCardsSaldo(maes)}${_acGraficos(maes)}</div>
+    + `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(maes)}</span>${_acBtnRefazer('')}</h4>${_acCardsSaldo(maes)}${_acGraficos(maes)}</div>
     <div class="mp-dois">
       <div class="mp-card"><h4 class="mp-tit">O que mais pesa <span class="mo-hint">saldo restante em R$</span></h4>${top.length ? top.map(([x, g]) => `<button class="mp-rank" style="grid-template-columns:minmax(0,1fr) 90px 150px" onclick="acSel('${x.cnpj}')">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_acE(x.nome)}</span><span class="mp-rank-bar"><i style="width:${g.pendR / maxR * 100}%;background:var(--amber)"></i></span><span class="mono" style="text-align:right">${_acR(g.pendR)}<small class="mo-hint" style="display:block">${_acT(g.pendT)}</small></span></button>`).join('') : '<p class="mo-hint">Nenhum saldo restante.</p>'}</div>
@@ -787,10 +792,11 @@ function _acPainelForn(f) {
       ? `Escolha a modalidade acima.${g.maes.length ? ` Há <b>${g.maes.length}</b> nota${g.maes.length > 1 ? 's' : ''} mãe deste fornecedor no SEFAZ — escolha <b>Nota mãe</b> para ver o saldo.` : ''}`
       : `A tela de <b>${_acE(AC_MODALIDADES[f.modalidade])}</b> ainda não foi feita — por enquanto só Nota mãe.`}</p></div>`;
   } else {
-    corpo = `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(maes, g)}</span></h4>${_acCardsSaldo(maes)}${_acGraficos(maes)}</div>
+    corpo = `<div class="mp-card"><h4 class="mp-tit">Resumo <span class="mo-hint">${_acResumoTxt(maes, g)}</span>${_acBtnRefazer(f.cnpj)}</h4>${_acCardsSaldo(maes)}${_acGraficos(maes)}</div>
       <div class="mp-subabas ac-subabas" role="tablist">${[['maes', 'ti-file-dollar', 'Notas mães', maes.length, ''], ['semvinc', 'ti-link-off', 'Sem vínculo', nSv, nSv ? 'var(--red)' : '']].map(([k, ic, rot, n, cor]) =>
         `<button class="mo-aba${AC.paba === k ? ' on' : ''}" role="tab" aria-selected="${AC.paba === k}" onclick="acPaba('${k}')"><i class="ti ${ic}"${cor ? ` style="color:${cor}"` : ''}></i>${rot} <b${cor ? ` style="color:${cor}"` : ''}>${n}</b></button>`).join('')}</div>
-      <div class="ac-maes">${AC.paba === 'semvinc' ? _acAlertaSemVinc(f, g) : _acCardsMaes(maes)}</div>`;
+      <div class="ac-maes">${AC.paba === 'semvinc' ? _acBarraSv(g) : _acBarraMaes(maes)}
+        <div id="ac-tcorpo" class="ac-maes">${AC.paba === 'semvinc' ? _acAlertaSemVinc(f, g) : _acCardsMaes(_acFiltraMaes(maes), maes.length)}</div></div>`;
   }
   return _acCab(mig, _acE(f.nome), _acCnpjFmt(f.cnpj), ehMae ? soma('pendT') : 0, ehMae ? soma('pendR') : 0) + mod + _acFicha(f, g) + corpo;
 }
@@ -894,30 +900,32 @@ const _acMatTd = n => `<td class="ac-comp ac-comp-mat" title="${_acE(n.materiais
 // não citam a mãe/filha devolvida — vincular à mão.
 function _acAlertaSemVinc(f, g) {
   if (!g.semVinc.length && !g.devSemVinc.length) return '<div class="mp-card"><p class="mo-hint"><i class="ti ti-circle-check" style="color:var(--green)"></i> Todas as notas filhas e devoluções deste fornecedor estão vinculadas.</p></div>';
-  const rec = _acRec(g), lote = g.semVinc.filter(s => _acNoLote(rec.get(s.chave)));
-  const avisos = g.semVinc.filter(s => rec.get(s.chave)?.excede).length;
-  const filhas = !g.semVinc.length ? '' : `<div class="mp-card ac-semvinc">
-    <h4 class="mp-tit">${g.semVinc.length} nota${g.semVinc.length > 1 ? 's' : ''} filha${g.semVinc.length > 1 ? 's' : ''} sem vínculo <span class="mo-hint">${_acT(g.semVinc.reduce((t, s) => t + s.peso, 0))} · o complementar não cita a nota mãe</span></h4>
+  const sv = _acFiltraSv(g.semVinc, true), dv = _acFiltraSv(g.devSemVinc, false);
+  if (!sv.length && !dv.length) return '<div class="mp-card"><p class="mo-hint">Nada com esses filtros.</p></div>';
+  const rec = _acRec(g), lote = sv.filter(s => _acNoLote(rec.get(s.chave)));
+  const avisos = sv.filter(s => rec.get(s.chave)?.excede).length;
+  const filhas = !sv.length ? '' : `<div class="mp-card ac-semvinc">
+    <h4 class="mp-tit">${sv.length < g.semVinc.length ? `${sv.length} de ${g.semVinc.length}` : sv.length} nota${g.semVinc.length > 1 ? 's' : ''} filha${g.semVinc.length > 1 ? 's' : ''} sem vínculo <span class="mo-hint">${_acT(sv.reduce((t, s) => t + s.peso, 0))} · o complementar não cita a nota mãe</span></h4>
     ${lote.length ? `<div class="ac-rec-lote"><button class="btn btn-sm btn-primary" onclick="acVincularRecs('${f.cnpj}')"><i class="ti ti-link"></i> Vincular ${lote.length} recomendada${lote.length > 1 ? 's' : ''}</button><span class="mo-hint">a nota mãe mais antiga com saldo, da mesma central e material${avisos ? ` · ${avisos} com aviso de saldo fica${avisos > 1 ? 'm' : ''} fora do lote` : ''}</span></div>` : ''}
     <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Número</th><th>Status</th><th>Emissão</th><th>Central</th><th>Material</th><th class="num">Peso</th><th>Complementar</th><th>Recomendada</th><th>Vincular à nota mãe</th></tr></thead><tbody>
-    ${g.semVinc.map(s => `<tr${s.status === 'autorizada' ? '' : ' class="inativa"'}>
+    ${sv.map(s => `<tr${s.status === 'autorizada' ? '' : ' class="inativa"'}>
       <td class="mono">${_acE(s.numero)}</td><td>${_acStHtml(s, 'filha')}</td><td>${_acData(s.emissao)}</td><td>${_acE(s.central || '—')}</td>${_acMatTd(s)}<td class="num mono">${_acT(s.peso)}${s.devNF ? `<small class="mo-hint" style="display:block">${_acT(s.devNF)} devolvido</small>` : ''}</td>
       <td class="ac-comp" title="${_acE(s.comp)}">${_acE(s.comp || '—')}</td>
       <td>${_acRecHtml(s, rec.get(s.chave))}</td>
       <td>${_acVincHtml(s, 'Nº ou chave da mãe', `ac-dl-${f.cnpj}-${_acDlId(s.central)}`)}</td>
     </tr>`).join('')}
     </tbody></table></div></div>`;
-  const devs = !g.devSemVinc.length ? '' : `<div class="mp-card ac-semvinc">
-    <h4 class="mp-tit">${g.devSemVinc.length} devoluç${g.devSemVinc.length > 1 ? 'ões' : 'ão'} sem vínculo <span class="mo-hint">${_acT(g.devSemVinc.reduce((t, s) => t + s.peso, 0))} · o complementar não cita uma nota mãe ou filha deste fornecedor (pode ser de compra comum)</span></h4>
+  const devs = !dv.length ? '' : `<div class="mp-card ac-semvinc">
+    <h4 class="mp-tit">${dv.length < g.devSemVinc.length ? `${dv.length} de ${g.devSemVinc.length}` : dv.length} devoluç${g.devSemVinc.length > 1 ? 'ões' : 'ão'} sem vínculo <span class="mo-hint">${_acT(dv.reduce((t, s) => t + s.peso, 0))} · o complementar não cita uma nota mãe ou filha deste fornecedor (pode ser de compra comum)</span></h4>
     <div class="micro-table-wrap"><table class="ac-tab"><thead><tr><th>Devolução</th><th>Emissão</th><th>Emitente</th><th>Material</th><th class="num">Peso</th><th>Complementar</th><th>Vincular à nota mãe ou filha</th></tr></thead><tbody>
-    ${g.devSemVinc.map(d => `<tr>
+    ${dv.map(d => `<tr>
       <td class="mono">${_acE(d.numero)}</td><td>${_acData(d.emissao)}</td><td>${d.cnpj === d.forn ? 'Fornecedor' : 'Concrelagos'}</td>${_acMatTd(d)}<td class="num mono">${_acT(d.peso)}</td>
       <td class="ac-comp" title="${_acE(d.comp)}">${_acE(d.comp || '—')}</td>
       <td>${d.vinculo === 'manual' ? `<span class="mo-hint ac-rec-nao">vinculada à NF ${_acE(d.alvoNumero)}, que não está no SEFAZ importado</span>` : _acVincHtml(d, 'Nº ou chave da mãe/filha', `ac-dl-${f.cnpj}-${_acDlId('')}`)}</td>
     </tr>`).join('')}
     </tbody></table></div></div>`;
   return `${filhas}${devs}
-    ${[...new Set([...g.semVinc.map(s => s.central), ...(g.devSemVinc.length ? [''] : [])])].map(c => {
+    ${[...new Set([...sv.map(s => s.central), ...(dv.length ? [''] : [])])].map(c => {
       // Sugestões só com as mães da central da filha (Hugo, 23/11/2026); filha
       // sem central (ou central sem mãe conhecida) vê todas as do fornecedor.
       const daCen = c ? g.maes.filter(m => m.central === c) : [];
@@ -926,9 +934,70 @@ function _acAlertaSemVinc(f, g) {
   `;
 }
 
-function _acCardsMaes(maes) {
-  if (!maes.length) return `<div class="mp-card"><p class="mo-hint">Nenhuma nota mãe deste fornecedor no SEFAZ importado${_acTemFiltro() ? ' para o filtro' : ''}.</p></div>`;
-  return `<div class="micro-section-title" style="margin:6px 2px 0"><i class="ti ti-file-dollar"></i> Notas mães (${maes.length})</div>` + maes.map(m => {
+/* ───────── filtros das tabelas do fornecedor (Hugo, 27/11/2026) ───────── */
+// Notas mães: status, nº/chave, só com restante e ordem. Sem vínculo: nº/chave/
+// complementar, status da filha e central. Digitar troca só #ac-tcorpo (o campo
+// não perde o foco); chips e ordem redesenham a tela.
+const _acDig = q => String(q || '').replace(/\D/g, '');
+const _acChipsSt = (lista, sel, fn) => {
+  const cont = new Map();
+  lista.forEach(n => cont.set(n.status, (cont.get(n.status) || 0) + 1));
+  return Object.keys(AC_STATUS).filter(k => cont.has(k)).map(k =>
+    `<button class="mp-chip${sel.has(k) ? ' ac-chip-on' : ''}" aria-pressed="${sel.has(k)}" onclick="${fn}('${k}')">${sel.has(k) ? '<i class="ti ti-check"></i>' : ''}${AC_STATUS[k][0]} <b>${_acNf0.format(cont.get(k))}</b></button>`).join('');
+};
+const _acBuscaHtml = (id, v, ph, fn) => `<label class="mp-busca ac-tbusca"><i class="ti ti-search"></i><input id="${id}" type="text" placeholder="${ph}" value="${_acE(v)}" oninput="${fn}(this.value)" aria-label="${ph}"></label>`;
+const AC_ORDENS = { emissao: ['Emissão', m => -m.emissao], restante: ['Restante', m => -m.pendT], retirado: ['% retirado', m => -m.pct] };
+
+function _acFiltraMaes(maes) {
+  const q = _acDig(AC.T.q), k = AC_ORDENS[AC.T.ord][1];
+  return maes.filter(m => (!AC.T.st.size || AC.T.st.has(m.status)) && (!AC.T.resto || m.pendT > 0) && (!q || m.numero.includes(q) || m.chave.includes(q)))
+    .sort((a, b) => k(a) - k(b) || b.emissao - a.emissao);
+}
+function _acBarraMaes(maes) {
+  if (!maes.length) return '';
+  return `<div class="ac-tbar">${_acBuscaHtml('ac-tq', AC.T.q, 'Nº ou chave da nota mãe…', 'acTBusca')}
+    <div class="mp-chips">${_acChipsSt(maes, AC.T.st, 'acTSt')}
+      <button class="mp-chip${AC.T.resto ? ' ac-chip-on' : ''}" aria-pressed="${AC.T.resto}" onclick="acTResto()"><i class="ti ${AC.T.resto ? 'ti-check' : 'ti-hourglass'}"></i>Só com restante</button></div>
+    <span class="mp-modo" role="group" aria-label="Ordenar notas mães"><span class="mo-hint">Ordenar</span>${Object.entries(AC_ORDENS).map(([k, [r]]) =>
+      `<button class="${AC.T.ord === k ? 'on' : ''}" aria-pressed="${AC.T.ord === k}" onclick="acTOrd('${k}')">${r}</button>`).join('')}</span></div>`;
+}
+
+const _acCenSv = n => n.central || 'Sem central';
+function _acFiltraSv(lista, filhas) {
+  const q = normalizeText(AC.S.q), d = _acDig(AC.S.q);
+  return lista.filter(n => (!filhas || !AC.S.st.size || AC.S.st.has(n.status)) && (AC.S.cen == null || _acCenSv(n) === AC.S.cen)
+    && (!q || (d && (n.numero.includes(d) || n.chave.includes(d))) || normalizeText(n.comp).includes(q)));
+}
+function _acBarraSv(g) {
+  const todas = [...g.semVinc, ...g.devSemVinc];
+  if (!todas.length) return '';
+  const cens = [...new Set(todas.map(_acCenSv))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return `<div class="ac-tbar">${_acBuscaHtml('ac-sq', AC.S.q, 'Nº, chave ou texto do complementar…', 'acSBusca')}
+    <div class="mp-chips">${_acChipsSt(g.semVinc, AC.S.st, 'acSSt')}</div>
+    <select class="form-select ac-tcen" onchange="acSCen(this.value)" aria-label="Central"><option value="">Todas as centrais</option>${cens.map(c => `<option value="${_acE(c)}"${AC.S.cen === c ? ' selected' : ''}>${_acE(c)}</option>`).join('')}</select></div>`;
+}
+
+function _acTabCorpo() {
+  const el = document.getElementById('ac-tcorpo'), f = AC.forn.get(AC.sel), g = AC.porForn.get(AC.sel);
+  if (!el || !f || !g) { _acDesenhar(); return; }
+  const maes = g.maes.filter(_acPassaMae);
+  el.innerHTML = AC.paba === 'semvinc' ? _acAlertaSemVinc(f, g) : _acCardsMaes(_acFiltraMaes(maes), maes.length);
+  _acFoco();
+}
+let _acTBuscaT = null;
+const _acTDepois = () => { clearTimeout(_acTBuscaT); _acTBuscaT = setTimeout(_acTabCorpo, 200); };
+function acTBusca(v) { AC.T.q = v; _acTDepois(); }
+function acSBusca(v) { AC.S.q = v; _acTDepois(); }
+const _acTroca = (set, k) => { if (set.has(k)) set.delete(k); else set.add(k); _acDesenhar(); };
+function acTSt(k) { _acTroca(AC.T.st, k); }
+function acSSt(k) { _acTroca(AC.S.st, k); }
+function acTResto() { AC.T.resto = !AC.T.resto; _acDesenhar(); }
+function acTOrd(k) { AC.T.ord = k; _acDesenhar(); }
+function acSCen(v) { AC.S.cen = v || null; _acDesenhar(); }
+
+function _acCardsMaes(maes, total = maes.length) {
+  if (!maes.length) return `<div class="mp-card"><p class="mo-hint">${total ? 'Nenhuma nota mãe com esses filtros.' : `Nenhuma nota mãe deste fornecedor no SEFAZ importado${_acTemFiltro() ? ' para o filtro' : ''}.`}</p></div>`;
+  return `<div class="micro-section-title" style="margin:6px 2px 0"><i class="ti ti-file-dollar"></i> Notas mães (${maes.length < total ? `${maes.length} de ${total}` : maes.length})</div>` + maes.map(m => {
     const ab = AC.abertas.has(m.chave);
     return `<div class="micro-filial-card ac-mcard${_acTom(m)}" data-ac="${m.chave}">
       <div class="micro-filial-header-wrap${ab ? ' open' : ''}">
@@ -938,6 +1007,7 @@ function _acCardsMaes(maes) {
             ${_acPill('Restante: ' + _acT(m.pendT), m.pendT > 0 ? 'var(--amber)' : 'var(--text3)', 'ti-hourglass')}
             ${_acPill('Retirado ' + _acNf0.format(m.pct * 100) + '%', 'var(--teal)', 'ti-truck-delivery')}
             ${m.devT > 0.001 ? _acPill('Devolvido ' + _acT(m.devT), 'var(--gs-dev)', 'ti-arrow-back-up') : ''}
+            ${_acUltRet(m)}
             ${m.excedido ? _acPill('Excedido ' + _acT(m.excedido), 'var(--red)', 'ti-alert-triangle') : ''}
             <span class="summary-sep"></span>
             <span class="ac-mcard-mat" title="${_acE(m.materiais.join(', '))}">${_acE(m.materiais.join(', ') || '—')}</span>
@@ -954,6 +1024,13 @@ function _acCardsMaes(maes) {
 // Cor do card pelo status (Hugo, 27/11/2026): Finalizada verde, Devolvida laranja,
 // as que zeram a nota (Cancelada, Inutilizada, Indevida, Recusada) vermelho.
 const _acTom = m => m.status === 'autorizada' ? '' : m.status === 'finalizada' ? ' ac-tom-fin' : m.status === 'devolvida' ? ' ac-tom-dev' : ' ac-tom-zero';
+// Data da última retirada (filha que conta) e há quantos dias — mostra se o saldo
+// está sendo usado (Hugo, 27/11/2026).
+function _acUltRet(m) {
+  if (!m.ultRet) return `<span class="ac-ult" title="Nenhuma nota filha retirada desta nota mãe"><i class="ti ti-calendar-off"></i>Sem retiradas</span>`;
+  const d = Math.max(0, Math.round((_acDiaDe(Date.now()) - _acDiaDe(m.ultRet)) / _acDia));
+  return `<span class="ac-ult" title="Última retirada (emissão da última nota filha)"><i class="ti ti-calendar-event"></i>Últ. retirada ${_acData(m.ultRet)} <b>${d === 0 ? 'hoje' : `há ${_acNf0.format(d)} d`}</b></span>`;
+}
 const AC_VINC = { manual: ['Manual', 'badge-purple'], chave: ['Pela chave', 'badge-teal'], numero: ['Pelo número', 'badge-teal'] };
 const _acVincTd = n => `<td><span class="badge ${AC_VINC[n.vinculo][1]}">${AC_VINC[n.vinculo][0]}</span></td>
       <td class="mono ac-chave" title="${n.chave}">${n.chave}</td>
@@ -962,8 +1039,12 @@ const _acVincTd = n => `<td><span class="badge ${AC_VINC[n.vinculo][1]}">${AC_VI
 // Relatório da nota mãe (corpo do card): KPIs, barra, curva do saldo, dados da nota,
 // filhas e devoluções.
 function _acRelatorio(m) {
-  const tempo = m.diasRest == null ? '—' : m.diasRest === 0 ? 'Zerado' : `${_acNf0.format(Math.ceil(m.diasRest))} dias`;
-  const tempoSub = m.previsao ? `até acabar · previsão ${_acData(m.previsao)}` : m.diasRest === 0 ? 'saldo zerado' : 'até acabar · sem ritmo de retiradas';
+  // KPI: dias de entrega até acabar (NFs restantes ÷ NFs por dia de entrega do fornecedor).
+  // Subvalor: o prazo corrido no ritmo atual, com os dias parados, e a previsão.
+  const g = AC.porForn.get(m.cnpj);
+  const tempo = m.diasEnt == null ? '—' : m.diasEnt === 0 ? 'Zerado' : `${_acNf0.format(m.diasEnt)} dia${m.diasEnt === 1 ? '' : 's'}`;
+  const tempoSub = m.diasEnt === 0 ? 'saldo zerado' : m.diasEnt == null ? 'de entrega até acabar · sem ritmo de retiradas'
+    : `de entrega até acabar (${_acNf1.format(g?.porDia || 0)} NF${g?.porDia >= 2 ? 's' : ''}/dia de entrega)${m.previsao ? ` · no ritmo atual, ${_acNf0.format(Math.ceil(m.diasRest))} dias corridos (previsão ${_acData(m.previsao)})` : ''}`;
   // Saldo depois de cada nota, na ordem das datas: filha (o retirado) e devolução da mãe.
   const depois = new Map();
   let s = m.totT;
@@ -1055,7 +1136,7 @@ function _acCurva(m) {
 }
 
 /* ───────── ações de tela ───────── */
-function acSel(cnpj) { AC.sel = AC.sel === cnpj ? '' : cnpj; AC.paba = 'maes'; AC.abertas.clear(); _acDesenhar(); }
+function acSel(cnpj) { AC.sel = AC.sel === cnpj ? '' : cnpj; AC.paba = 'maes'; AC.abertas.clear(); AC.T.q = AC.S.q = ''; AC.S.cen = null; _acDesenhar(); }
 function acGrp(k) { AC.grp = AC.grp === k ? '' : k; AC.sub = ''; AC.sel = ''; _acDesenhar(); }
 function acSub(k) { AC.sub = AC.sub === k ? '' : k; AC.sel = ''; _acDesenhar(); }
 function acGrupo(g) { AC.F.grupo = g; AC.grp = ''; AC.sub = ''; _acDesenhar(); }
@@ -1186,7 +1267,7 @@ async function acVincularRecs(cnpj, chaveFilha) {
   const g = AC.porForn.get(cnpj);
   if (!g || AC.vinculando) return;
   const rec = _acRec(g);
-  const pares = g.semVinc.map(s => [s, rec.get(s.chave)]).filter(([s, r]) => chaveFilha ? s.chave === chaveFilha && r?.mae : _acNoLote(r));
+  const pares = (chaveFilha ? g.semVinc : _acFiltraSv(g.semVinc, true)).map(s => [s, rec.get(s.chave)]).filter(([s, r]) => chaveFilha ? s.chave === chaveFilha && r?.mae : _acNoLote(r));
   if (!pares.length) return;
   if (!chaveFilha) {
     const t = pares.reduce((a, [s]) => a + s.peso, 0), nMaes = new Set(pares.map(([, r]) => r.mae.chave)).size;
@@ -1207,6 +1288,49 @@ async function acVincularRecs(cnpj, chaveFilha) {
   if (erro) toast(`Falha ao vincular${gravadas ? ` (${gravadas} gravada(s) antes do erro)` : ''}: ` + (erro.message || erro), 'error');
   else toast(`${gravadas} nota(s) filha(s) vinculada(s)${gravadas < pares.length ? ` · ${pares.length - gravadas} já tinha(m) vínculo` : ''}.`, 'success');
   acordosRender();
+}
+
+/* ───────── refazer vínculos (Hugo, 27/11/2026) ───────── */
+// Apaga os vínculos MANUAIS (acordo_vinculos) de um fornecedor — ou de todos os
+// fornecedores do sistema, ignorando aba e filtros — e recalcula: os automáticos
+// (chave/número citado) voltam sozinhos no _acMontar; o resto fica em Sem vínculo,
+// com a recomendação. Status manuais não mudam.
+function _acManuaisDe(cnpj) {
+  if (!cnpj) return [...AC.vinc.keys()];
+  const minhas = new Set([...AC.maes, ...AC.filhas].filter(n => n.cnpj === cnpj).concat(AC.devs.filter(d => d.forn === cnpj)).map(n => n.chave));
+  return [...AC.vinc].filter(([ch, v]) => minhas.has(ch) || minhas.has(v.chave_mae)).map(([ch]) => ch);
+}
+function _acBtnRefazer(cnpj) {
+  const n = _acManuaisDe(cnpj).length;
+  const tit = n ? `Apaga ${n} vínculo${n > 1 ? 's' : ''} manual${n > 1 ? 'is' : ''} ${cnpj ? 'deste fornecedor' : 'de todos os fornecedores'} e recalcula os automáticos` : 'Nenhum vínculo manual para apagar';
+  return `<button class="btn btn-sm ac-refazer" onclick="acRefazer('${cnpj}')" title="${tit}"${n ? '' : ' disabled'}><i class="ti ti-refresh"></i>${cnpj ? 'Refazer vínculos' : 'Refazer vínculos de todos'}${n ? ` <b>${_acNf0.format(n)}</b>` : ''}</button>`;
+}
+function acRefazer(cnpj) {
+  const chaves = _acManuaisDe(cnpj);
+  if (!chaves.length || AC.vinculando) return;
+  const quem = cnpj ? (AC.forn.get(cnpj)?.nome || _acCnpjFmt(cnpj)) : 'Todos os fornecedores';
+  const body = `<p>Apaga <b>${_acNf0.format(chaves.length)} vínculo${chaves.length > 1 ? 's' : ''} manual${chaves.length > 1 ? 'is' : ''}</b> (filha → mãe e devolução → mãe/filha)${cnpj ? '' : ' de <b>todos os fornecedores</b>, sem olhar aba nem filtros'} e recalcula os vínculos automáticos pela chave ou pelo número citado no complementar.</p>
+    <p>O que o complementar não citar volta para <b>Sem vínculo</b>, com a recomendação. Os status escolhidos à mão não mudam. Não dá para desfazer.</p>`;
+  const exec = async () => {
+    AC.vinculando = true;
+    const q = () => window.supabaseClient.from('acordo_vinculos');
+    let apagadas = 0, erro = null;
+    try {
+      if (!cnpj) { const r = await q().delete({ count: 'exact' }).not('chave_filha', 'is', null); erro = r.error; apagadas = r.count || 0; }
+      else for (let i = 0; i < chaves.length && !erro; i += 150) {
+        const r = await q().delete({ count: 'exact' }).in('chave_filha', chaves.slice(i, i + 150));
+        erro = r.error; apagadas += r.count || 0;
+      }
+      _acSetVinc(await _acFetchAll('acordo_vinculos', '*', 'chave_filha'));
+    } catch (e) { erro = erro || e; }
+    AC.vinculando = false;
+    acordosRender();
+    if (erro) { toast(`Falha ao refazer os vínculos${apagadas ? ` (${apagadas} apagado(s) antes do erro)` : ''}: ` + (erro.message || erro), 'error'); return; }
+    const sv = cnpj ? (AC.porForn.get(cnpj)?.semVinc.length || 0) : AC.filhas.filter(f => !f.mae && f.status !== 'cancelada').length;
+    toast(`${quem}: ${_acNf0.format(apagadas)} vínculo(s) manual(is) apagado(s) e recalculado(s) · ${_acNf0.format(sv)} filha(s) sem vínculo.`, 'success');
+  };
+  if (typeof confirmarDestrutivo === 'function') confirmarDestrutivo({ title: 'Refazer vínculos', sub: quem, body, confirmLabel: 'Apagar e recalcular', onConfirm: exec });
+  else if (confirm(`Apagar ${chaves.length} vínculo(s) manual(is) de ${quem} e recalcular?`)) return exec();
 }
 
 function acCopiar(txt) {
@@ -1251,6 +1375,6 @@ function _acRealtime() {
     }).subscribe();
 }
 
-Object.assign(window, { acordosRender, acSel, acGrp, acSub, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acCopiar, acDesvincular });
+Object.assign(window, { acordosRender, acSel, acGrp, acSub, acGrupo, acAba, acPaba, acBusca, acLista, acRecarregar, acFAbrir, acFMarcar, acFBuscar, acFFechar, acFAplicar, acFLimpar, acFLimparTodos, acToggle, acModalidade, acStatus, acVincular, acVincularRecs, acEvo, acCopiar, acDesvincular, acTBusca, acSBusca, acTSt, acSSt, acTResto, acTOrd, acSCen, acRefazer });
 // Lista recolhida: lembrada neste navegador.
 try { AC.listaRecolhida = localStorage.getItem('acordos.listaRecolhida') === '1'; } catch (_) { /* sem storage */ }
